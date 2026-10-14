@@ -14,7 +14,7 @@ Les `BACKUP_KEEP` archives les plus récentes sont conservées (14 par défaut).
 
 ## Restauration
 
-1. Schéma en place (nouvelle installation : `php bin/install.php` sans `--demo`).
+1. Schéma en place (nouvelle installation : `php bin/install.php` sans `--catalog`).
 2. Restaurer les données (**remplace toutes les données actuelles**) :
 
 ```bash

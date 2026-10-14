@@ -66,6 +66,8 @@ final class CartService
              ORDER BY p.name, v.sort_order, v.id',
             [$cartId]
         );
+        $rows = I18n::localize('product', $rows, 'product_id', ['name' => 'product_name']);
+        $rows = I18n::localize('variant', $rows, 'variant_id', ['label' => 'variant_label']);
         foreach ($rows as &$row) {
             $row['available'] = (int) $row['v_active'] === 1 && $row['v_deleted'] === null && (int) $row['p_active'] === 1
                 && $row['p_deleted'] === null && ($row['c_active'] === null || (int) $row['c_active'] === 1);
@@ -89,11 +91,11 @@ final class CartService
         foreach ($out['items'] as $item) {
             $out['count'] += (int) $item['quantity'];
             if (!$item['available']) {
-                $out['problems'][] = sprintf('« %s – %s » n\'est plus disponible. Retirez-le du panier pour continuer.', $item['product_name'], $item['variant_label']);
+                $out['problems'][] = t('cart.problem_unavailable', ['item' => $item['product_name'] . ' – ' . $item['variant_label']]);
                 continue;
             }
             if (!$item['enough_stock']) {
-                $out['problems'][] = sprintf('Stock insuffisant pour « %s – %s » : %d disponible(s).', $item['product_name'], $item['variant_label'], (int) $item['stock']);
+                $out['problems'][] = t('cart.problem_stock', ['item' => $item['product_name'] . ' – ' . $item['variant_label'], 'count' => (int) $item['stock']]);
             }
             $out['subtotal'] += $item['line_total'];
         }
@@ -126,11 +128,11 @@ final class CartService
     public static function add(Request $r, int $variantId, int $qty): array
     {
         if ($qty < 1 || $qty > self::maxQty()) {
-            return ['ok' => false, 'message' => 'Quantité invalide (1 à ' . self::maxQty() . ').'];
+            return ['ok' => false, 'message' => t('cart.qty_invalid', ['max' => self::maxQty()])];
         }
         $variant = Catalog::purchasableVariant($variantId);
         if ($variant === null) {
-            return ['ok' => false, 'message' => 'Ce produit n\'est pas disponible.'];
+            return ['ok' => false, 'message' => t('cart.unavailable')];
         }
         $cart = self::current($r, true);
         $existing = (int) DB::value('SELECT quantity FROM cart_items WHERE cart_id = ? AND variant_id = ?', [(int) $cart['id'], $variantId]);
@@ -138,11 +140,11 @@ final class CartService
         if ($wanted > (int) $variant['stock']) {
             $left = max(0, (int) $variant['stock'] - $existing);
             return ['ok' => false, 'message' => (int) $variant['stock'] === 0
-                ? 'Ce produit est en rupture de stock.'
-                : sprintf('Stock insuffisant : vous pouvez encore ajouter %d unité(s).', $left)];
+                ? t('cart.out_of_stock')
+                : t('cart.stock_left', ['count' => $left])];
         }
         if ($wanted > self::maxQty()) {
-            return ['ok' => false, 'message' => 'Quantité maximale par article : ' . self::maxQty() . '. Pour de gros volumes, demandez un devis professionnel.'];
+            return ['ok' => false, 'message' => t('cart.max_line_pro', ['max' => self::maxQty()])];
         }
         if ($existing > 0) {
             DB::run('UPDATE cart_items SET quantity = ? WHERE cart_id = ? AND variant_id = ?', [$wanted, (int) $cart['id'], $variantId]);
@@ -150,7 +152,7 @@ final class CartService
             DB::insert('cart_items', ['cart_id' => (int) $cart['id'], 'variant_id' => $variantId, 'quantity' => $qty, 'created_at' => gmdate('Y-m-d H:i:s')]);
         }
         self::touch((int) $cart['id']);
-        return ['ok' => true, 'message' => sprintf('« %s – %s » a été ajouté au panier.', $variant['product_name'], $variant['label'])];
+        return ['ok' => true, 'message' => t('cart.added', ['item' => $variant['product_name'] . ' – ' . $variant['label']])];
     }
 
     /** @return array{ok:bool, message:string} */
@@ -158,24 +160,24 @@ final class CartService
     {
         $cart = self::current($r);
         if ($cart === null) {
-            return ['ok' => false, 'message' => 'Panier introuvable.'];
+            return ['ok' => false, 'message' => t('cart.not_found')];
         }
         if ($qty <= 0) {
             return self::remove($r, $variantId);
         }
         if ($qty > self::maxQty()) {
-            return ['ok' => false, 'message' => 'Quantité maximale par article : ' . self::maxQty() . '.'];
+            return ['ok' => false, 'message' => t('cart.max_line', ['max' => self::maxQty()])];
         }
         $stock = DB::value('SELECT stock FROM product_variants WHERE id = ?', [$variantId]);
         if ($stock === null) {
-            return ['ok' => false, 'message' => 'Article introuvable.'];
+            return ['ok' => false, 'message' => t('cart.item_not_found')];
         }
         if ($qty > (int) $stock) {
-            return ['ok' => false, 'message' => sprintf('Stock insuffisant : %d unité(s) disponible(s).', (int) $stock)];
+            return ['ok' => false, 'message' => t('cart.stock_available', ['count' => (int) $stock])];
         }
         $n = DB::run('UPDATE cart_items SET quantity = ? WHERE cart_id = ? AND variant_id = ?', [$qty, (int) $cart['id'], $variantId])->rowCount();
         self::touch((int) $cart['id']);
-        return $n > 0 ? ['ok' => true, 'message' => 'Quantité mise à jour.'] : ['ok' => false, 'message' => 'Article absent du panier.'];
+        return $n > 0 ? ['ok' => true, 'message' => t('cart.updated')] : ['ok' => false, 'message' => t('cart.not_in_cart')];
     }
 
     /** @return array{ok:bool, message:string} */
@@ -186,7 +188,7 @@ final class CartService
             DB::run('DELETE FROM cart_items WHERE cart_id = ? AND variant_id = ?', [(int) $cart['id'], $variantId]);
             self::touch((int) $cart['id']);
         }
-        return ['ok' => true, 'message' => 'Article retiré du panier.'];
+        return ['ok' => true, 'message' => t('cart.removed')];
     }
 
     /** @return array{ok:bool, message:string} */
@@ -194,7 +196,7 @@ final class CartService
     {
         $cart = self::current($r);
         if ($cart === null) {
-            return ['ok' => false, 'message' => 'Votre panier est vide.'];
+            return ['ok' => false, 'message' => t('cart.empty')];
         }
         $promo = PromoService::find($code);
         $summary = self::summary($cart);
@@ -203,7 +205,7 @@ final class CartService
             return ['ok' => false, 'message' => (string) $eval['error']];
         }
         DB::update('carts', ['promo_code' => $promo['code'], 'updated_at' => gmdate('Y-m-d H:i:s')], 'id = ?', [(int) $cart['id']]);
-        return ['ok' => true, 'message' => 'Code promo « ' . $promo['code'] . ' » appliqué.'];
+        return ['ok' => true, 'message' => t('promo.applied', ['code' => $promo['code']])];
     }
 
     public static function removePromo(Request $r): void

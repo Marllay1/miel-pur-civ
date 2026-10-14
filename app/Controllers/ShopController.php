@@ -38,7 +38,7 @@ final class ShopController
             }
         }
         if ($filters['categorie'] !== '' && $current === null) {
-            throw new HttpException(404, 'Cette catégorie n\'existe pas.');
+            throw new HttpException(404, t('shop.category_missing'));
         }
         $query = array_filter([
             'q' => $filters['q'], 'categorie' => $filters['categorie'], 'format' => $filters['format'],
@@ -53,8 +53,8 @@ final class ShopController
             'categories' => $categories,
             'currentCategory' => $current,
             'formats' => Catalog::availableFormats(),
-            'pageTitle' => $current ? $current['name'] : ($filters['q'] !== '' ? 'Recherche « ' . $filters['q'] . ' »' : 'Boutique'),
-            'metaDescription' => $current ? excerpt($current['description'], 158) : 'Miel et cire d\'abeille de Katiola : découvrez le catalogue, commandez en ligne et payez à la livraison.',
+            'pageTitle' => $current ? $current['name'] : ($filters['q'] !== '' ? t('shop.search_title', ['q' => $filters['q']]) : t('nav.shop')),
+            'metaDescription' => $current ? excerpt($current['description'], 158) : t('shop.meta'),
             'canonical' => $current ? '/boutique?categorie=' . $current['slug'] : '/boutique',
             'noindex' => $filtered || $result['page'] > 1,
         ]);
@@ -64,7 +64,7 @@ final class ShopController
     {
         $product = Catalog::findBySlug($r->params['slug']);
         if ($product === null) {
-            throw new HttpException(404, 'Ce produit n\'existe pas ou n\'est plus disponible.');
+            throw new HttpException(404, t('shop.product_missing'));
         }
         $variants = Catalog::variants((int) $product['id']);
         $selectedId = $r->int('variante');
@@ -147,13 +147,13 @@ final class ShopController
             'author_name' => 'required|max:100',
             'rating' => 'required|int|min:1|max:5',
             'comment' => 'required|min:10|max:2000',
-        ], ['author_name' => 'Votre nom', 'rating' => 'La note', 'comment' => 'Votre avis']);
+        ], ['author_name' => t('field.your_name'), 'rating' => t('field.rating'), 'comment' => t('field.comment')]);
         $errors = $v->errors;
         if ($spam = spam_check($r)) {
             $errors['_'] = $spam;
         }
         if (!$errors && !RateLimiter::hit('review:' . $r->ip(), 5, 3600)) {
-            $errors['_'] = 'Vous avez déjà envoyé plusieurs avis récemment. Réessayez plus tard.';
+            $errors['_'] = t('review.throttled');
         }
         if ($errors) {
             $response = $this->show($r, ['reviewErrors' => $errors, 'reviewOld' => $r->post]);
@@ -174,7 +174,7 @@ final class ShopController
             'moderated_at' => null,
             'created_at' => gmdate('Y-m-d H:i:s'),
         ]);
-        Session::flash('success', 'Merci ! Votre avis sera publié après vérification par notre équipe.');
+        Session::flash('success', t('review.thanks'));
         return redirect('/boutique/' . $product['slug'] . '#avis');
     }
 }

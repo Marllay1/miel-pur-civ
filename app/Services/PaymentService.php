@@ -5,9 +5,14 @@ namespace App\Services;
 
 use App\Core\Audit;
 use App\Core\DB;
+use App\Core\Log;
+use App\Services\Payment\CinetPayGateway;
 use App\Services\Payment\DemoGateway;
 use App\Services\Payment\Gateway;
-use App\Services\Payment\UnconfiguredGateway;
+use App\Services\Payment\MtnMomoGateway;
+use App\Services\Payment\OrangeMoneyGateway;
+use App\Services\Payment\PaymentException;
+use App\Services\Payment\WaveGateway;
 use App\Services\Payment\WebhookException;
 
 final class PaymentService
@@ -16,11 +21,11 @@ final class PaymentService
     public static function gateways(): array
     {
         return [
+            'wave' => new WaveGateway(),
+            'orange_money' => new OrangeMoneyGateway(),
+            'mtn_momo' => new MtnMomoGateway(),
+            'card' => new CinetPayGateway(),
             'demo' => new DemoGateway(),
-            'orange_money' => new UnconfiguredGateway('orange_money', 'Orange Money', ['ORANGE_MONEY_CLIENT_ID', 'ORANGE_MONEY_CLIENT_SECRET', 'ORANGE_MONEY_MERCHANT_KEY', 'ORANGE_MONEY_WEBHOOK_SECRET'], 'API Orange Money Web Payment — contrat marchand Orange Côte d\'Ivoire requis.'),
-            'mtn_momo' => new UnconfiguredGateway('mtn_momo', 'MTN Mobile Money', ['MTN_MOMO_SUBSCRIPTION_KEY', 'MTN_MOMO_API_USER', 'MTN_MOMO_API_KEY', 'MTN_MOMO_WEBHOOK_SECRET'], 'API MTN MoMo (Collections) — compte marchand MTN Côte d\'Ivoire requis.'),
-            'wave' => new UnconfiguredGateway('wave', 'Wave', ['WAVE_API_KEY', 'WAVE_WEBHOOK_SECRET'], 'API Wave Checkout — compte Wave Business requis.'),
-            'card' => new UnconfiguredGateway('card', 'Carte bancaire', ['CARD_PROVIDER', 'CARD_API_KEY', 'CARD_WEBHOOK_SECRET'], 'Agrégateur de paiement par carte (CinetPay, PayDunya, etc.) à choisir. Aucun numéro de carte ne doit transiter par ce serveur.'),
         ];
     }
 
@@ -31,7 +36,7 @@ final class PaymentService
 
     /**
      * Moyens de paiement réellement proposables pour une zone.
-     * @return array<int, array{code:string, label:string, description:string, online:bool}>
+     * @return array<int, array{code:string, label:string, description:string, online:bool, needs_phone:bool}>
      */
     public static function availableMethods(?array $zone): array
     {
@@ -39,16 +44,15 @@ final class PaymentService
         if (Settings::bool('cod_enabled') && ($zone === null || (int) $zone['allows_cod'] === 1)) {
             $methods[] = [
                 'code' => 'cod',
-                'label' => 'Paiement à la livraison',
-                'description' => $zone !== null && (int) $zone['is_pickup'] === 1
-                    ? 'Vous payez au moment du retrait.'
-                    : 'Vous payez en espèces à la réception. Notre équipe vous appelle pour confirmer la commande.',
+                'label' => t('pay.cod'),
+                'description' => $zone !== null && (int) $zone['is_pickup'] === 1 ? t('pay.desc.cod_pickup') : t('pay.desc.cod'),
                 'online' => false,
+                'needs_phone' => false,
             ];
         }
         foreach (self::gateways() as $gateway) {
             if ($gateway->isEnabled()) {
-                $methods[] = ['code' => $gateway->code(), 'label' => $gateway->label(), 'description' => $gateway->description(), 'online' => true];
+                $methods[] = ['code' => $gateway->code(), 'label' => $gateway->label(), 'description' => $gateway->description(), 'online' => true, 'needs_phone' => $gateway->needsPhone()];
             }
         }
         return $methods;
@@ -59,22 +63,39 @@ final class PaymentService
         return DB::one('SELECT * FROM payments WHERE reference = ?', [$reference]);
     }
 
-    /** Crée (ou réutilise) une tentative de paiement pour une commande en attente. */
-    public static function initiate(array $order, string $provider): array
+    public static function latestForOrder(int $orderId): ?array
     {
+        return DB::one('SELECT * FROM payments WHERE order_id = ? ORDER BY id DESC LIMIT 1', [$orderId]);
+    }
+
+    /**
+     * Crée une tentative de paiement et la démarre chez le prestataire.
+     * @return array{payment:array, redirect:?string, pending:bool}
+     * @throws \DomainException|PaymentException
+     */
+    public static function initiate(array $order, string $orderToken, ?string $payerPhone = null): array
+    {
+        $provider = $order['payment_method'];
         $gateway = self::gateway($provider);
         if ($gateway === null || !$gateway->isEnabled()) {
-            throw new \DomainException('Ce moyen de paiement n\'est pas disponible.');
+            throw new \DomainException(t('pay.unavailable'));
         }
         if ($order['status'] !== 'pending_payment') {
-            throw new \DomainException('Cette commande n\'est pas en attente de paiement.');
+            throw new \DomainException(t('pay.not_pending'));
         }
         if ($order['expires_at'] !== null && $order['expires_at'] < gmdate('Y-m-d H:i:s')) {
-            throw new \DomainException('Le délai de paiement de cette commande est dépassé.');
+            throw new \DomainException(t('pay.expired'));
         }
+        if ($gateway->needsPhone() && ($payerPhone === null || MtnMomoGateway::msisdn($payerPhone) === null)) {
+            throw new PaymentException(t('pay.phone_invalid'));
+        }
+        // Une tentative encore ouverte (redirection non utilisée) est réutilisée, sauf paiement poussé sur mobile.
         $existing = DB::one("SELECT * FROM payments WHERE order_id = ? AND provider = ? AND status = 'initiated' ORDER BY id DESC LIMIT 1", [(int) $order['id'], $provider]);
-        if ($existing !== null && (int) $existing['amount'] === (int) $order['total']) {
-            return $existing;
+        if ($existing !== null && (int) $existing['amount'] === (int) $order['total'] && $existing['checkout_url'] && !$gateway->needsPhone()) {
+            return ['payment' => $existing, 'redirect' => $existing['checkout_url'], 'pending' => false];
+        }
+        if ($existing !== null) {
+            DB::update('payments', ['status' => 'cancelled', 'failure_reason' => 'Remplacée par une nouvelle tentative', 'updated_at' => gmdate('Y-m-d H:i:s')], 'id = ?', [(int) $existing['id']]);
         }
         $now = gmdate('Y-m-d H:i:s');
         $id = DB::insert('payments', [
@@ -84,29 +105,102 @@ final class PaymentService
             'amount' => (int) $order['total'],
             'currency' => 'XOF',
             'status' => 'initiated',
+            'payer_phone' => $payerPhone !== null ? mb_substr($payerPhone, 0, 30) : null,
             'created_at' => $now,
             'updated_at' => $now,
         ]);
-        return DB::one('SELECT * FROM payments WHERE id = ?', [$id]);
+        $payment = DB::one('SELECT * FROM payments WHERE id = ?', [$id]);
+        try {
+            $started = $gateway->start($payment, $order, $orderToken);
+        } catch (PaymentException $e) {
+            DB::update('payments', ['status' => 'failed', 'failure_reason' => mb_substr($e->getMessage(), 0, 255), 'updated_at' => gmdate('Y-m-d H:i:s')], 'id = ?', [$id]);
+            throw $e;
+        }
+        DB::update('payments', ['provider_token' => $started['provider_token'], 'checkout_url' => $started['redirect'] !== null ? mb_substr($started['redirect'], 0, 500) : null, 'updated_at' => gmdate('Y-m-d H:i:s')], 'id = ?', [$id]);
+        return ['payment' => DB::one('SELECT * FROM payments WHERE id = ?', [$id]), 'redirect' => $started['redirect'], 'pending' => $started['pending']];
     }
 
     /**
-     * Point d'entrée des notifications serveur à serveur.
+     * Interroge le prestataire et applique le résultat s'il est définitif.
+     * @return string résultat (paid, failed, cancelled, pending, already_processed, unavailable…)
+     */
+    public static function verify(array $payment): string
+    {
+        if ($payment['status'] !== 'initiated') {
+            return 'already_processed';
+        }
+        $gateway = self::gateway($payment['provider']);
+        if ($gateway === null) {
+            return 'unavailable';
+        }
+        DB::update('payments', ['last_checked_at' => gmdate('Y-m-d H:i:s')], 'id = ?', [(int) $payment['id']]);
+        $status = $gateway->fetchStatus($payment);
+        if ($status === null) {
+            return 'unavailable';
+        }
+        if ($status['status'] === 'pending') {
+            return 'pending';
+        }
+        return self::applyResult($payment['provider'], [
+            'event_id' => 'verify:' . $payment['reference'] . ':' . $status['status'] . ':' . (int) ($status['amount'] ?? $payment['amount']),
+            'reference' => $payment['reference'],
+            'status' => $status['status'],
+            'amount' => $status['amount'] ?? (int) $payment['amount'],
+            'provider_reference' => $status['provider_reference'],
+        ], json_encode(['source' => 'verification', 'status' => $status], JSON_UNESCAPED_SLASHES) ?: '');
+    }
+
+    /**
+     * Notification serveur à serveur. Les résultats signés sont appliqués directement ;
+     * les autres servent à identifier le paiement, dont l'état est alors demandé au prestataire.
      * @return array{http:int, result:string}
      */
-    public static function handleWebhook(string $provider, array $headers, string $body): array
+    public static function handleWebhook(string $provider, array $headers, string $body, array $post = []): array
     {
         $gateway = self::gateway($provider);
-        if ($gateway === null) {
+        if ($gateway === null || ($provider !== 'demo' && !$gateway->isEnabled())) {
             return ['http' => 404, 'result' => 'unknown_provider'];
         }
         try {
-            $event = $gateway->parseWebhook($headers, $body);
+            $note = $gateway->parseNotification($headers, $body, $post);
         } catch (WebhookException $e) {
             return ['http' => $e->status, 'result' => $e->getMessage()];
         }
-        $result = self::applyResult($provider, $event, $body);
-        return ['http' => 200, 'result' => $result];
+        if ($note['event'] !== null) {
+            return ['http' => 200, 'result' => self::applyResult($provider, $note['event'], $body)];
+        }
+        $payment = null;
+        if ($note['reference'] !== null) {
+            $payment = DB::one('SELECT * FROM payments WHERE reference = ? AND provider = ?', [$note['reference'], $provider]);
+        } elseif ($note['token'] !== null) {
+            foreach (DB::all("SELECT * FROM payments WHERE provider = ? AND status = 'initiated' AND provider_token IS NOT NULL ORDER BY id DESC LIMIT 200", [$provider]) as $p) {
+                $parts = explode('|', (string) $p['provider_token']);
+                if (hash_equals((string) end($parts), $note['token']) || hash_equals($parts[0], $note['token'])) {
+                    $payment = $p;
+                    break;
+                }
+            }
+        }
+        if ($payment === null) {
+            return ['http' => 200, 'result' => 'ignored'];
+        }
+        return ['http' => 200, 'result' => self::verify($payment)];
+    }
+
+    /** Vérifie les paiements en ligne restés en attente (tâche planifiée), avant toute annulation pour expiration. */
+    public static function verifyPending(int $limit = 50): int
+    {
+        $done = 0;
+        foreach (DB::all("SELECT * FROM payments WHERE status = 'initiated' AND provider <> 'demo' ORDER BY id LIMIT " . (int) $limit) as $p) {
+            try {
+                if (!in_array(self::verify($p), ['pending', 'unavailable'], true)) {
+                    $done++;
+                }
+            } catch (\Throwable $e) {
+                Log::error('Vérification de paiement impossible : ' . $e->getMessage(), ['ref' => $p['reference']]);
+            }
+        }
+        return $done;
     }
 
     /**

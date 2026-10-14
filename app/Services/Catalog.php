@@ -37,6 +37,13 @@ final class Catalog
         'coffret' => 'Coffret',
     ];
 
+    /** Traductions des produits et de leur catégorie dans la langue courante. */
+    public static function localizeProducts(array $rows): array
+    {
+        $rows = I18n::localize('product', $rows);
+        return I18n::localize('category', $rows, 'category_id', ['name' => 'category_name', 'description' => '_cat_description']);
+    }
+
     private static function publicWhere(): string
     {
         return 't.is_active = 1 AND (t.category_id IS NULL OR t.category_active = 1) AND t.variant_count > 0';
@@ -53,8 +60,8 @@ final class Catalog
         $q = trim((string) ($f['q'] ?? ''));
         if ($q !== '') {
             $like = '%' . str_replace(['!', '%', '_'], ['!!', '!%', '!_'], mb_substr($q, 0, 80)) . '%';
-            $where[] = "(t.name LIKE ? ESCAPE '!' OR t.short_description LIKE ? ESCAPE '!' OR t.category_name LIKE ? ESCAPE '!')";
-            array_push($params, $like, $like, $like);
+            $where[] = "(t.name LIKE ? ESCAPE '!' OR t.short_description LIKE ? ESCAPE '!' OR t.category_name LIKE ? ESCAPE '!' OR EXISTS (SELECT 1 FROM translations tr WHERE tr.entity_type = 'product' AND tr.entity_id = t.id AND tr.field IN ('name', 'short_description') AND tr.value LIKE ? ESCAPE '!'))";
+            array_push($params, $like, $like, $like, $like);
         }
         if (!empty($f['categorie'])) {
             $where[] = 't.category_slug = ?';
@@ -87,32 +94,33 @@ final class Catalog
         $pages = max(1, (int) ceil($total / $perPage));
         $page = max(1, min($page, $pages));
         $offset = ($page - 1) * $perPage;
-        $items = DB::all('SELECT * FROM (' . self::BASE_SELECT . ") t WHERE $sqlWhere ORDER BY $order LIMIT " . (int) $perPage . ' OFFSET ' . (int) $offset, $params);
+        $items = self::localizeProducts(DB::all('SELECT * FROM (' . self::BASE_SELECT . ") t WHERE $sqlWhere ORDER BY $order LIMIT " . (int) $perPage . ' OFFSET ' . (int) $offset, $params));
         return ['items' => $items, 'total' => $total, 'page' => $page, 'pages' => $pages, 'per_page' => $perPage];
     }
 
     public static function findBySlug(string $slug): ?array
     {
-        return DB::one('SELECT * FROM (' . self::BASE_SELECT . ') t WHERE t.slug = ? AND ' . self::publicWhere(), [$slug]);
+        $row = DB::one('SELECT * FROM (' . self::BASE_SELECT . ') t WHERE t.slug = ? AND ' . self::publicWhere(), [$slug]);
+        return $row === null ? null : self::localizeProducts([$row])[0];
     }
 
     public static function featured(int $limit = 4): array
     {
-        return DB::all('SELECT * FROM (' . self::BASE_SELECT . ') t WHERE ' . self::publicWhere() . ' ORDER BY t.is_featured DESC, t.created_at DESC LIMIT ' . (int) $limit);
+        return self::localizeProducts(DB::all('SELECT * FROM (' . self::BASE_SELECT . ') t WHERE ' . self::publicWhere() . ' ORDER BY t.is_featured DESC, t.created_at DESC LIMIT ' . (int) $limit));
     }
 
     public static function related(array $product, int $limit = 4): array
     {
-        return DB::all(
+        return self::localizeProducts(DB::all(
             'SELECT * FROM (' . self::BASE_SELECT . ') t WHERE ' . self::publicWhere() . ' AND t.id <> ? ORDER BY (t.category_id = ?) DESC, t.is_featured DESC, t.name LIMIT ' . (int) $limit,
             [(int) $product['id'], (int) ($product['category_id'] ?? 0)]
-        );
+        ));
     }
 
     public static function variants(int $productId, bool $activeOnly = true): array
     {
         $sql = 'SELECT * FROM product_variants WHERE product_id = ? AND deleted_at IS NULL' . ($activeOnly ? ' AND is_active = 1' : '') . ' ORDER BY sort_order, price, id';
-        return DB::all($sql, [$productId]);
+        return I18n::localize('variant', DB::all($sql, [$productId]));
     }
 
     public static function images(int $productId): array
@@ -122,10 +130,10 @@ final class Catalog
 
     public static function categories(): array
     {
-        return DB::all(
+        return I18n::localize('category', DB::all(
             'SELECT c.*, (SELECT COUNT(*) FROM (' . self::BASE_SELECT . ') t WHERE t.category_id = c.id AND ' . self::publicWhere() . ') AS product_count
              FROM categories c WHERE c.is_active = 1 ORDER BY c.sort_order, c.name'
-        );
+        ));
     }
 
     /** Formats effectivement présents dans le catalogue public. */
@@ -143,13 +151,18 @@ final class Catalog
     /** Variante achetable (variante et produit actifs, non supprimés, catégorie active). */
     public static function purchasableVariant(int $variantId): ?array
     {
-        return DB::one(
+        $v = DB::one(
             'SELECT v.*, p.name AS product_name, p.slug AS product_slug FROM product_variants v
              JOIN products p ON p.id = v.product_id LEFT JOIN categories c ON c.id = p.category_id
              WHERE v.id = ? AND v.is_active = 1 AND v.deleted_at IS NULL AND p.is_active = 1 AND p.deleted_at IS NULL
                AND (c.id IS NULL OR c.is_active = 1)',
             [$variantId]
         );
+        if ($v === null) {
+            return null;
+        }
+        $v = I18n::localizeOne('variant', $v);
+        return I18n::localizeOne('product', $v, 'product_id', ['name' => 'product_name']);
     }
 
     public static function approvedReviews(int $productId): array

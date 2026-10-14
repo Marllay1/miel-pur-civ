@@ -3,8 +3,8 @@ declare(strict_types=1);
 
 /**
  * Installation : crée .env (secrets générés), les dossiers, la base, applique les migrations et les données de référence.
- *   php bin/install.php            installation sans données de démonstration
- *   php bin/install.php --demo     ajoute le catalogue de démonstration (étiqueté « Démo »)
+ *   php bin/install.php            installation (rôles, pages, FAQ, zones de livraison)
+ *   php bin/install.php --catalog  ajoute le catalogue initial (gamme confirmée ; --demo reste accepté)
  *   php bin/install.php --sqlite   (nouvelle installation) configure SQLite au lieu de MySQL
  * Le script est rejouable : il n'écrase ni le .env existant ni les données.
  */
@@ -76,11 +76,11 @@ $applied = Migrator::migrate();
 out($applied ? '✔ Migrations appliquées : ' . implode(', ', $applied) : '• Schéma déjà à jour.');
 
 (require BASE_PATH . '/database/seeds/base.php')();
-out('✔ Données de référence : rôles, permissions, pages provisoires, FAQ, zones de livraison [À CONFIRMER].');
+out('✔ Données de référence : rôles, permissions, pages FR/EN, FAQ FR/EN, zones de livraison.');
 
-if (!empty($opts['demo'])) {
-    (require BASE_PATH . '/database/seeds/demo.php')();
-    out('✔ Catalogue de DÉMONSTRATION chargé (produits, prix et stocks fictifs, badge « Démo »).');
+if (!empty($opts['catalog']) || !empty($opts['demo'])) {
+    (require BASE_PATH . '/database/seeds/catalog.php')();
+    out('✔ Catalogue initial chargé (5 produits, 10 formats, FR/EN) ; ajustez les stocks dans l\'administration.');
 }
 
 $admins = (int) DB::value("SELECT COUNT(*) FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name = 'admin'");

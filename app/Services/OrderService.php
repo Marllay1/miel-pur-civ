@@ -86,45 +86,45 @@ final class OrderService
     public static function create(array $data, ?array $cart, ?int $userId, string $idempotencyKey, ?int $expectedTotal): array
     {
         if (!preg_match('/^[a-f0-9]{32}$/', $idempotencyKey)) {
-            return ['status' => 'error', 'errors' => ['Formulaire invalide. Rechargez la page.']];
+            return ['status' => 'error', 'errors' => [t('form.invalid_reload')]];
         }
         $existing = DB::one('SELECT * FROM orders WHERE idempotency_key = ?', [$idempotencyKey]);
         if ($existing !== null) {
             return ['status' => 'existing', 'order' => $existing];
         }
         if ($cart === null) {
-            return ['status' => 'error', 'errors' => ['Votre panier est vide.']];
+            return ['status' => 'error', 'errors' => [t('cart.empty')]];
         }
         $token = bin2hex(random_bytes(16));
         try {
             $order = DB::transaction(static function () use ($data, $cart, $userId, $idempotencyKey, $expectedTotal, $token): array {
                 $summary = CartService::summary($cart);
                 if ($summary['items'] === []) {
-                    throw new OrderException(['Votre panier est vide.']);
+                    throw new OrderException([t('cart.empty')]);
                 }
                 if ($summary['problems'] !== []) {
                     throw new OrderException($summary['problems']);
                 }
                 if ($summary['promo_error'] !== null) {
-                    throw new OrderException(['Code promo : ' . $summary['promo_error'] . ' Retirez-le du panier pour continuer.']);
+                    throw new OrderException([t('order.promo_error', ['error' => $summary['promo_error']])]);
                 }
                 $zone = ShippingService::find((int) $data['zone_id']);
                 if ($zone === null) {
-                    throw new OrderException(['Zone de livraison invalide.']);
+                    throw new OrderException([t('order.zone_invalid')]);
                 }
                 $isPickup = (int) $zone['is_pickup'] === 1;
                 $method = (string) $data['payment_method'];
                 $allowed = array_column(PaymentService::availableMethods($zone), 'code');
                 if (!in_array($method, $allowed, true)) {
-                    throw new OrderException(['Ce moyen de paiement n\'est pas disponible pour cette zone.']);
+                    throw new OrderException([t('order.method_unavailable')]);
                 }
                 $min = Settings::int('min_order_amount');
                 if ($min > 0 && $summary['subtotal'] < $min) {
-                    throw new OrderException(['Le montant minimum de commande est de ' . money($min) . '.']);
+                    throw new OrderException([t('order.min_amount', ['amount' => money($min)])]);
                 }
                 $quote = self::quote($summary, $zone);
                 if ($expectedTotal === null || $expectedTotal !== $quote['total']) {
-                    throw new OrderException(['Le total de votre commande a été recalculé : ' . money($quote['total']) . '. Vérifiez le récapitulatif puis confirmez à nouveau.'], $quote['total']);
+                    throw new OrderException([t('order.total_changed', ['total' => money($quote['total'])])], $quote['total']);
                 }
 
                 $now = gmdate('Y-m-d H:i:s');
@@ -138,6 +138,7 @@ final class OrderService
                     'status' => $online ? 'pending_payment' : 'pending_confirmation',
                     'payment_method' => $method,
                     'payment_status' => $online ? 'pending' : 'unpaid',
+                    'locale' => \App\Core\Lang::get(),
                     'customer_first_name' => $data['first_name'],
                     'customer_last_name' => $data['last_name'],
                     'customer_email' => mb_strtolower($data['email']),
@@ -168,7 +169,7 @@ final class OrderService
                         [$qty, $now, (int) $item['variant_id'], $qty]
                     )->rowCount();
                     if ($updated !== 1) {
-                        throw new OrderException([sprintf('Stock insuffisant pour « %s – %s ». Mettez à jour votre panier.', $item['product_name'], $item['variant_label'])]);
+                        throw new OrderException([t('order.stock', ['item' => $item['product_name'] . ' – ' . $item['variant_label']])]);
                     }
                     DB::insert('order_items', [
                         'order_id' => $orderId,
@@ -187,7 +188,7 @@ final class OrderService
                     ]);
                 }
                 if (isset($summary['promo']['id']) && !PromoService::consume((int) $summary['promo']['id'])) {
-                    throw new OrderException(['Ce code promo vient d\'atteindre son nombre maximal d\'utilisations. Retirez-le pour continuer.']);
+                    throw new OrderException([t('order.promo_exhausted')]);
                 }
                 DB::insert('order_status_history', [
                     'order_id' => $orderId, 'from_status' => null,
@@ -351,10 +352,32 @@ final class OrderService
     public static function expireOverdue(): int
     {
         $count = 0;
-        $rows = DB::all("SELECT id FROM orders WHERE status = 'pending_payment' AND expires_at IS NOT NULL AND expires_at < ?", [gmdate('Y-m-d H:i:s')]);
+        $rows = DB::all("SELECT id, expires_at FROM orders WHERE status = 'pending_payment' AND expires_at IS NOT NULL AND expires_at < ?", [gmdate('Y-m-d H:i:s')]);
         foreach ($rows as $row) {
+            $note = 'Délai de paiement dépassé : annulation automatique.';
+            // Une notification de paiement peut s'être perdue : on interroge le prestataire avant d'annuler.
+            $payment = PaymentService::latestForOrder((int) $row['id']);
+            if ($payment !== null && $payment['status'] === 'initiated' && $payment['provider'] !== 'demo') {
+                try {
+                    $result = PaymentService::verify($payment);
+                } catch (\Throwable $e) {
+                    $result = 'unavailable';
+                    Log::error('Vérification avant expiration impossible : ' . $e->getMessage(), ['ref' => $payment['reference']]);
+                }
+                if ($result === 'unavailable') {
+                    // Prestataire injoignable : on réessaie aux passages suivants plutôt que d'annuler à tort,
+                    // puis, après 24 h, on libère le stock en le signalant (un paiement tardif sera visible dans le journal).
+                    if (strtotime((string) $row['expires_at'] . ' UTC') > time() - 86400) {
+                        continue;
+                    }
+                    $note = 'Délai de paiement dépassé ; état du paiement invérifiable auprès du prestataire depuis 24 h : annulation automatique, à contrôler.';
+                }
+                if (DB::value('SELECT status FROM orders WHERE id = ?', [(int) $row['id']]) !== 'pending_payment') {
+                    continue;
+                }
+            }
             try {
-                self::transition((int) $row['id'], 'cancelled', null, 'Délai de paiement dépassé : annulation automatique.');
+                self::transition((int) $row['id'], 'cancelled', null, $note);
                 $count++;
             } catch (\DomainException $e) {
                 Log::info('Expiration ignorée : ' . $e->getMessage());

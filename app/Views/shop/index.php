@@ -2,94 +2,80 @@
 use App\Core\View;
 use App\Services\Catalog;
 /** @var array $result @var array $filters @var array $query @var array $categories @var ?array $currentCategory @var array $formats */
+$activeFilters = array_filter([$filters['format'], $filters['prix_min'], $filters['prix_max'], $filters['en_stock'] ? '1' : null, $filters['tri'] !== 'pertinence' ? $filters['tri'] : null], static fn ($v) => $v !== null && $v !== '');
 ?>
-<div class="page-head">
-  <div class="wrap">
-    <nav class="breadcrumb" aria-label="Fil d'Ariane">
-      <ol>
-        <li><a href="/">Accueil</a></li>
-        <?php if ($currentCategory): ?>
-        <li><a href="/boutique">Boutique</a></li>
-        <li aria-current="page"><?= e($currentCategory['name']) ?></li>
-        <?php else: ?>
-        <li aria-current="page">Boutique</li>
-        <?php endif; ?>
-      </ol>
-    </nav>
-    <h1><?= e($currentCategory['name'] ?? 'Boutique') ?></h1>
-    <?php if ($currentCategory && $currentCategory['description']): ?><p class="lead"><?= rich_inline($currentCategory['description']) ?></p><?php endif; ?>
+<div class="wrap page-head">
+  <h1><?= e($currentCategory['name'] ?? t('nav.shop')) ?></h1>
+  <?php if ($currentCategory && $currentCategory['description']): ?><p class="lead"><?= e($currentCategory['description']) ?></p><?php else: ?><p class="lead"><?= e(t('shop.lead')) ?></p><?php endif; ?>
+</div>
+
+<div class="wrap">
+  <form action="/boutique" method="get" class="searchbar" role="search" id="recherche">
+    <?= icon('search') ?>
+    <label class="sr-only" for="f-q"><?= e(t('shop.search')) ?></label>
+    <input id="f-q" name="q" type="search" value="<?= e($filters['q']) ?>" maxlength="80" placeholder="<?= e(t('shop.search_placeholder')) ?>" data-search-input>
+    <?php if ($filters['categorie'] !== ''): ?><input type="hidden" name="categorie" value="<?= e($filters['categorie']) ?>"><?php endif; ?>
+  </form>
+
+  <nav class="chips" aria-label="<?= e(t('shop.categories')) ?>">
+    <a class="chip" href="<?= e(url('/boutique', array_diff_key($query, ['categorie' => 1, 'page' => 1]))) ?>"<?= $filters['categorie'] === '' ? ' aria-current="page"' : '' ?>><?= e(t('shop.all')) ?></a>
+    <?php foreach ($categories as $c): ?>
+    <a class="chip" href="<?= e(url('/boutique', ['categorie' => $c['slug']] + array_diff_key($query, ['page' => 1]))) ?>"<?= $filters['categorie'] === $c['slug'] ? ' aria-current="page"' : '' ?>><?= e($c['name']) ?> <span class="count"><?= (int) $c['product_count'] ?></span></a>
+    <?php endforeach; ?>
+  </nav>
+
+  <div class="shop-toolbar">
+    <p class="results-count" aria-live="polite"><?= e(t('shop.results', ['count' => (int) $result['total']])) ?></p>
   </div>
-</div>
 
-<div class="wrap shop-layout">
-  <aside class="filters" aria-labelledby="h-filters">
-    <details class="filters-box" open data-filters>
-      <summary id="h-filters">Filtrer et trier</summary>
-      <form action="/boutique" method="get" class="filters-form">
-        <div class="field">
-          <label for="f-q">Recherche</label>
-          <input id="f-q" name="q" type="search" value="<?= e($filters['q']) ?>" maxlength="80">
-        </div>
-        <div class="field">
-          <label for="f-cat">Catégorie</label>
-          <select id="f-cat" name="categorie">
-            <option value="">Toutes</option>
-            <?php foreach ($categories as $c): ?>
-            <option value="<?= e($c['slug']) ?>"<?= $filters['categorie'] === $c['slug'] ? ' selected' : '' ?>><?= e($c['name']) ?> (<?= (int) $c['product_count'] ?>)</option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <?php if ($formats): ?>
-        <div class="field">
-          <label for="f-format">Format</label>
-          <select id="f-format" name="format">
-            <option value="">Tous</option>
-            <?php foreach ($formats as $k => $label): ?>
-            <option value="<?= e($k) ?>"<?= $filters['format'] === $k ? ' selected' : '' ?>><?= e($label) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <?php endif; ?>
-        <fieldset class="field price-range">
-          <legend>Prix (FCFA)</legend>
-          <div class="inline-field">
-            <label class="sr-only" for="f-min">Prix minimum</label>
-            <input id="f-min" name="prix_min" type="number" min="0" step="500" inputmode="numeric" placeholder="Min" value="<?= e($filters['prix_min']) ?>">
-            <span aria-hidden="true">–</span>
-            <label class="sr-only" for="f-max">Prix maximum</label>
-            <input id="f-max" name="prix_max" type="number" min="0" step="500" inputmode="numeric" placeholder="Max" value="<?= e($filters['prix_max']) ?>">
-          </div>
-        </fieldset>
-        <label class="check"><input type="checkbox" name="en_stock" value="1"<?= $filters['en_stock'] ? ' checked' : '' ?>> En stock uniquement</label>
-        <div class="field">
-          <label for="f-tri">Trier par</label>
-          <select id="f-tri" name="tri">
-            <?php foreach (Catalog::SORTS as $k => $label): ?>
-            <option value="<?= e($k) ?>"<?= $filters['tri'] === $k ? ' selected' : '' ?>><?= e($label) ?></option>
-            <?php endforeach; ?>
-          </select>
-        </div>
-        <div class="filters-actions">
-          <button class="btn btn-primary btn-small" type="submit">Appliquer</button>
-          <a class="link-btn" href="/boutique">Réinitialiser</a>
-        </div>
-      </form>
-    </details>
-  </aside>
+  <details class="filters-sheet"<?= $activeFilters ? ' open' : '' ?>>
+    <summary class="btn btn-gray btn-small"><?= icon('filter') ?><?= e(t('shop.filters')) ?><?= $activeFilters ? ' · ' . count($activeFilters) : '' ?></summary>
+    <form action="/boutique" method="get" class="filters-panel">
+      <?php if ($filters['q'] !== ''): ?><input type="hidden" name="q" value="<?= e($filters['q']) ?>"><?php endif; ?>
+      <?php if ($filters['categorie'] !== ''): ?><input type="hidden" name="categorie" value="<?= e($filters['categorie']) ?>"><?php endif; ?>
+      <?php if ($formats): ?>
+      <div class="field">
+        <label for="f-format"><?= e(t('shop.format')) ?></label>
+        <select id="f-format" name="format">
+          <option value=""><?= e(t('shop.all_formats')) ?></option>
+          <?php foreach ($formats as $k => $label): ?><option value="<?= e($k) ?>"<?= $filters['format'] === $k ? ' selected' : '' ?>><?= e(t('format.' . $k)) ?></option><?php endforeach; ?>
+        </select>
+      </div>
+      <?php endif; ?>
+      <div class="field">
+        <label for="f-min"><?= e(t('shop.price_min')) ?></label>
+        <input id="f-min" name="prix_min" type="number" min="0" step="500" inputmode="numeric" value="<?= e($filters['prix_min']) ?>">
+      </div>
+      <div class="field">
+        <label for="f-max"><?= e(t('shop.price_max')) ?></label>
+        <input id="f-max" name="prix_max" type="number" min="0" step="500" inputmode="numeric" value="<?= e($filters['prix_max']) ?>">
+      </div>
+      <div class="field">
+        <label for="f-tri"><?= e(t('shop.sort')) ?></label>
+        <select id="f-tri" name="tri">
+          <?php foreach (array_keys(Catalog::SORTS) as $k): ?><option value="<?= e($k) ?>"<?= $filters['tri'] === $k ? ' selected' : '' ?>><?= e(t('sort.' . $k)) ?></option><?php endforeach; ?>
+        </select>
+      </div>
+      <label class="switch field-full"><span><?= e(t('shop.in_stock')) ?></span><input type="checkbox" name="en_stock" value="1"<?= $filters['en_stock'] ? ' checked' : '' ?>></label>
+      <div class="filters-actions">
+        <button class="btn btn-small" type="submit"><?= e(t('shop.apply')) ?></button>
+        <a class="btn btn-small btn-plain" href="<?= e(url('/boutique', ['categorie' => $filters['categorie'] ?: null])) ?>"><?= e(t('shop.reset')) ?></a>
+      </div>
+    </form>
+  </details>
 
-  <section class="shop-results" aria-labelledby="h-results">
-    <h2 id="h-results" class="results-count"><?= (int) $result['total'] ?> produit<?= $result['total'] > 1 ? 's' : '' ?></h2>
-    <?php if ($result['items']): ?>
-    <div class="product-grid">
-      <?php foreach ($result['items'] as $product): ?><?= View::partial('product-card', ['product' => $product]) ?><?php endforeach; ?>
-    </div>
-    <?= View::partial('pagination', ['page' => $result['page'], 'pages' => $result['pages'], 'base' => '/boutique', 'query' => $query]) ?>
-    <?php else: ?>
-    <div class="empty-state">
-      <span class="hex-outline" aria-hidden="true"></span>
-      <p>Aucun produit ne correspond à votre recherche.</p>
-      <a class="btn btn-ghost" href="/boutique">Voir tout le catalogue</a>
-    </div>
-    <?php endif; ?>
-  </section>
+  <?php if ($result['items']): ?>
+  <div class="product-grid">
+    <?php foreach ($result['items'] as $product): ?><?= View::partial('product-card', ['product' => $product]) ?><?php endforeach; ?>
+  </div>
+  <?= View::partial('pagination', ['page' => $result['page'], 'pages' => $result['pages'], 'base' => '/boutique', 'query' => $query]) ?>
+  <?php else: ?>
+  <div class="empty-state">
+    <?= icon('search') ?>
+    <h2><?= e(t('shop.empty')) ?></h2>
+    <p class="muted"><?= e(t('shop.empty_hint')) ?></p>
+    <a class="btn btn-tinted" href="/boutique"><?= e(t('shop.see_catalog')) ?></a>
+  </div>
+  <?php endif; ?>
 </div>
+<div class="section"></div>

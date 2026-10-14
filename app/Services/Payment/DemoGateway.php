@@ -7,27 +7,17 @@ use App\Core\Env;
 use App\Services\Settings;
 
 /**
- * Paiement SIMULÉ. Aucune somme n'est débitée. Sert à tester le parcours complet,
- * y compris la notification signée (HMAC-SHA256 de « horodatage.corps », tolérance 300 s).
- * À désactiver en production (DEMO_PAYMENT_ENABLED=0 et réglage demo_payment_enabled=0).
+ * Paiement SIMULÉ (tests uniquement). Aucune somme n'est débitée.
+ * Notification signée HMAC-SHA256 de « horodatage.corps », tolérance 300 s.
+ * Désactivé par défaut : DEMO_PAYMENT_ENABLED=1 + réglage demo_payment_enabled + secret ≥ 32 caractères.
  */
-final class DemoGateway implements Gateway
+final class DemoGateway extends AbstractGateway
 {
     public const TOLERANCE = 300;
 
     public function code(): string
     {
         return 'demo';
-    }
-
-    public function label(): string
-    {
-        return 'Paiement SIMULÉ (démonstration)';
-    }
-
-    public function description(): string
-    {
-        return 'Aucune somme n\'est débitée. Permet de tester le paiement en ligne avant l\'intégration d\'un vrai prestataire.';
     }
 
     public function secret(): string
@@ -45,9 +35,14 @@ final class DemoGateway implements Gateway
         return ['DEMO_PAYMENT_ENABLED', 'DEMO_PAYMENT_SECRET'];
     }
 
-    public function checkoutUrl(array $payment, string $orderToken): string
+    public function start(array $payment, array $order, string $orderToken): array
     {
-        return url('/paiement/demo/' . $payment['reference'], ['t' => $orderToken]);
+        return ['redirect' => url('/paiement/demo/' . $payment['reference'], ['t' => $orderToken]), 'pending' => false, 'provider_token' => null];
+    }
+
+    public function fetchStatus(array $payment): ?array
+    {
+        return null;
     }
 
     public function sign(string $body, int $timestamp): string
@@ -65,7 +60,7 @@ final class DemoGateway implements Gateway
             'status' => $status,
             'amount' => (int) $payment['amount'],
             'currency' => 'XOF',
-            'provider_reference' => 'DEMO-' . strtoupper(bin2hex(random_bytes(5))),
+            'provider_reference' => 'SIM-' . strtoupper(bin2hex(random_bytes(5))),
         ], JSON_THROW_ON_ERROR);
         return [
             'headers' => ['x-demo-timestamp' => (string) $timestamp, 'x-demo-signature' => $this->sign($body, $timestamp)],
@@ -73,7 +68,7 @@ final class DemoGateway implements Gateway
         ];
     }
 
-    public function parseWebhook(array $headers, string $body, ?int $now = null): array
+    public function parseNotification(array $headers, string $body, array $post, ?int $now = null): array
     {
         $now ??= time();
         $headers = array_change_key_case($headers, CASE_LOWER);
@@ -97,12 +92,12 @@ final class DemoGateway implements Gateway
             || !in_array($data['status'], ['succeeded', 'failed', 'cancelled'], true)) {
             throw new WebhookException('Contenu invalide.', 422);
         }
-        return [
+        return ['reference' => $data['reference'], 'token' => null, 'event' => [
             'event_id' => mb_substr($data['event_id'], 0, 100),
             'reference' => $data['reference'],
             'status' => $data['status'],
             'amount' => $data['amount'],
             'provider_reference' => isset($data['provider_reference']) && is_string($data['provider_reference']) ? mb_substr($data['provider_reference'], 0, 120) : null,
-        ];
+        ]];
     }
 }

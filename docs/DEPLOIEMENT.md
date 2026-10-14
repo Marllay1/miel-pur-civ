@@ -2,13 +2,19 @@
 
 ## 1. Hébergement
 
-- PHP 8.2+ (8.3 recommandé) avec les extensions listées dans INSTALLATION.md ; MariaDB 10.6+ ou MySQL 8+.
+- PHP 8.2+ (8.3 recommandé) avec les extensions listées dans INSTALLATION.md (dont `curl` pour les paiements en ligne) ; MariaDB 10.4+ ou MySQL 8+.
 - Hébergement mutualisé possible si l'on peut **choisir le dossier racine** (DocumentRoot) et lancer des tâches planifiées (cron).
 - **Le DocumentRoot doit pointer sur `public/`**. Les dossiers `app/`, `bin/`, `database/`, `storage/`, `tests/` et le fichier `.env` ne doivent jamais être accessibles depuis le web. Un `.htaccess` de secours à la racine du projet bloque ces chemins si la configuration est imparfaite, mais il ne remplace pas un DocumentRoot correct.
 
-Exemple Apache :
+Les deux configurations ci-dessous ont été **testées** (Apache 2.4.58 via XAMPP, Nginx 1.30.5 avec PHP en FastCGI) : 66 contrôles de sécurité HTTP réussis sur chacune (`tests/security-http.php`, voir docs/TESTS.md).
+
+### Apache
 
 ```
+TraceEnable Off
+ServerTokens Prod
+ServerSignature Off
+
 <VirtualHost *:443>
     ServerName www.exemple.ci
     DocumentRoot /var/www/miel-pur-ci/public
@@ -21,13 +27,27 @@ Exemple Apache :
 </VirtualHost>
 ```
 
-Exemple Nginx (PHP-FPM) :
+`TraceEnable`, `ServerTokens` et `ServerSignature` se placent au niveau du serveur (pas dans un `.htaccess`) ; vérifier qu'aucun fichier inclus plus loin ne les redéfinit (sous XAMPP : `httpd-default.conf`). Modules requis : `mod_rewrite`, `mod_headers`.
+
+### Nginx (PHP-FPM)
 
 ```
+server_tokens off;
+
+# Hôte inconnu (en-tête Host forgé) : connexion fermée sans réponse.
 server {
+    listen 443 ssl default_server;
+    server_name _;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 443 ssl;
     server_name www.exemple.ci;
     root /var/www/miel-pur-ci/public;
     index index.php;
+    client_max_body_size 8m;
+    # certificats Let's Encrypt (certbot)…
     location ~ /\. { deny all; }
     location /uploads/ { location ~ \.php$ { deny all; } }
     location / { try_files $uri /index.php?$query_string; }
@@ -36,17 +56,25 @@ server {
 }
 ```
 
+Seul `public/index.php` est exécuté ; tout autre fichier `.php` renvoie 404, et aucun script n'est exécuté dans `uploads/`. `client_max_body_size` doit rester supérieur à la taille maximale des images (5 Mo).
+
 ## 2. HTTPS
 
-Obligatoire. Certificat Let's Encrypt (certbot) ou celui de l'hébergeur. Puis dans `.env` : `APP_URL=https://www.exemple.ci`. Les cookies passent alors en `Secure` et l'en-tête HSTS est envoyé automatiquement. Derrière un proxy/CDN, renseigner `TRUSTED_PROXY`.
+Obligatoire (et indispensable aux notifications de paiement). Certificat Let's Encrypt (certbot) ou celui de l'hébergeur. Puis dans `.env` : `APP_URL=https://www.exemple.ci`. Les cookies passent alors en `Secure` et l'en-tête HSTS est envoyé automatiquement. Derrière un proxy/CDN, renseigner `TRUSTED_PROXY`.
 
 ## 3. Installation sur le serveur
 
 ```bash
-php bin/install.php
+php bin/install.php --catalog
 ```
 
-(sans `--demo` en production). Compléter `.env` : `APP_ENV=production`, `APP_DEBUG=0`, accès base, `MAIL_DRIVER=mail` si un serveur de messagerie est configuré, `DEMO_PAYMENT_ENABLED=0`. Droits : `.env` en 600 ; `storage/` et `public/uploads/` inscriptibles par l'utilisateur PHP.
+(`--catalog` charge la gamme initiale ; l'omettre pour démarrer avec un catalogue vide). Compléter `.env` : `APP_ENV=production`, `APP_DEBUG=0`, accès base, e-mails (`MAIL_DRIVER=smtp` et `SMTP_*`, voir PARAMETRES.md), `DEMO_PAYMENT_ENABLED=0`, clés des prestataires de paiement (voir INTEGRATIONS.md). Droits : `.env` en 600 ; `storage/` et `public/uploads/` inscriptibles par l'utilisateur PHP.
+
+Vérifier l'envoi d'e-mails :
+
+```bash
+php tests/smtp-check.php --to=votre@adresse.ci
+```
 
 ## 4. Premier administrateur
 
@@ -63,11 +91,11 @@ Le mot de passe généré s'affiche **une seule fois** : le noter, se connecter 
 30 2 * * *   php /var/www/miel-pur-ci/bin/backup.php >> /var/www/miel-pur-ci/storage/logs/cron.log 2>&1
 ```
 
-`expire-orders` annule les commandes payables en ligne restées impayées après le délai (réglage *Délai de paiement*), restitue stock et codes promo, et purge les données techniques expirées. Tant que seul le paiement à la livraison est actif, il sert surtout au nettoyage.
+`expire-orders` annule les commandes payables en ligne restées impayées après le délai (réglage *Délai de paiement*), restitue stock et codes promo, vérifie une dernière fois l'état des paiements en attente auprès des prestataires et purge les données techniques expirées.
 
 ## 6. Avant d'ouvrir le site
 
-Suivre la liste de contrôle de **/admin/integrations** (tout doit être « oui ») et le document [PARAMETRES.md](PARAMETRES.md). En particulier : retirer les produits de démonstration, désactiver le paiement simulé et le bandeau de démonstration, faire valider les pages légales, renseigner coordonnées et zones de livraison réelles.
+Suivre la liste de contrôle de **/admin/integrations** (tout doit être « oui ») et le document [PARAMETRES.md](PARAMETRES.md). En particulier : faire valider les pages légales, renseigner raison sociale, RCCM, directeur de la publication, hébergeur et e-mail de notification des commandes, vérifier les frais et délais des zones de livraison, tester chaque moyen de paiement en ligne avec une petite transaction réelle avant de l'ouvrir.
 
 ## 7. Mises à jour
 

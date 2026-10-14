@@ -10,11 +10,15 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Session;
 use App\Core\Validator;
+use App\Services\I18n;
 use App\Services\Settings;
 
 final class ContentController extends Base
 {
-    public const HOME_KEYS = ['home_hero_title', 'home_hero_text', 'home_story_title', 'home_story_text', 'home_pro_text', 'store_tagline'];
+    public const HOME_KEYS = [
+        'home_hero_title', 'home_hero_title_en', 'home_hero_text', 'home_hero_text_en', 'home_story_title', 'home_story_title_en',
+        'home_story_text', 'home_story_text_en', 'home_pro_text', 'home_pro_text_en', 'store_tagline', 'store_tagline_en',
+    ];
 
     // ---- Messages de contact
     public function messages(Request $r): Response
@@ -94,7 +98,8 @@ final class ContentController extends Base
         if ($page === null) {
             throw new HttpException(404);
         }
-        return admin_view('content/page-form', ['page' => $page, 'old' => $old ?? $page, 'errors' => $errors, 'pageTitle' => $page['title']], $status);
+        return admin_view('content/page-form', ['page' => $page, 'old' => $old ?? $page, 'errors' => $errors, 'pageTitle' => $page['title'],
+            'translation' => is_array($old['en'] ?? null) ? $old['en'] : I18n::get('page', (int) $page['id'])], $status);
     }
 
     public function pageSave(Request $r): Response
@@ -114,6 +119,7 @@ final class ContentController extends Base
             'is_validated' => $validated, 'updated_by' => $this->uid(), 'updated_at' => gmdate('Y-m-d H:i:s'),
         ], 'id = ?', [(int) $page['id']]);
         Audit::log('page.update', 'page', $page['slug'], ['validated' => $validated]);
+        $this->saveTranslation($r, 'page', (int) $page['id']);
         Session::flash('success', 'Page enregistrée.');
         return redirect('/admin/pages/' . $page['id']);
     }
@@ -125,6 +131,7 @@ final class ContentController extends Base
         return admin_view('content/faqs', [
             'faqs' => DB::all('SELECT * FROM faqs ORDER BY category, sort_order, id'),
             'edit' => $edit, 'old' => $old ?? ($edit ?? ['is_active' => 1, 'category' => 'Général']), 'errors' => $errors, 'pageTitle' => 'FAQ',
+            'translation' => is_array($old['en'] ?? null) ? $old['en'] : ($edit ? I18n::get('faq', (int) $edit['id']) : []),
         ], $status);
     }
 
@@ -145,6 +152,7 @@ final class ContentController extends Base
             $id = DB::insert('faqs', $data + ['created_at' => $now]);
         }
         Audit::log('faq.save', 'faq', $id);
+        $this->saveTranslation($r, 'faq', $id);
         Session::flash('success', 'Question enregistrée.');
         return redirect('/admin/faq');
     }
@@ -152,6 +160,7 @@ final class ContentController extends Base
     public function faqDelete(Request $r): Response
     {
         DB::run('DELETE FROM faqs WHERE id = ?', [(int) $r->params['id']]);
+        DB::run('DELETE FROM translations WHERE entity_type = ? AND entity_id = ?', ['faq', (int) $r->params['id']]);
         Audit::log('faq.delete', 'faq', (int) $r->params['id']);
         Session::flash('success', 'Question supprimée.');
         return redirect('/admin/faq');

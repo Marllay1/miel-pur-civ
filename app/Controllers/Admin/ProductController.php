@@ -11,6 +11,7 @@ use App\Core\Response;
 use App\Core\Session;
 use App\Core\Validator;
 use App\Services\Catalog;
+use App\Services\I18n;
 use App\Services\ImageService;
 
 final class ProductController extends Base
@@ -51,7 +52,8 @@ final class ProductController extends Base
     {
         return admin_view('products/form', [
             'product' => null, 'old' => $old + ['is_active' => '1'], 'errors' => $errors, 'categories' => $this->categories(),
-            'variants' => [], 'images' => [], 'pageTitle' => 'Nouveau produit',
+            'variants' => [], 'images' => [], 'translation' => is_array($old['en'] ?? null) ? $old['en'] : [], 'variantTranslations' => [],
+            'pageTitle' => 'Nouveau produit',
         ], $status);
     }
 
@@ -91,6 +93,7 @@ final class ProductController extends Base
         $now = gmdate('Y-m-d H:i:s');
         $id = DB::insert('products', $data + ['created_at' => $now, 'updated_at' => $now, 'deleted_at' => null]);
         Audit::log('product.create', 'product', $id, ['name' => $data['name']]);
+        $this->saveTranslation($r, 'product', $id);
         Session::flash('success', 'Produit créé. Ajoutez maintenant ses variantes (formats, prix, stock) et ses images.');
         return redirect('/admin/produits/' . $id);
     }
@@ -107,9 +110,15 @@ final class ProductController extends Base
     public function edit(Request $r, array $errors = [], ?array $old = null, int $status = 200): Response
     {
         $p = $this->find((int) $r->params['id']);
+        $variants = Catalog::variants((int) $p['id'], false);
+        $variantTranslations = [];
+        foreach ($variants as $variant) {
+            $variantTranslations[(int) $variant['id']] = I18n::get('variant', (int) $variant['id'])['label'] ?? '';
+        }
         return admin_view('products/form', [
             'product' => $p, 'old' => $old ?? $p, 'errors' => $errors, 'categories' => $this->categories(),
-            'variants' => Catalog::variants((int) $p['id'], false), 'images' => Catalog::images((int) $p['id']),
+            'variants' => $variants, 'images' => Catalog::images((int) $p['id']),
+            'translation' => is_array($old['en'] ?? null) ? $old['en'] : I18n::get('product', (int) $p['id']), 'variantTranslations' => $variantTranslations,
             'pageTitle' => $p['name'],
         ], $status);
     }
@@ -124,6 +133,7 @@ final class ProductController extends Base
         $changed = array_keys(array_diff_assoc(array_map('strval', $data), array_map('strval', array_intersect_key($p, $data))));
         DB::update('products', $data + ['updated_at' => gmdate('Y-m-d H:i:s')], 'id = ?', [(int) $p['id']]);
         Audit::log('product.update', 'product', (int) $p['id'], ['fields' => $changed]);
+        $this->saveTranslation($r, 'product', (int) $p['id']);
         Session::flash('success', 'Produit enregistré.');
         return redirect('/admin/produits/' . $p['id']);
     }
@@ -187,6 +197,7 @@ final class ProductController extends Base
             DB::insert('stock_movements', ['variant_id' => $vid, 'quantity' => $data['stock'], 'reason' => 'initial', 'reference' => null, 'user_id' => $this->uid(), 'note' => 'Stock initial', 'created_at' => $now]);
         }
         Audit::log('variant.create', 'variant', $vid, ['product' => (int) $p['id'], 'sku' => $data['sku'], 'price' => $data['price'], 'stock' => $data['stock']]);
+        $this->saveTranslation($r, 'variant', $vid);
         Session::flash('success', 'Variante « ' . $data['label'] . ' » ajoutée.');
         return redirect('/admin/produits/' . $p['id'] . '#variantes');
     }
@@ -214,6 +225,7 @@ final class ProductController extends Base
             $details['price'] = [(int) $variant['price'], (int) $data['price']];
         }
         Audit::log('variant.update', 'variant', (int) $variant['id'], $details);
+        $this->saveTranslation($r, 'variant', (int) $variant['id']);
         Session::flash('success', 'Variante enregistrée.');
         return redirect('/admin/produits/' . $variant['product_id'] . '#variantes');
     }

@@ -1,7 +1,7 @@
 <?php
 use App\Core\View;
 use App\Services\Catalog;
-/** @var ?array $product @var array $old @var array $errors @var array $categories @var array $variants @var array $images */
+/** @var ?array $product @var array $old @var array $errors @var array $categories @var array $variants @var array $images @var array $translation @var array $variantTranslations */
 $val = static fn (string $k) => e($old[$k] ?? '');
 $chk = static fn (string $k) => !empty($old[$k]) ? ' checked' : '';
 $action = $product ? '/admin/produits/' . $product['id'] : '/admin/produits';
@@ -37,6 +37,12 @@ $action = $product ? '/admin/produits/' . $product['id'] : '/admin/produits';
     <label class="check"><input type="checkbox" name="is_featured" value="1"<?= $chk('is_featured') ?>> À la une (accueil)</label>
     <label class="check"><input type="checkbox" name="is_demo" value="1"<?= $chk('is_demo') ?>> Produit de démonstration (badge « Démo »)</label>
   </div>
+  <div class="field-full"><?= View::partial('admin-translation', [
+      'type' => 'product', 'values' => $translation, 'prefix' => 'en-product',
+      'labels' => ['name' => 'Nom', 'short_description' => 'Résumé', 'description' => 'Description', 'origin' => 'Origine', 'usage_tips' => 'Utilisations',
+          'storage_tips' => 'Conservation', 'meta_title' => 'Titre SEO', 'meta_description' => 'Description SEO'],
+      'long' => ['description', 'origin', 'usage_tips', 'storage_tips'],
+  ]) ?></div>
   <div class="field-full"><button class="btn btn-primary" type="submit"><?= $product ? 'Enregistrer' : 'Créer le produit' ?></button></div>
 </form>
 
@@ -48,6 +54,7 @@ $action = $product ? '/admin/produits/' . $product['id'] : '/admin/produits';
   <form action="/admin/variantes/<?= (int) $v['id'] ?>" method="post" class="variant-row">
     <?= csrf_field() ?>
     <div class="field"><label for="v<?= (int) $v['id'] ?>-label">Libellé</label><input id="v<?= (int) $v['id'] ?>-label" name="label" required maxlength="100" value="<?= e($v['label']) ?>"></div>
+    <div class="field"><label for="v<?= (int) $v['id'] ?>-label-en">Libellé <span lang="en" class="small muted">(EN)</span></label><input id="v<?= (int) $v['id'] ?>-label-en" name="en[label]" lang="en" maxlength="100" value="<?= e($variantTranslations[(int) $v['id']] ?? '') ?>" placeholder="vide = français"></div>
     <div class="field"><label for="v<?= (int) $v['id'] ?>-format">Format</label><select id="v<?= (int) $v['id'] ?>-format" name="format"><?php foreach (Catalog::FORMATS as $k => $l): ?><option value="<?= e($k) ?>"<?= $v['format'] === $k ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label for="v<?= (int) $v['id'] ?>-sku">Réf. (SKU)</label><input id="v<?= (int) $v['id'] ?>-sku" name="sku" required maxlength="64" value="<?= e($v['sku']) ?>"></div>
     <div class="field"><label for="v<?= (int) $v['id'] ?>-weight">Poids (g)</label><input id="v<?= (int) $v['id'] ?>-weight" name="weight_grams" type="number" min="0" value="<?= e($v['weight_grams']) ?>"></div>
@@ -65,6 +72,7 @@ $action = $product ? '/admin/produits/' . $product['id'] : '/admin/produits';
   <form action="/admin/produits/<?= (int) $product['id'] ?>/variantes" method="post" class="variant-row variant-new">
     <?= csrf_field() ?>
     <div class="field"><label for="nv-label">Libellé</label><input id="nv-label" name="label" required maxlength="100" placeholder="500 g"></div>
+    <div class="field"><label for="nv-label-en">Libellé <span lang="en" class="small muted">(EN)</span></label><input id="nv-label-en" name="en[label]" lang="en" maxlength="100" placeholder="vide = français"></div>
     <div class="field"><label for="nv-format">Format</label><select id="nv-format" name="format"><?php foreach (Catalog::FORMATS as $k => $l): ?><option value="<?= e($k) ?>"><?= e($l) ?></option><?php endforeach; ?></select></div>
     <div class="field"><label for="nv-sku">Réf. (SKU)</label><input id="nv-sku" name="sku" required maxlength="64"></div>
     <div class="field"><label for="nv-weight">Poids (g)</label><input id="nv-weight" name="weight_grams" type="number" min="0"></div>

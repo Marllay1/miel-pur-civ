@@ -43,6 +43,18 @@ final class Response
         return new self('', $status, ['Location' => $url]);
     }
 
+    /** Redirection vers une page de paiement hébergée par un prestataire (HTTPS obligatoire) ou un chemin interne. */
+    public static function redirectExternal(string $url): self
+    {
+        if (str_starts_with($url, '/') && !str_starts_with($url, '//')) {
+            return self::redirect($url);
+        }
+        if (!preg_match('#^https://[a-z0-9.-]+(:\d+)?(/|$)#i', $url) && !(Env::get('APP_ENV') !== 'production' && preg_match('#^http://(127\.0\.0\.1|localhost)(:\d+)?/#', $url))) {
+            return self::redirect('/');
+        }
+        return new self('', 303, ['Location' => $url]);
+    }
+
     public function withHeader(string $name, string $value): self
     {
         $this->headers[$name] = $value;

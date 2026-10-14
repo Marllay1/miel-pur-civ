@@ -2,11 +2,12 @@
 declare(strict_types=1);
 
 /**
- * Données de référence indispensables (idempotent) : rôles, permissions, pages, FAQ, zones de livraison.
- * Les contenus marqués [À CONFIRMER] / [À COMPLÉTER] doivent être validés par le client.
+ * Données de référence indispensables (idempotent) : rôles, permissions, pages FR/EN, FAQ FR/EN, zones de livraison FR/EN.
+ * Les informations d'identification légale (RCCM, NCC, hébergeur…) proviennent des réglages et ne sont affichées que si elles sont renseignées.
  */
 
 use App\Core\DB;
+use App\Services\I18n;
 
 return static function (): void {
     $now = gmdate('Y-m-d H:i:s');
@@ -45,51 +46,57 @@ return static function (): void {
         }
     }
 
-    $legalNotice = "**Modèle provisoire — à faire valider par un juriste au regard du droit ivoirien** (notamment la loi n° 2013-546 relative aux transactions électroniques et la loi n° 2013-450 relative à la protection des données à caractère personnel). [À CONFIRMER]";
-    $pages = [
-        'a-propos' => ['À propos', false, "## Qui sommes-nous ?\n\nMIEL PUR DE CÔTE D'IVOIRE est une entreprise apicole basée à Katiola. [À COMPLÉTER : date de création, fondateurs, équipe.]\n\n## Nos ruchers\n\n[À COMPLÉTER : localisation des ruchers, nombre de ruches, flore butinée (anacardier, karité, néré…), saisons de récolte. Ne publier que des informations vérifiées.]\n\n## Notre façon de travailler\n\n[À COMPLÉTER : méthodes d'extraction, filtration, conditionnement, contrôles qualité.]\n\n## Certifications et analyses\n\nAucune certification n'est revendiquée sur ce site à ce jour. [À CONFIRMER : ajouter uniquement les certifications ou analyses de laboratoire justifiées par un document.]"],
-        'conditions-generales-de-vente' => ['Conditions générales de vente', true, "$legalNotice\n\n## 1. Objet\n\nLes présentes conditions régissent les ventes conclues sur ce site entre [À COMPLÉTER : raison sociale, forme, capital, RCCM, siège] (« le Vendeur ») et toute personne passant commande (« le Client »).\n\n## 2. Produits et prix\n\nLes prix sont indiqués en francs CFA (FCFA), toutes taxes comprises [À CONFIRMER : régime de TVA applicable]. Les frais de livraison sont indiqués avant la validation de la commande.\n\n## 3. Commande\n\nLa commande est enregistrée après validation du récapitulatif. Pour un paiement à la livraison, elle est confirmée par téléphone par le Vendeur.\n\n## 4. Paiement\n\nMoyens acceptés : paiement à la livraison. [À CONFIRMER : autres moyens après intégration effective.]\n\n## 5. Livraison\n\nVoir la [politique de livraison](/politique-de-livraison).\n\n## 6. Rétractation, retours\n\nVoir la [politique de retours et remboursements](/retours-et-remboursements).\n\n## 7. Litiges\n\n[À COMPLÉTER : médiation, juridiction compétente.]"],
-        'politique-de-confidentialite' => ['Politique de confidentialité', true, "$legalNotice\n\n## Responsable du traitement\n\n[À COMPLÉTER : identité et coordonnées du responsable ; déclaration auprès de l'ARTCI le cas échéant.]\n\n## Données collectées\n\n- Identité et coordonnées (nom, téléphone, e-mail, adresse de livraison) pour traiter vos commandes ;\n- Historique de commandes si vous créez un compte ;\n- Messages envoyés via les formulaires de contact et de devis ;\n- Adresse e-mail pour la lettre d'information, uniquement avec votre accord.\n\n## Paiement\n\nAucun numéro de carte bancaire n'est collecté ni stocké par ce site.\n\n## Cookies\n\nCookies strictement nécessaires : session, sécurité des formulaires, panier. Les outils de mesure d'audience ne sont chargés qu'après votre consentement.\n\n## Durées de conservation\n\n[À COMPLÉTER]\n\n## Vos droits\n\nVous pouvez demander l'accès, la rectification ou la suppression de vos données en écrivant à [À COMPLÉTER : adresse de contact]."],
-        'politique-de-livraison' => ['Politique de livraison', true, "$legalNotice\n\n## Zones desservies\n\nLes zones, frais et délais affichés lors de la commande sont fixés par le Vendeur. [À CONFIRMER : liste définitive des zones et tarifs.]\n\n## Confirmation\n\nPour les commandes payées à la livraison, un conseiller vous appelle pour confirmer l'adresse et le créneau.\n\n## Réception\n\nVérifiez l'état des produits en présence du livreur. [À COMPLÉTER : procédure en cas de colis endommagé.]"],
-        'retours-et-remboursements' => ['Retours et remboursements', true, "$legalNotice\n\n## Produits alimentaires\n\n[À CONFIRMER : conditions de retour applicables aux denrées alimentaires (pot non ouvert, délai, état).]\n\n## Produit défectueux ou erreur de commande\n\nContactez-nous dans un délai de [À COMPLÉTER] jours avec votre numéro de commande et une photo.\n\n## Remboursement\n\n[À COMPLÉTER : délai et moyen de remboursement.]"],
-        'mentions-legales' => ['Mentions légales', true, "$legalNotice\n\n## Éditeur du site\n\n[À COMPLÉTER : raison sociale, forme juridique, capital, RCCM, NCC, siège social, téléphone, e-mail, directeur de la publication.]\n\n## Hébergement\n\n[À COMPLÉTER : nom, adresse et téléphone de l'hébergeur.]\n\n## Réalisation\n\nSite conçu et développé par HELIX TECHNOLOGIES.\n\n## Propriété intellectuelle\n\nLes textes, logos et photographies sont la propriété de leurs auteurs. Les illustrations marquées « démo » sont provisoires."],
-    ];
-    foreach ($pages as $slug => [$title, $legal, $body]) {
-        if (DB::value('SELECT id FROM pages WHERE slug = ?', [$slug]) === null) {
-            DB::insert('pages', [
-                'slug' => $slug, 'title' => $title, 'body' => $body, 'is_legal' => $legal ? 1 : 0, 'is_validated' => 0,
-                'meta_description' => null, 'updated_by' => null, 'created_at' => $now, 'updated_at' => $now,
+    $pages = require __DIR__ . '/pages.php';
+    foreach ($pages as $slug => $p) {
+        $id = DB::value('SELECT id FROM pages WHERE slug = ?', [$slug]);
+        if ($id === null) {
+            $id = DB::insert('pages', [
+                'slug' => $slug, 'title' => $p['fr'][0], 'body' => $p['fr'][1], 'is_legal' => $p['legal'] ? 1 : 0, 'is_validated' => 0,
+                'meta_description' => $p['fr'][2] ?? null, 'updated_by' => null, 'created_at' => $now, 'updated_at' => $now,
             ]);
+            I18n::save('page', (int) $id, ['title' => $p['en'][0], 'body' => $p['en'][1], 'meta_description' => $p['en'][2] ?? '']);
         }
     }
 
     if ((int) DB::value('SELECT COUNT(*) FROM faqs') === 0) {
         $faqs = [
-            ['Commande', 'Dois-je créer un compte pour commander ?', 'Non. Vous pouvez commander en tant qu\'invité. Un compte permet simplement de retrouver vos commandes et adresses.'],
-            ['Paiement', 'Quels moyens de paiement acceptez-vous ?', 'Le paiement à la livraison est disponible. Les paiements par Orange Money, MTN Mobile Money, Wave ou carte ne sont **pas encore proposés** : ils le seront uniquement après leur intégration et leurs tests. [À CONFIRMER]'],
-            ['Livraison', 'Où livrez-vous et en combien de temps ?', 'Les zones, frais et délais sont affichés à l\'étape « Livraison » de la commande. [À CONFIRMER : zones définitives.]'],
-            ['Commande', 'Comment suivre ma commande ?', 'Utilisez le lien reçu par e-mail, votre espace client, ou la page [Suivi de commande](/suivi-commande) avec votre numéro et votre e-mail.'],
-            ['Produits', 'Comment conserver le miel ?', 'Dans un endroit sec, à température ambiante, à l\'abri de la lumière, pot bien fermé. La cristallisation est un phénomène naturel. [À CONFIRMER par le producteur.]'],
-            ['Professionnels', 'Proposez-vous des tarifs pour les professionnels ?', 'Oui, sur devis. Remplissez le formulaire [Commandes professionnelles](/commandes-professionnelles).'],
+            [['Commande', 'Dois-je créer un compte pour commander ?', 'Non. Vous pouvez commander en tant qu\'invité. Un compte permet simplement de retrouver vos commandes et vos adresses.'],
+             ['Ordering', 'Do I need an account to order?', 'No. You can check out as a guest. An account simply lets you find your orders and addresses again.']],
+            [['Paiement', 'Quels moyens de paiement acceptez-vous ?', 'Selon les moyens activés au moment de votre commande : paiement à la livraison, Orange Money, MTN Mobile Money, Wave et carte bancaire. Les moyens disponibles sont affichés à l\'étape « Paiement ». Vos données bancaires sont saisies sur la page sécurisée du prestataire, jamais sur notre site.'],
+             ['Payment', 'Which payment methods do you accept?', 'Depending on the methods enabled when you order: cash on delivery, Orange Money, MTN Mobile Money, Wave and bank card. Available methods are shown at the "Payment" step. Your card details are entered on the provider\'s secure page, never on our website.']],
+            [['Livraison', 'Où livrez-vous et en combien de temps ?', 'Nous livrons à Katiola, Bouaké, Abidjan et dans les autres villes de Côte d\'Ivoire. Les frais et délais de chaque zone sont affichés à l\'étape « Livraison », avant toute validation. Le retrait à Katiola est gratuit.'],
+             ['Delivery', 'Where do you deliver and how long does it take?', 'We deliver to Katiola, Bouaké, Abidjan and other cities in Côte d\'Ivoire. The fee and lead time for each area are shown at the "Delivery" step, before you confirm. Pick-up in Katiola is free.']],
+            [['Commande', 'Comment suivre ma commande ?', 'Utilisez le lien reçu par e-mail, votre espace client, ou la page [Suivi de commande](/suivi-commande) avec votre numéro de commande et votre e-mail.'],
+             ['Ordering', 'How can I track my order?', 'Use the link in your confirmation email, your account, or the [Order tracking](/suivi-commande) page with your order number and email.']],
+            [['Produits', 'Pourquoi mon miel cristallise-t-il ?', 'La cristallisation est un phénomène naturel lié à la composition en sucres du miel : elle ne change ni sa qualité ni ses vertus. Pour le rendre de nouveau liquide, placez le pot fermé au bain-marie tiède (40 °C maximum).'],
+             ['Products', 'Why does my honey crystallise?', 'Crystallisation is a natural process caused by the sugars in honey: it changes neither its quality nor its properties. To liquefy it again, warm the closed jar in a lukewarm water bath (40 °C maximum).']],
+            [['Produits', 'Comment conserver le miel ?', 'À température ambiante, à l\'abri de l\'humidité et de la lumière, pot bien fermé. Inutile de le mettre au réfrigérateur.'],
+             ['Products', 'How should I store honey?', 'At room temperature, away from moisture and light, with the lid tightly closed. There is no need to refrigerate it.']],
+            [['Produits', 'Votre miel est-il bio ?', 'Oui. Notre miel est 100 % bio et 100 % miel, et il est certifié conforme aux normes internationales par un laboratoire habilité par l\'INAO.'],
+             ['Products', 'Is your honey organic?', 'Yes. Our honey is 100% organic and 100% honey, and it is certified compliant with international standards by an INAO-approved laboratory.']],
+            [['Professionnels', 'Proposez-vous des tarifs pour les professionnels ?', 'Oui, sur devis, pour des volumes ponctuels ou réguliers. Remplissez le formulaire [Commandes professionnelles](/commandes-professionnelles).'],
+             ['Business', 'Do you offer prices for businesses?', 'Yes, on quotation, for one-off or regular volumes. Fill in the [Business orders](/commandes-professionnelles) form.']],
         ];
-        foreach ($faqs as $i => [$cat, $q, $a]) {
-            DB::insert('faqs', ['question' => $q, 'answer' => $a, 'category' => $cat, 'sort_order' => $i, 'is_active' => 1, 'created_at' => $now, 'updated_at' => $now]);
+        foreach ($faqs as $i => [[$cat, $q, $a], [$catEn, $qEn, $aEn]]) {
+            $id = DB::insert('faqs', ['question' => $q, 'answer' => $a, 'category' => $cat, 'sort_order' => $i, 'is_active' => 1, 'created_at' => $now, 'updated_at' => $now]);
+            I18n::save('faq', $id, ['question' => $qEn, 'answer' => $aEn, 'category' => $catEn]);
         }
     }
 
     if ((int) DB::value('SELECT COUNT(*) FROM shipping_zones') === 0) {
         $zones = [
-            ['Retrait à Katiola', 'Retrait sur rendez-vous [À CONFIRMER : adresse]', 0, null, 'Sur rendez-vous', 1, 1],
-            ['Katiola (livraison locale)', 'Livraison en ville [À CONFIRMER : tarif]', 500, null, '24 à 48 h', 1, 0],
-            ['Bouaké', 'Livraison à domicile [À CONFIRMER : tarif]', 1500, null, '2 à 3 jours', 1, 0],
-            ['Abidjan', 'Livraison à domicile [À CONFIRMER : tarif]', 2500, 50000, '2 à 4 jours', 1, 0],
-            ['Autres villes de Côte d\'Ivoire', 'Expédition par transporteur [À CONFIRMER : tarif, paiement à la livraison possible ?]', 3500, null, '3 à 7 jours', 0, 0],
+            [['Retrait à Katiola', 'Retrait sur rendez-vous, après confirmation par téléphone', 'Sur rendez-vous'], ['Pick-up in Katiola', 'Pick-up by appointment, after phone confirmation', 'By appointment'], 0, null, 1, 1],
+            [['Katiola', 'Livraison à domicile en ville', '24 à 48 h'], ['Katiola', 'Home delivery in town', '24 to 48 hours'], 500, null, 1, 0],
+            [['Bouaké', 'Livraison à domicile', '2 à 3 jours'], ['Bouaké', 'Home delivery', '2 to 3 days'], 1500, null, 1, 0],
+            [['Abidjan', 'Livraison à domicile, offerte dès 50 000 FCFA', '2 à 4 jours'], ['Abidjan', 'Home delivery, free from 50,000 FCFA', '2 to 4 days'], 2500, 50000, 1, 0],
+            [['Autres villes de Côte d\'Ivoire', 'Expédition par transporteur, paiement en ligne', '3 à 7 jours'], ['Other cities in Côte d\'Ivoire', 'Shipped by carrier, online payment', '3 to 7 days'], 3500, null, 0, 0],
         ];
-        foreach ($zones as $i => [$name, $desc, $fee, $free, $delay, $cod, $pickup]) {
-            DB::insert('shipping_zones', [
+        foreach ($zones as $i => [[$name, $desc, $delay], [$nameEn, $descEn, $delayEn], $fee, $free, $cod, $pickup]) {
+            $id = DB::insert('shipping_zones', [
                 'name' => $name, 'description' => $desc, 'fee' => $fee, 'free_threshold' => $free, 'delay_text' => $delay,
                 'allows_cod' => $cod, 'is_pickup' => $pickup, 'is_active' => 1, 'sort_order' => $i, 'created_at' => $now, 'updated_at' => $now,
             ]);
+            I18n::save('zone', $id, ['name' => $nameEn, 'description' => $descEn, 'delay_text' => $delayEn]);
         }
     }
 };

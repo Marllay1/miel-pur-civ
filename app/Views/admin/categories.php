@@ -1,4 +1,4 @@
-<?php use App\Core\View; /** @var array $categories @var ?array $edit @var array $old @var array $errors */ $val = static fn (string $k) => e($old[$k] ?? ''); ?>
+<?php use App\Core\View; /** @var array $categories @var ?array $edit @var array $old @var array $errors @var array $translation */ $val = static fn (string $k) => e($old[$k] ?? ''); ?>
 <h1>Catégories</h1>
 <div class="admin-cols">
   <div class="table-wrap">
@@ -22,6 +22,8 @@
     <div class="field"><label for="f-description">Description</label><textarea id="f-description" name="description" rows="3"><?= $val('description') ?></textarea></div>
     <div class="field"><label for="f-sort">Ordre</label><input id="f-sort" name="sort_order" type="number" min="0" value="<?= $val('sort_order') ?: '0' ?>"></div>
     <label class="check"><input type="checkbox" name="is_active" value="1"<?= !empty($old['is_active']) ? ' checked' : '' ?>> Active</label>
+    <?= View::partial('admin-translation', ['type' => 'category', 'values' => $translation, 'prefix' => 'en-category',
+        'labels' => ['name' => 'Nom', 'description' => 'Description'], 'long' => ['description']]) ?>
     <button class="btn btn-primary btn-small" type="submit">Enregistrer</button>
     <?php if ($edit): ?> <a href="/admin/categories">Annuler</a><?php endif; ?>
   </form>

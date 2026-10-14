@@ -9,12 +9,12 @@ final class ShippingService
 {
     public static function zones(bool $activeOnly = true): array
     {
-        return DB::all('SELECT * FROM shipping_zones' . ($activeOnly ? ' WHERE is_active = 1' : '') . ' ORDER BY sort_order, name');
+        return I18n::localize('zone', DB::all('SELECT * FROM shipping_zones' . ($activeOnly ? ' WHERE is_active = 1' : '') . ' ORDER BY sort_order, name'));
     }
 
     public static function find(int $id, bool $activeOnly = true): ?array
     {
-        return DB::one('SELECT * FROM shipping_zones WHERE id = ?' . ($activeOnly ? ' AND is_active = 1' : ''), [$id]);
+        return I18n::localizeOne('zone', DB::one('SELECT * FROM shipping_zones WHERE id = ?' . ($activeOnly ? ' AND is_active = 1' : ''), [$id]));
     }
 
     /** Frais de livraison, calculés sur le montant après remise. */

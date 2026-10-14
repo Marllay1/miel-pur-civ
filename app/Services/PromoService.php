@@ -28,19 +28,19 @@ final class PromoService
         $now ??= gmdate('Y-m-d H:i:s');
         $fail = static fn (string $msg) => ['valid' => false, 'error' => $msg, 'discount' => 0, 'free_shipping' => false];
         if ($promo === null || (int) $promo['is_active'] !== 1) {
-            return $fail('Ce code promo n\'existe pas ou n\'est plus actif.');
+            return $fail(t('promo.not_found'));
         }
         if ($promo['starts_at'] !== null && $promo['starts_at'] > $now) {
-            return $fail('Ce code promo n\'est pas encore valable.');
+            return $fail(t('promo.not_started'));
         }
         if ($promo['ends_at'] !== null && $promo['ends_at'] < $now) {
-            return $fail('Ce code promo a expiré.');
+            return $fail(t('promo.expired'));
         }
         if ($promo['max_uses'] !== null && (int) $promo['used_count'] >= (int) $promo['max_uses']) {
-            return $fail('Ce code promo a atteint son nombre maximal d\'utilisations.');
+            return $fail(t('promo.exhausted'));
         }
         if ($subtotal < (int) $promo['min_subtotal']) {
-            return $fail('Ce code nécessite un panier d\'au moins ' . money((int) $promo['min_subtotal']) . '.');
+            return $fail(t('promo.min', ['amount' => money((int) $promo['min_subtotal'])]));
         }
         $value = (int) $promo['value'];
         $discount = match ($promo['type']) {

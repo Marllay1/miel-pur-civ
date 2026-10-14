@@ -26,6 +26,7 @@ Les transitions impossibles (par exemple « livrée » sans passer par « expéd
 
 - **Produit** : nom, résumé, description (mise en forme simple : ligne vide = paragraphe, `## ` titre, `- ` liste, `**gras**`), origine, utilisations, conservation, SEO. Case *Produit de démonstration* = badge « Démo ».
 - **Variantes** : chaque format (250 g, 500 g, 1 kg, seau…) a sa référence (SKU), son prix en FCFA entiers et son stock. Un produit sans variante active n'apparaît pas sur le site.
+- **Version anglaise** : les fiches produit, catégories, pages, questions de FAQ et zones de livraison ont un encadré *Traduction anglaise* ; chaque format a un champ *Libellé (EN)*. Un champ vide affiche le texte français sur la version anglaise du site (`/en/…`). Les textes de l'accueil se traduisent dans *Contenus → Accueil*. L'administration elle-même reste en français.
 - **Images** : JPEG, PNG ou WebP, 5 Mo maximum, ré-encodées en WebP ; le *texte alternatif* (description de l'image) est obligatoire.
 - **Suppression** : le produit est archivé ; les commandes passées conservent nom et prix d'origine.
 - **Stock** : page *Stock* → nouvelle quantité + motif (inventaire, réception, casse). Toutes les variations sont historisées. Si une vente a lieu pendant la saisie, l'ajustement est refusé pour éviter d'écraser la vente.

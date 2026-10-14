@@ -34,9 +34,12 @@ $router->post('/commande', [CheckoutController::class, 'store']);
 $router->get('/commande/' . $order, [CheckoutController::class, 'show']);
 $router->post('/commande/' . $order . '/payer', [CheckoutController::class, 'pay']);
 $router->get('/commande/' . $order . '/recu', [CheckoutController::class, 'receipt']);
+$router->get('/commande/' . $order . '/paiement', [CheckoutController::class, 'waiting']);
+$router->get('/commande/' . $order . '/paiement/statut', [CheckoutController::class, 'paymentStatus']);
 
 $router->get('/paiement/demo/{reference:PAY-[A-F0-9]+}', [PaymentController::class, 'demo']);
 $router->post('/paiement/demo/{reference:PAY-[A-F0-9]+}', [PaymentController::class, 'demoSubmit']);
+$router->get('/paiement/retour/{provider:[a-z_]+}', [PaymentController::class, 'returnFrom']);
 $router->post('/webhooks/paiement/{provider:[a-z_]+}', [PaymentController::class, 'webhook'], ['nocsrf']);
 
 $router->get('/suivi-commande', [PageController::class, 'tracking']);
@@ -47,6 +50,8 @@ $router->post('/contact', [PageController::class, 'contactSubmit']);
 $router->get('/commandes-professionnelles', [PageController::class, 'pro']);
 $router->post('/commandes-professionnelles', [PageController::class, 'proSubmit']);
 $router->get('/faq', [PageController::class, 'faq']);
+$router->get('/menu', [PageController::class, 'menu']);
+$router->post('/preferences/theme', [PageController::class, 'theme']);
 $router->post('/newsletter', [PageController::class, 'newsletter']);
 $router->get('/newsletter/desinscription/{token:[a-f0-9]+}', [PageController::class, 'unsubscribe']);
 foreach (['conditions-generales-de-vente', 'politique-de-confidentialite', 'politique-de-livraison', 'retours-et-remboursements', 'mentions-legales'] as $legal) {

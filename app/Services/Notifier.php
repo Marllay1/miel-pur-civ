@@ -3,68 +3,83 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Core\Lang;
 use App\Core\Mailer;
 
 /**
- * E-mails transactionnels (texte brut). Le lien de commande contient le jeton secret uniquement dans l'e-mail initial.
+ * E-mails transactionnels, envoyés dans la langue de la commande (ou du client).
+ * Le lien personnel de commande (jeton secret) ne figure que dans l'e-mail de confirmation.
  */
 final class Notifier
 {
+    /** Exécute $fn dans la langue demandée puis restaure la langue courante. */
+    private static function in(string $locale, callable $fn): void
+    {
+        $previous = Lang::get();
+        Lang::set($locale);
+        try {
+            $fn();
+        } finally {
+            Lang::set($previous);
+        }
+    }
+
     private static function signature(): string
     {
-        return "\n\n— " . Settings::get('store_name') . "\n" . base_url();
+        return "\n\n— " . Settings::get('store_name') . "\n" . abs_url('/') . (Settings::get('store_phone') !== '' ? "\n" . Settings::get('store_phone') : '');
     }
 
     public static function orderPlaced(array $order, string $token): void
     {
-        $items = OrderService::items((int) $order['id']);
-        $lines = array_map(static fn ($i) => sprintf('- %s – %s × %d : %s', $i['product_name'], $i['variant_label'], $i['quantity'], money((int) $i['line_total'])), $items);
-        $link = abs_url('/commande/' . $order['number'] . '?t=' . $token);
-        $payment = $order['status'] === 'pending_payment'
-            ? "Votre commande sera confirmée après réception du paiement (" . payment_method_label($order['payment_method']) . ")."
-            : 'Paiement à la livraison : notre équipe vous contactera pour confirmer la commande et le créneau de livraison.';
-        $body = "Bonjour {$order['customer_first_name']},\n\nNous avons bien reçu votre commande {$order['number']}.\n\n"
-            . implode("\n", $lines)
-            . "\n\nSous-total : " . money((int) $order['subtotal'])
-            . ((int) $order['discount'] > 0 ? "\nRemise : -" . money((int) $order['discount']) : '')
-            . "\nLivraison ({$order['shipping_zone_name']}) : " . money((int) $order['shipping_fee'])
-            . "\nTotal : " . money((int) $order['total'])
-            . "\n\n$payment\n\nSuivre votre commande (lien personnel, ne le partagez pas) :\n$link"
-            . self::signature();
-        Mailer::send($order['customer_email'], 'Commande ' . $order['number'] . ' reçue', $body);
+        self::in($order['locale'] ?? 'fr', static function () use ($order, $token): void {
+            $items = OrderService::items((int) $order['id']);
+            $lines = array_map(static fn ($i) => sprintf('- %s – %s × %d : %s', $i['product_name'], $i['variant_label'], $i['quantity'], money((int) $i['line_total'])), $items);
+            $link = abs_url('/commande/' . $order['number'] . '?t=' . $token);
+            $payment = $order['status'] === 'pending_payment'
+                ? t('mail.placed.pay_online', ['method' => payment_method_label($order['payment_method'])])
+                : t('mail.placed.cod');
+            $body = t('mail.hello', ['name' => $order['customer_first_name']]) . "\n\n"
+                . t('mail.placed.intro', ['number' => $order['number']]) . "\n\n"
+                . implode("\n", $lines)
+                . "\n\n" . t('totals.subtotal') . ' : ' . money((int) $order['subtotal'])
+                . ((int) $order['discount'] > 0 ? "\n" . t('totals.discount') . ' : -' . money((int) $order['discount']) : '')
+                . "\n" . t('totals.shipping') . ' (' . $order['shipping_zone_name'] . ') : ' . money((int) $order['shipping_fee'])
+                . "\n" . t('totals.total') . ' : ' . money((int) $order['total'])
+                . "\n\n" . $payment . "\n\n" . t('mail.placed.link') . "\n" . $link
+                . self::signature();
+            Mailer::send($order['customer_email'], t('mail.placed.subject', ['number' => $order['number']]), $body);
+        });
 
         $admin = Settings::get('order_notification_email');
         if ($admin !== '' && filter_var($admin, FILTER_VALIDATE_EMAIL)) {
-            Mailer::send($admin, 'Nouvelle commande ' . $order['number'] . ' – ' . money((int) $order['total']),
-                "Nouvelle commande {$order['number']} ({$order['customer_first_name']} {$order['customer_last_name']}, {$order['customer_phone']}).\n"
-                . 'Statut : ' . status_label($order['status']) . "\n" . abs_url('/admin/commandes/' . $order['id']));
+            self::in('fr', static function () use ($order, $admin): void {
+                Mailer::send($admin, 'Nouvelle commande ' . $order['number'] . ' – ' . money((int) $order['total']),
+                    "Nouvelle commande {$order['number']} ({$order['customer_first_name']} {$order['customer_last_name']}, {$order['customer_phone']}).\n"
+                    . 'Paiement : ' . payment_method_label($order['payment_method']) . "\nStatut : " . status_label($order['status']) . "\n" . base_url() . '/admin/commandes/' . $order['id']);
+            });
         }
     }
 
     public static function statusChanged(array $order): void
     {
-        $messages = [
-            'paid' => 'Votre paiement a bien été reçu. Nous préparons votre commande.',
-            'preparing' => 'Votre commande est confirmée et en cours de préparation.',
-            'shipped' => 'Votre commande a été remise au livreur.',
-            'delivered' => 'Votre commande est indiquée comme livrée. Merci pour votre confiance !',
-            'cancelled' => 'Votre commande a été annulée. Contactez-nous pour toute question.',
-            'refunded' => 'Votre commande a été remboursée.',
-        ];
-        if (!isset($messages[$order['status']])) {
+        if (!Lang::has('mail.status.' . $order['status'], 'fr')) {
             return;
         }
-        $body = "Bonjour {$order['customer_first_name']},\n\nCommande {$order['number']} : " . status_label($order['status']) . ".\n"
-            . $messages[$order['status']] . "\n\nSuivi : " . abs_url('/suivi-commande') . self::signature();
-        Mailer::send($order['customer_email'], 'Commande ' . $order['number'] . ' : ' . status_label($order['status']), $body);
+        self::in($order['locale'] ?? 'fr', static function () use ($order): void {
+            $body = t('mail.hello', ['name' => $order['customer_first_name']]) . "\n\n"
+                . t('mail.status.line', ['number' => $order['number'], 'status' => status_label($order['status'])]) . "\n"
+                . t('mail.status.' . $order['status']) . "\n\n" . t('mail.status.track') . ' ' . abs_url('/suivi-commande') . self::signature();
+            Mailer::send($order['customer_email'], t('mail.status.subject', ['number' => $order['number'], 'status' => status_label($order['status'])]), $body);
+        });
     }
 
-    public static function passwordReset(array $user, string $token): void
+    public static function passwordReset(array $user, string $token, string $locale = 'fr'): void
     {
-        $link = abs_url('/compte/reinitialiser/' . $token);
-        Mailer::send($user['email'], 'Réinitialisation de votre mot de passe',
-            "Bonjour {$user['first_name']},\n\nPour choisir un nouveau mot de passe, ouvrez ce lien (valable 1 heure) :\n$link\n\n"
-            . "Si vous n'êtes pas à l'origine de cette demande, ignorez ce message." . self::signature());
+        self::in($locale, static function () use ($user, $token): void {
+            $link = abs_url('/compte/reinitialiser/' . $token);
+            Mailer::send($user['email'], t('mail.reset.subject'),
+                t('mail.hello', ['name' => $user['first_name']]) . "\n\n" . t('mail.reset.body') . "\n" . $link . "\n\n" . t('mail.reset.ignore') . self::signature());
+        });
     }
 
     public static function staffNotice(string $subject, string $body): void

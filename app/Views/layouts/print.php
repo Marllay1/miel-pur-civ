@@ -1,5 +1,5 @@
 <?php /** @var string $content */ ?><!doctype html>
-<html lang="fr">
+<html lang="<?= e(\App\Core\Lang::get()) ?>" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

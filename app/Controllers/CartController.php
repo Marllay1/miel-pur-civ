@@ -17,7 +17,7 @@ final class CartController
         return view('checkout/cart', [
             'summary' => $summary,
             'zones' => ShippingService::zones(),
-            'pageTitle' => 'Panier',
+            'pageTitle' => t('cart.title'),
             'noindex' => true,
         ]);
     }
@@ -43,7 +43,7 @@ final class CartController
     {
         $raw = $r->post['qty'] ?? '';
         if (!is_string($raw) || !preg_match('/^\d{1,4}$/', trim($raw))) {
-            return $this->respond($r, ['ok' => false, 'message' => 'Quantité invalide.']);
+            return $this->respond($r, ['ok' => false, 'message' => t('cart.qty_invalid_short')]);
         }
         return $this->respond($r, CartService::update($r, (int) $r->int('variant_id', 0), (int) trim($raw)));
     }
@@ -61,6 +61,6 @@ final class CartController
     public function removePromo(Request $r): Response
     {
         CartService::removePromo($r);
-        return $this->respond($r, ['ok' => true, 'message' => 'Code promo retiré.']);
+        return $this->respond($r, ['ok' => true, 'message' => t('promo.removed')]);
     }
 }

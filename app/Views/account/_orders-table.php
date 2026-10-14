@@ -1,20 +1,15 @@
 <?php /** @var array $orders */ ?>
 <?php if (!$orders): ?>
-<p class="muted">Aucune commande pour le moment. <a href="/boutique">Découvrir la boutique</a></p>
+<div class="empty-state"><?= icon('receipt') ?><p class="muted"><?= e(t('account.no_orders')) ?></p><a class="btn btn-tinted" href="/boutique"><?= e(t('home.cta_shop')) ?></a></div>
 <?php else: ?>
-<div class="table-wrap">
-<table class="table">
-  <thead><tr><th scope="col">N°</th><th scope="col">Date</th><th scope="col">Statut</th><th scope="col" class="num">Total</th></tr></thead>
-  <tbody>
-    <?php foreach ($orders as $o): ?>
-    <tr>
-      <td><a href="/commande/<?= e($o['number']) ?>"><?= e($o['number']) ?></a></td>
-      <td><?= e(date_fr($o['created_at'], false)) ?></td>
-      <td><span class="status status-<?= e($o['status']) ?>"><?= e(status_label($o['status'])) ?></span></td>
-      <td class="num"><?= money((int) $o['total']) ?></td>
-    </tr>
-    <?php endforeach; ?>
-  </tbody>
-</table>
+<div class="group">
+  <?php foreach ($orders as $o): ?>
+  <a class="cell" href="/commande/<?= e($o['number']) ?>">
+    <span class="cell-icon gray"><?= icon('receipt') ?></span>
+    <span class="cell-body"><span class="cell-title"><?= e($o['number']) ?></span><br><span class="cell-sub"><?= e(date_fr($o['created_at'], false)) ?> · <?= money((int) $o['total']) ?></span></span>
+    <span class="status status-<?= e($o['status']) ?>"><?= e(status_label($o['status'])) ?></span>
+    <span class="cell-chevron"><?= icon('chevron') ?></span>
+  </a>
+  <?php endforeach; ?>
 </div>
 <?php endif; ?>

@@ -5,7 +5,9 @@ declare(strict_types=1);
  * Tests de sécurité en boîte noire contre un serveur HTTP réel.
  *   php -S localhost:8000 -t public public/router.php   (dans un autre terminal)
  *   php tests/security-http.php [http://localhost:8000]
- * Crée un compte client jetable dans la base configurée (.env) ; à lancer sur un environnement de développement.
+ *   php tests/security-http.php http://miel.localhost        (Apache/XAMPP ; *.localhost est résolu vers 127.0.0.1)
+ * Crée un compte client jetable dans la base configurée (.env) ; à lancer sur un environnement de développement,
+ * avec MAIL_DRIVER=log (le contrôle de l'en-tête Host lit les messages dans storage/mail).
  */
 
 if (PHP_SAPI !== 'cli') {
@@ -14,6 +16,13 @@ if (PHP_SAPI !== 'cli') {
 require dirname(__DIR__) . '/app/bootstrap.php';
 
 $base = rtrim($argv[1] ?? 'http://localhost:8000', '/');
+if (\App\Core\Env::get('APP_ENV') === 'production') {
+    fwrite(STDERR, "Refusé : ce script crée des comptes et remet à zéro les limitations de fréquence (APP_ENV=production).\n");
+    exit(2);
+}
+// Chaque exécution crée un compte et demande des réinitialisations : sans remise à zéro, les limitations
+// (5 inscriptions / heure / IP…) feraient échouer la 2e ou 3e exécution. Elles sont testées par le scénario 25.
+\App\Core\DB::run('DELETE FROM rate_limits');
 $passed = 0;
 $failed = 0;
 
@@ -29,6 +38,11 @@ function http(string $method, string $url, array $headers = [], ?string $body = 
         CURLOPT_TIMEOUT => 20,
         CURLOPT_HTTPHEADER => $headers,
     ]);
+    // *.localhost désigne toujours la machine locale (RFC 6761), même si le système ne le résout pas (Windows).
+    $host = (string) parse_url($url, PHP_URL_HOST);
+    if (str_ends_with($host, '.localhost')) {
+        curl_setopt($ch, CURLOPT_RESOLVE, [$host . ':' . (parse_url($url, PHP_URL_PORT) ?: 80) . ':127.0.0.1']);
+    }
     if ($cookie !== null) {
         curl_setopt($ch, CURLOPT_COOKIE, $cookie);
     }
@@ -101,6 +115,7 @@ foreach (['/' => 200, '/page-inexistante' => 404, '/admin/connexion' => 200, '/c
     $r = http('GET', $base . $path);
     check($r['status'] === $code, "$path → $code");
     check(!isset($r['headers']['x-powered-by']), "$path : pas de X-Powered-By");
+    check(!preg_match('/\d+\.\d+/',$r['headers']['server'] ?? ''), "$path : en-tête Server sans numéro de version");
     check(str_contains($r['headers']['content-security-policy'] ?? '', "script-src 'self'") && str_contains($r['headers']['content-security-policy'] ?? '', "frame-ancestors 'none'"), "$path : CSP stricte");
     check(($r['headers']['x-frame-options'] ?? '') === 'DENY' && ($r['headers']['x-content-type-options'] ?? '') === 'nosniff', "$path : DENY + nosniff");
     check(($r['headers']['referrer-policy'] ?? '') === 'strict-origin-when-cross-origin', "$path : Referrer-Policy");
@@ -113,14 +128,15 @@ echo "Fichiers et traversée de répertoires\n";
 foreach (['/.env', '/../.env', '/..%2f.env', '/%2e%2e/.env', '/assets/../../.env', '/assets/%2e%2e/%2e%2e/.env', '/assets/..%5c..%5c.env', '/index.php', '/router.php',
     '/uploads/.htaccess', '/.htaccess', '/../app/bootstrap.php', '/assets/../../app/config/defaults.php', '/../storage/logs/', '/../composer.json', '/.git/config', '/uploads/'] as $path) {
     $r = http('GET', $base . $path);
-    check($r['status'] === 404 && !str_contains($r['body'], 'APP_KEY') && !str_contains($r['body'], '<?php'), "$path → 404 sans contenu sensible (obtenu {$r['status']})");
+    // 404 (serveur PHP intégré, Nginx) ou 400/403 (Apache) : l'essentiel est que rien ne soit servi.
+    check(in_array($r['status'], [400, 403, 404], true) && !str_contains($r['body'], 'APP_KEY') && !str_contains($r['body'], '<?php'), "$path → refusé sans contenu sensible (obtenu {$r['status']})");
 }
 check(http('GET', "$base/assets/css/app.css")['status'] === 200, 'Fichier statique légitime servi');
 
 echo "Méthodes HTTP\n";
 foreach (['TRACE', 'PUT', 'DELETE', 'PATCH'] as $m) {
     $r = http($m, "$base/");
-    check(in_array($r['status'], [404, 405, 419], true), "$m / → {$r['status']}");
+    check(in_array($r['status'], [403, 404, 405], true), "$m / → {$r['status']}");
 }
 
 echo "Sessions et cookies\n";
@@ -147,22 +163,35 @@ check($me['status'] === 200, 'Nouvelle session authentifiée');
 
 echo "CSRF\n";
 $r = http('POST', "$base/compte/deconnexion", ['Content-Type: application/x-www-form-urlencoded'], '', "mpci_sess=$s1");
-check($r['status'] === 419, 'POST sans jeton → 419');
+check($r['status'] === 403 && str_contains($r['body'], 'Formulaire expiré'), 'POST sans jeton → 403 « formulaire expiré »');
 $other = http('GET', "$base/contact");
 $foreign = csrfFrom($other['body']);
 $r = http('POST', "$base/compte/deconnexion", ['Content-Type: application/x-www-form-urlencoded'], http_build_query(['_csrf' => $foreign]), "mpci_sess=$s1");
-check($r['status'] === 419, 'Jeton d\'une autre session → 419');
+check($r['status'] === 403, 'Jeton d\'une autre session → 403');
 check(http('GET', "$base/compte", [], null, "mpci_sess=$s1")['status'] === 200, 'Toujours connecté (pas de déconnexion forcée)');
 
 echo "En-tête Host (empoisonnement des liens de réinitialisation)\n";
-$f = http('GET', "$base/compte/mot-de-passe-oublie");
-$sf = sessionId($f);
-$before = glob(BASE_PATH . '/storage/mail/*.eml') ?: [];
-http('POST', "$base/compte/mot-de-passe-oublie", ['Content-Type: application/x-www-form-urlencoded', 'Host: evil.example', 'X-Forwarded-Host: evil.example'],
-    http_build_query(['_csrf' => csrfFrom($f['body']), 'email' => $email]), "mpci_sess=$sf");
-$new = array_values(array_diff(glob(BASE_PATH . '/storage/mail/*.eml') ?: [], $before));
-$mail = $new ? (string) file_get_contents(end($new)) : '';
-check($mail !== '' && !str_contains($mail, 'evil.example') && str_contains($mail, base_url() . '/compte/reinitialiser/'), 'Lien construit depuis APP_URL, pas depuis Host');
+/** Demande de réinitialisation avec des en-têtes forgés ; renvoie [statut HTTP, texte décodé du message produit ou ''] (MAIL_DRIVER=log). */
+function resetRequest(string $base, string $email, array $headers): array
+{
+    $f = http('GET', "$base/compte/mot-de-passe-oublie");
+    $before = glob(BASE_PATH . '/storage/mail/*.eml') ?: [];
+    $r = http('POST', "$base/compte/mot-de-passe-oublie", array_merge(['Content-Type: application/x-www-form-urlencoded'], $headers),
+        http_build_query(['_csrf' => csrfFrom($f['body']), 'email' => $email]), 'mpci_sess=' . sessionId($f));
+    $new = array_values(array_diff(glob(BASE_PATH . '/storage/mail/*.eml') ?: [], $before));
+    $raw = $new ? (string) file_get_contents(end($new)) : '';
+    // Parties MIME encodées en base64 : on les décode pour lire les liens.
+    $text = preg_replace_callback('/\n\n([A-Za-z0-9+\/=\n]{20,})(?=\n--)/', static fn ($m) => "\n\n" . base64_decode(str_replace("\n", '', $m[1])), $raw) ?? $raw;
+    return [$r['status'], $text];
+}
+// 1) Host correct, X-Forwarded-Host forgé : l'application est atteinte et doit ignorer l'en-tête.
+[, $mail] = resetRequest($base, $email, ['X-Forwarded-Host: evil.example', 'X-Forwarded-Proto: http']);
+check($mail !== '' && !str_contains($mail, 'evil.example') && str_contains($mail, base_url() . '/compte/reinitialiser/'), 'X-Forwarded-Host ignoré : lien construit depuis APP_URL');
+// 2) Host forgé : soit le serveur web ne transmet pas la requête (hôte virtuel inconnu), soit le lien vient d'APP_URL.
+[$status, $mail] = resetRequest($base, $email, ['Host: evil.example']);
+// Statut 0 : connexion fermée sans réponse (Nginx « return 444 » pour un hôte inconnu).
+check($mail === '' ? ($status >= 400 || $status === 0) : (!str_contains($mail, 'evil.example') && str_contains($mail, base_url() . '/compte/reinitialiser/')),
+    'Host forgé sans effet (' . ($mail === '' ? 'requête refusée par le serveur web : ' . ($status ?: 'connexion fermée') : 'lien construit depuis APP_URL') . ')');
 
 echo "Force brute\n";
 $lf = http('GET', "$base/compte/connexion");

@@ -9,6 +9,7 @@ use App\Core\Request;
 use App\Core\Response;
 use App\Core\Session;
 use App\Core\Validator;
+use App\Services\I18n;
 
 final class CategoryController extends Base
 {
@@ -18,6 +19,7 @@ final class CategoryController extends Base
         return admin_view('categories', [
             'categories' => DB::all('SELECT c.*, (SELECT COUNT(*) FROM products p WHERE p.category_id = c.id AND p.deleted_at IS NULL) AS product_count FROM categories c ORDER BY c.sort_order, c.name'),
             'edit' => $edit, 'old' => $old ?? ($edit ?? ['is_active' => 1]), 'errors' => $errors, 'pageTitle' => 'Catégories',
+            'translation' => is_array($old['en'] ?? null) ? $old['en'] : ($edit ? I18n::get('category', (int) $edit['id']) : []),
         ], $status);
     }
 
@@ -43,6 +45,7 @@ final class CategoryController extends Base
             $id = DB::insert('categories', $data + ['parent_id' => null, 'created_at' => $now]);
             Audit::log('category.create', 'category', $id, ['name' => $data['name']]);
         }
+        $this->saveTranslation($r, 'category', $id);
         Session::flash('success', 'Catégorie enregistrée.');
         return redirect('/admin/categories');
     }

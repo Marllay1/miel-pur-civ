@@ -53,9 +53,10 @@ return [
         T::contains('Aucun avis publié', $r->body, 'Absence d\'avis assumée');
         T::contains('og:title', $r->body, 'Open Graph');
         T::contains('rel="canonical"', $r->body, 'URL canonique');
-        T::contains('Produit et illustration de démonstration', $r->body, 'Étiquette démo');
+        T::notContains('émo', strip_tags($r->body), 'Plus aucune mention « démo »');
+        T::notContains('À CONFIRMER', $r->body, 'Plus aucun marqueur provisoire');
         $vrac = $c->get('/boutique/miel-vrac-professionnels');
-        T::contains('épuisé', $vrac->body, 'Variante en rupture signalée');
+        T::ok(preg_match('/value="' . T::variant('MPCI-VRAC-25')['id'] . '"[^>]*disabled/s', $vrac->body) === 1, 'Variante en rupture désactivée');
         T::status(404, $c->get('/boutique/nexiste-pas'), 'Produit inexistant');
         DB::run("UPDATE products SET is_active = 0 WHERE slug = 'miel-cremeux'");
         T::status(404, $c->get('/boutique/miel-cremeux'), 'Produit masqué inaccessible');
@@ -80,12 +81,12 @@ return [
         $other->cookies = $c->cookies;
         T::contains('Miel liquide toutes fleurs', $other->get('/panier')->body, 'Panier persistant (cookie)');
         // Code promo : minimum 5 000 non atteint, puis atteint.
-        $c->post('/panier/code-promo', ['code' => 'demo10']);
-        T::notContains('Remise (DEMO10)', $c->get('/panier')->body, 'Promo refusée sous le minimum');
+        $c->post('/panier/code-promo', ['code' => 'bienvenue10']);
+        T::notContains('Remise (BIENVENUE10)', $c->get('/panier')->body, 'Promo refusée sous le minimum');
         $c->addToCart('MPCI-LIQ-500', 1);
-        $c->post('/panier/code-promo', ['code' => 'demo10']);
+        $c->post('/panier/code-promo', ['code' => 'bienvenue10']);
         $page = html_entity_decode($c->get('/panier')->body);
-        T::contains('Remise (DEMO10)', $page, 'Promo appliquée');
+        T::contains('Remise (BIENVENUE10)', $page, 'Promo appliquée');
         T::contains('900', $page, '10 % de 9 000');
         // Fusion à la connexion.
         $u = T::user('customer', 'fusion@example.test');
@@ -161,6 +162,15 @@ return [
         $c->addToCart('MPCI-LIQ-500', 1);
         T::status(422, $c->checkout('Autres villes de Côte d\'Ivoire', 'cod'), 'Moyen de paiement non autorisé pour la zone');
         T::status(422, $c->checkout('Abidjan', 'orange_money'), 'Prestataire non intégré refusé');
+        // Zone payable uniquement en ligne : proposée seulement si un paiement en ligne est disponible.
+        $c->addToCart('MPCI-LIQ-500', 1);
+        T::contains('Autres villes', $c->get('/commande')->body, 'Zone « paiement en ligne » proposée quand un paiement en ligne existe');
+        Env::set('DEMO_PAYMENT_ENABLED', '0');
+        $form = $c->get('/commande')->body;
+        T::notContains('Autres villes', $form, 'Zone sans aucun moyen de paiement utilisable non proposée (client jamais bloqué)');
+        T::contains('Abidjan', $form, 'Zones payables à la livraison toujours proposées');
+        T::status(422, $c->checkout('Autres villes de Côte d\'Ivoire', 'demo'), 'Commande refusée côté serveur pour cette zone');
+        Env::set('DEMO_PAYMENT_ENABLED', '1');
     },
 
     '07 Double commande (idempotence)' => function (): void {
@@ -193,14 +203,14 @@ return [
         T::eq('pending', $o['payment_status'], 'Paiement en attente');
         T::ok($o['expires_at'] !== null, 'Échéance fixée');
         $page = $c->get("/commande/$number?t=$token");
-        T::contains('paiement SIMULÉ', $page->body, 'Bouton de paiement étiqueté SIMULÉ');
+        T::contains('Paiement SIMULÉ', $page->body, 'Bouton de paiement étiqueté SIMULÉ');
         $go = $c->post("/commande/$number/payer", ['t' => $token]);
         T::redirectsTo('/paiement/demo/PAY-', $go, 'Redirection vers la page simulée');
         $demoUrl = $go->headers['Location'];
         $ref = explode('?', basename($demoUrl))[0];
         $demo = $c->get($demoUrl);
         T::status(200, $demo, 'Page de paiement simulé');
-        T::contains('Aucune somme n\'est débitée', html_entity_decode($demo->body, ENT_QUOTES), 'Avertissement simulé');
+        T::contains('aucune somme n\'est débitée', html_entity_decode($demo->body, ENT_QUOTES), 'Avertissement simulé');
         $c->post('/paiement/demo/' . $ref, ['t' => $token, 'outcome' => 'failed']);
         $o = OrderService::findByNumber($number);
         T::eq('pending_payment', $o['status'], 'Échec : commande toujours en attente');
@@ -230,9 +240,9 @@ return [
     '09 Webhook signé : signature, horodatage, rejeu, montant' => function (): void {
         $c = new Client();
         $c->addToCart('MPCI-CIRE-250', 1);
-        [$number] = Client::orderRef($c->checkout('Abidjan', 'demo'));
+        [$number, $token] = Client::orderRef($c->checkout('Abidjan', 'demo'));
         $order = OrderService::findByNumber($number);
-        $payment = PaymentService::initiate($order, 'demo');
+        $payment = PaymentService::initiate($order, $token)['payment'];
         $gw = PaymentService::gateway('demo');
         $wh = new Client('41.0.0.1');
         $n = $gw->buildNotification($payment, 'succeeded');
@@ -263,9 +273,9 @@ return [
         T::eq('unknown_payment', json_decode($wh->request('POST', '/webhooks/paiement/demo', [], $ghost['headers'], $ghost['body'])->body, true)['result'], 'Paiement inconnu');
         // Paiement reçu sur une commande déjà annulée → traitement manuel tracé.
         $c->addToCart('MPCI-CIRE-250', 1);
-        [$n2] = Client::orderRef($c->checkout('Abidjan', 'demo'));
+        [$n2, $t2] = Client::orderRef($c->checkout('Abidjan', 'demo'));
         $o2 = OrderService::findByNumber($n2);
-        $p2 = PaymentService::initiate($o2, 'demo');
+        $p2 = PaymentService::initiate($o2, $t2)['payment'];
         OrderService::transition((int) $o2['id'], 'cancelled', null, 'test');
         DB::run("UPDATE payments SET status = 'initiated' WHERE id = ?", [(int) $p2['id']]);
         $late = $gw->buildNotification($p2, 'succeeded');
@@ -332,8 +342,10 @@ return [
         $a = new Client();
         T::redirectsTo('/admin', $a->post('/admin/connexion', ['email' => 'admin@example.test', 'password' => 'Motdepasse123']), 'Connexion admin');
         T::eq(1, (int) DB::value("SELECT COUNT(*) FROM audit_log WHERE action = 'admin.login'"), 'Connexion journalisée');
-        T::status(419, $a->post('/admin/categories', ['name' => 'Sans CSRF'], false), 'Formulaire sans jeton CSRF → 419');
-        T::status(419, $a->request('POST', '/admin/categories', ['name' => 'Faux', '_csrf' => str_repeat('0', 64)]), 'Jeton CSRF erroné → 419');
+        $noCsrf = $a->post('/admin/categories', ['name' => 'Sans CSRF'], false);
+        T::status(403, $noCsrf, 'Formulaire sans jeton CSRF → 403 (code standard : Apache remplace 419 par 500)');
+        T::contains('Formulaire expiré', $noCsrf->body, 'Page dédiée au formulaire expiré');
+        T::status(403, $a->request('POST', '/admin/categories', ['name' => 'Faux', '_csrf' => str_repeat('0', 64)]), 'Jeton CSRF erroné → 403');
         $a->session['staff_seen'] = time() - 7201;
         T::redirectsTo('/admin/connexion', $a->get('/admin'), 'Déconnexion après 2 h d\'inactivité');
         T::ok(empty($a->session['user_id']), 'Session personnel fermée');
@@ -422,10 +434,10 @@ return [
     '14 Changements de statut de commande' => function (): void {
         $c = new Client();
         $c->addToCart('MPCI-LIQ-500', 2);
-        $c->post('/panier/code-promo', ['code' => 'DEMO10']);
+        $c->post('/panier/code-promo', ['code' => 'BIENVENUE10']);
         [$number] = Client::orderRef($c->checkout('Abidjan', 'cod'));
         $o = OrderService::findByNumber($number);
-        T::eq(1, (int) DB::value("SELECT used_count FROM promo_codes WHERE code = 'DEMO10'"), 'Promo consommée');
+        T::eq(1, (int) DB::value("SELECT used_count FROM promo_codes WHERE code = 'BIENVENUE10'"), 'Promo consommée');
         $a = new Client();
         $a->loginAs(T::user('order_manager', 'om@example.test'));
         $a->post('/admin/commandes/' . $o['id'] . '/statut', ['status' => 'shipped']);
@@ -444,13 +456,13 @@ return [
         T::ok(count(array_filter(Mailer::$sent, static fn ($m) => str_contains($m['subject'], 'Expédiée'))) === 1, 'Client notifié de l\'expédition');
         // Annulation : stock et promo restitués, une seule fois.
         $c->addToCart('MPCI-LIQ-500', 2);
-        $c->post('/panier/code-promo', ['code' => 'DEMO10']);
+        $c->post('/panier/code-promo', ['code' => 'BIENVENUE10']);
         [$n2] = Client::orderRef($c->checkout('Abidjan', 'cod'));
         $o2 = OrderService::findByNumber($n2);
         $stock = T::stock('MPCI-LIQ-500');
         $a->post('/admin/commandes/' . $o2['id'] . '/statut', ['status' => 'cancelled']);
         T::eq($stock + 2, T::stock('MPCI-LIQ-500'), 'Stock restitué');
-        T::eq(1, (int) DB::value("SELECT used_count FROM promo_codes WHERE code = 'DEMO10'"), 'Compteur promo restitué');
+        T::eq(1, (int) DB::value("SELECT used_count FROM promo_codes WHERE code = 'BIENVENUE10'"), 'Compteur promo restitué');
         try {
             OrderService::transition((int) $o2['id'], 'cancelled', null);
             T::ok(false, 'Double annulation refusée');
@@ -466,14 +478,14 @@ return [
     '15 Rendu mobile et bureau (contrôles structurels)' => function (): void {
         $c = new Client();
         $css = (string) file_get_contents(BASE_PATH . '/public/assets/css/app.css');
-        foreach (['@media (min-width: 640px)', '@media (min-width: 900px)', '@media (min-width: 980px)', '@media (max-width: 440px)', 'prefers-reduced-motion', ':focus-visible'] as $needle) {
+        foreach (['@media (min-width: 640px)', '@media (min-width: 900px)', '@media (min-width: 960px)', 'prefers-color-scheme: dark', ':root[data-theme="dark"]', 'prefers-reduced-motion', ':focus-visible', 'env(safe-area-inset-bottom)'] as $needle) {
             T::contains($needle, $css, 'CSS responsive/accessibilité');
         }
         foreach (['/', '/boutique', '/boutique/miel-liquide-toutes-fleurs', '/panier', '/contact', '/faq', '/commandes-professionnelles', '/compte/connexion', '/a-propos', '/mentions-legales'] as $path) {
             $r = $c->get($path);
             T::status(200, $r, "GET $path");
-            T::contains('name="viewport" content="width=device-width, initial-scale=1"', $r->body, "Viewport $path");
-            T::contains('<html lang="fr">', $r->body, "Langue $path");
+            T::contains('content="width=device-width, initial-scale=1', $r->body, "Viewport $path");
+            T::contains('<html lang="fr"', $r->body, "Langue $path");
             T::contains('class="skip-link"', $r->body, "Lien d'évitement $path");
             T::ok(preg_match('/<script(?![^>]*\bsrc=)(?![^>]*application\/ld\+json)[^>]*>/i', $r->body) === 0, "Aucun script inline $path");
             T::ok(preg_match('/\sstyle="/i', $r->body) === 0, "Aucun style inline $path");
@@ -745,7 +757,7 @@ return [
         $c->post('/compte/connexion', ['email' => 'sess@example.test', 'password' => 'Reinit2026xyz']);
         $c->post('/compte/deconnexion');
         T::ok(!isset($c->session['user_id']) && !isset($c->session['pwd_fp']), 'Session vidée à la déconnexion');
-        T::status(419, $c->post('/compte/deconnexion', [], false), 'Déconnexion sans CSRF refusée (pas de déconnexion forcée)');
+        T::status(403, $c->post('/compte/deconnexion', [], false), 'Déconnexion sans CSRF refusée (pas de déconnexion forcée)');
         // Session forgée : un user_id sans empreinte est rejeté.
         $forged = new Client('10.8.0.6');
         $forged->session = ['user_id' => (int) DB::value("SELECT id FROM users WHERE email = 'sess@example.test'")];
@@ -918,16 +930,16 @@ return [
         DB::run("UPDATE shipping_zones SET is_active = 0 WHERE name = 'Bouaké'");
         T::status(422, $c->checkout('Bouaké', 'cod'), 'Zone désactivée refusée');
         // Code promo plafonné : la dernière utilisation ne peut servir qu'une fois.
-        DB::run("UPDATE promo_codes SET max_uses = 1, used_count = 0 WHERE code = 'DEMO10'");
+        DB::run("UPDATE promo_codes SET max_uses = 1, used_count = 0 WHERE code = 'BIENVENUE10'");
         $p1 = new Client('10.10.0.2');
         $p2 = new Client('10.10.0.3');
         foreach ([$p1, $p2] as $p) {
             $p->addToCart('MPCI-LIQ-500', 2);
-            $p->post('/panier/code-promo', ['code' => 'DEMO10']);
+            $p->post('/panier/code-promo', ['code' => 'BIENVENUE10']);
         }
         Client::orderRef($p1->checkout('Abidjan', 'cod'));
-        T::ok(in_array($p2->checkout('Abidjan', 'cod')->status, [303, 422], true) && (int) DB::value("SELECT COUNT(*) FROM orders WHERE promo_code = 'DEMO10'") === 1, 'Code promo épuisé non réutilisé');
-        T::eq(1, (int) DB::value("SELECT used_count FROM promo_codes WHERE code = 'DEMO10'"), 'Compteur jamais dépassé');
+        T::ok(in_array($p2->checkout('Abidjan', 'cod')->status, [303, 422], true) && (int) DB::value("SELECT COUNT(*) FROM orders WHERE promo_code = 'BIENVENUE10'") === 1, 'Code promo épuisé non réutilisé');
+        T::eq(1, (int) DB::value("SELECT used_count FROM promo_codes WHERE code = 'BIENVENUE10'"), 'Compteur jamais dépassé');
         // Paiement en ligne sur une commande à la livraison : refusé.
         $cod = new Client('10.10.0.4');
         $cod->addToCart('MPCI-LIQ-250', 1);
@@ -987,5 +999,251 @@ return [
             T::contains($rule, $gitignore, "Ignoré par git : $rule");
         }
         Env::set('APP_DEBUG', '1');
+    },
+
+    // ===================== Itération 2 : paiements intégrés, bilinguisme, thème =====================
+
+    '28 Paiements intégrés (Wave, MTN MoMo, Orange Money, carte) contre les simulateurs' => function (): void {
+        T::providers();
+        T::eq(['cod', 'wave', 'orange_money', 'mtn_momo', 'card', 'demo'], array_column(PaymentService::availableMethods(T::zone('Abidjan')), 'code'), 'Moyens proposés une fois configurés');
+        \App\Services\Settings::set('wave_enabled', '0');
+        T::ok(!in_array('wave', array_column(PaymentService::availableMethods(null), 'code'), true), 'Moyen désactivable en administration');
+        \App\Services\Settings::set('wave_enabled', '1');
+        Env::set('CINETPAY_API_KEY', '');
+        T::ok(!in_array('card', array_column(PaymentService::availableMethods(null), 'code'), true), 'Moyen non proposé sans ses clés');
+        // Page Intégrations : état réel de chaque prestataire, URL de notification, aucun secret affiché.
+        $adm = new Client('10.20.0.9');
+        $adm->loginAs(T::user('admin', 'integrations@example.test'));
+        $page = html_entity_decode($adm->get('/admin/integrations')->body);
+        T::eq(3, substr_count($page, 'Actif — proposé aux clients'), 'Intégrations : Wave, Orange, MTN (configurés) affichés actifs');
+        T::contains('Clés manquantes', $page, 'Intégrations : prestataire sans clé signalé (carte)');
+        T::contains('/webhooks/paiement/wave', $page, 'Intégrations : URL de notification à déclarer');
+        T::notContains('cp_api_key', $page, 'Intégrations : aucune valeur secrète affichée');
+        T::notContains('Non intégré', $page, 'Intégrations : plus de mention « non intégré »');
+        Env::set('CINETPAY_API_KEY', 'cp_api_key');
+        $wh = new Client('41.0.0.2');
+
+        // Wave : redirection, notification signée, rejeu, retour client vérifié
+        $c = new Client('10.20.0.1');
+        $c->addToCart('MPCI-LIQ-500', 1);
+        $r = $c->checkout('Abidjan', 'wave');
+        T::ok(str_starts_with($r->headers['Location'] ?? '', 'https://pay.wave.com/c/cos-'), 'Redirection vers la page Wave');
+        $pay = DB::one("SELECT * FROM payments WHERE provider = 'wave'");
+        T::ok(str_starts_with((string) $pay['provider_token'], 'cos-'), 'Session Wave enregistrée');
+        T::eq(7000, (int) $pay['amount'], 'Montant calculé par le serveur envoyé à Wave');
+        $event = json_encode(['id' => 'EV_1', 'type' => 'checkout.session.completed', 'data' => ['id' => $pay['provider_token'], 'amount' => (string) $pay['amount'], 'currency' => 'XOF',
+            'payment_status' => 'succeeded', 'checkout_status' => 'complete', 'client_reference' => $pay['reference'], 'transaction_id' => 'TCN1']]);
+        $ts = time();
+        $sig = hash_hmac('sha256', $ts . $event, 'wave_webhook_secret_for_tests');
+        T::status(401, $wh->request('POST', '/webhooks/paiement/wave', [], ['Wave-Signature' => "t=$ts,v1=" . str_repeat('0', 64)], $event), 'Signature Wave invalide → 401');
+        $old = $ts - 900;
+        T::status(400, $wh->request('POST', '/webhooks/paiement/wave', [], ['Wave-Signature' => "t=$old,v1=" . hash_hmac('sha256', $old . $event, 'wave_webhook_secret_for_tests')], $event), 'Horodatage Wave expiré → 400');
+        T::eq('paid', json_decode($wh->request('POST', '/webhooks/paiement/wave', [], ['Wave-Signature' => "t=$ts,v1=$sig"], $event)->body, true)['result'] ?? null, 'Notification Wave signée → commande payée');
+        T::eq('duplicate', json_decode($wh->request('POST', '/webhooks/paiement/wave', [], ['Wave-Signature' => "t=$ts,v1=$sig"], $event)->body, true)['result'] ?? null, 'Rejeu Wave ignoré');
+        $c->addToCart('MPCI-LIQ-250', 1);
+        $c->checkout('Abidjan', 'wave');
+        $p2 = DB::one("SELECT * FROM payments WHERE provider = 'wave' ORDER BY id DESC LIMIT 1");
+        $o2 = OrderService::find((int) $p2['order_id']);
+        $token2 = ((array) $c->session['order_tokens'])[$o2['number']];
+        $c->get('/paiement/retour/wave?ref=' . $p2['reference'] . '&t=' . $token2);
+        T::eq('pending_payment', OrderService::find((int) $o2['id'])['status'], 'Retour sans paiement chez Wave : aucune validation');
+        T::providerSet('wave', $p2['provider_token'], 'succeeded');
+        $back = $c->get('/paiement/retour/wave?ref=' . $p2['reference'] . '&t=' . $token2);
+        T::redirectsTo('/commande/' . $o2['number'], $back, 'Retour client redirigé vers la commande');
+        T::eq('paid', OrderService::find((int) $o2['id'])['status'], 'Retour client : état confirmé auprès de Wave');
+        T::status(404, (new Client('10.20.0.8'))->get('/paiement/retour/wave?ref=' . $p2['reference']), 'Retour sans jeton refusé');
+
+        // MTN MoMo : demande poussée sur le téléphone, interrogation, rappel forgé sans effet
+        $m = new Client('10.20.0.2');
+        $m->addToCart('MPCI-CIRE-250', 1);
+        T::status(422, $m->checkout('Abidjan', 'mtn_momo', ['payer_phone' => '123']), 'Numéro Mobile Money invalide refusé');
+        $r = $m->checkout('Abidjan', 'mtn_momo', ['payer_phone' => '05 44 33 22 11']);
+        T::ok(preg_match('#/commande/(MPCI-[0-9]+-[A-F0-9]+)/paiement\?t=([a-f0-9]{32})#', $r->headers['Location'] ?? '', $mm) === 1, 'Page d\'attente de validation');
+        [, $mn, $mt] = $mm;
+        $mp = DB::one("SELECT * FROM payments WHERE provider = 'mtn_momo'");
+        T::eq('05 44 33 22 11', $mp['payer_phone'], 'Numéro payeur enregistré');
+        T::status(200, $m->get("/commande/$mn/paiement?t=$mt"), 'Page d\'attente affichée');
+        T::eq(false, json_decode($m->get("/commande/$mn/paiement/statut?t=$mt")->body, true)['done'], 'En attente de validation');
+        $wh->request('POST', '/webhooks/paiement/mtn_momo', [], [], json_encode(['externalId' => $mp['reference'], 'status' => 'SUCCESSFUL', 'amount' => $mp['amount']]));
+        T::eq('pending_payment', OrderService::findByNumber($mn)['status'], 'Rappel MoMo forgé « SUCCESSFUL » sans effet (état réel : PENDING)');
+        T::providerSet('mtn', $mp['provider_token'], 'SUCCESSFUL');
+        DB::run('UPDATE payments SET last_checked_at = NULL WHERE id = ?', [(int) $mp['id']]);
+        $st = json_decode($m->get("/commande/$mn/paiement/statut?t=$mt")->body, true);
+        T::ok($st['done'] && $st['order_status'] === 'paid', 'Validation sur le téléphone → commande payée');
+        T::status(404, (new Client('10.20.0.9'))->get("/commande/$mn/paiement/statut"), 'Statut protégé par le jeton');
+        $m->addToCart('MPCI-CIRE-250', 1);
+        $m->checkout('Abidjan', 'mtn_momo', ['payer_phone' => '0544332211']);
+        $mp2 = DB::one("SELECT * FROM payments WHERE provider = 'mtn_momo' ORDER BY id DESC LIMIT 1");
+        T::providerSet('mtn', $mp2['provider_token'], 'FAILED');
+        T::eq('failed', json_decode($wh->request('POST', '/webhooks/paiement/mtn_momo', [], [], json_encode(['externalId' => $mp2['reference'], 'referenceId' => $mp2['provider_token']]))->body, true)['result'], 'Rappel MoMo → vérification → échec enregistré');
+
+        // Orange Money : jeton de notification + confirmation par transactionstatus
+        $om = new Client('10.20.0.3');
+        $om->addToCart('MPCI-LIQ-500', 2);
+        $r = $om->checkout('Abidjan', 'orange_money');
+        T::ok(str_starts_with($r->headers['Location'] ?? '', 'https://webpayment-qualif.orange-money.com/'), 'Redirection vers Orange Money');
+        $op = DB::one("SELECT * FROM payments WHERE provider = 'orange_money'");
+        [, $notifToken] = explode('|', (string) $op['provider_token']);
+        T::eq('ignored', json_decode($wh->request('POST', '/webhooks/paiement/orange_money', [], [], json_encode(['status' => 'SUCCESS', 'notif_token' => str_repeat('a', 32), 'txnid' => 'X']))->body, true)['result'], 'Jeton de notification inconnu ignoré');
+        T::eq('pending', json_decode($wh->request('POST', '/webhooks/paiement/orange_money', [], [], json_encode(['status' => 'SUCCESS', 'notif_token' => $notifToken, 'txnid' => 'X']))->body, true)['result'], 'Notification non confirmée par Orange : en attente');
+        T::eq('pending_payment', OrderService::find((int) $op['order_id'])['status'], 'Aucune validation sans confirmation d\'Orange');
+        T::providerSet('orange', $op['reference'], 'SUCCESS');
+        T::eq('paid', json_decode($wh->request('POST', '/webhooks/paiement/orange_money', [], [], json_encode(['status' => 'SUCCESS', 'notif_token' => $notifToken, 'txnid' => 'X']))->body, true)['result'], 'Confirmation Orange → commande payée');
+
+        // Carte via CinetPay : page hébergée, confirmation par /v2/payment/check, contrôle du montant
+        $cp = new Client('10.20.0.4');
+        $cp->addToCart('MPCI-COF-3', 1);
+        $r = $cp->checkout('Abidjan', 'card');
+        T::ok(str_starts_with($r->headers['Location'] ?? '', 'https://checkout.cinetpay.com/'), 'Redirection vers la page de paiement par carte');
+        $cpay = DB::one("SELECT * FROM payments WHERE provider = 'card'");
+        $form = ['cpm_site_id' => '123456', 'cpm_trans_id' => $cpay['reference']];
+        T::eq('pending', json_decode($wh->request('POST', '/webhooks/paiement/card', $form, ['x-token' => 'faux'])->body, true)['result'], 'Notification carte non confirmée : en attente');
+        T::providerSet('cinetpay', $cpay['reference'], 'ACCEPTED', 1);
+        T::eq('amount_mismatch', json_decode($wh->request('POST', '/webhooks/paiement/card', $form)->body, true)['result'], 'Montant différent détecté et refusé');
+        T::providerSet('cinetpay', $cpay['reference'], 'ACCEPTED', (int) $cpay['amount']);
+        T::eq('paid', json_decode($wh->request('POST', '/webhooks/paiement/card', $form)->body, true)['result'], 'Carte acceptée → commande payée');
+        T::status(422, $wh->request('POST', '/webhooks/paiement/card', ['cpm_site_id' => '999', 'cpm_trans_id' => $cpay['reference']]), 'Notification d\'un autre site refusée');
+
+        // Vérification auprès du prestataire avant toute annulation pour expiration
+        $e = new Client('10.20.0.5');
+        $e->addToCart('MPCI-LIQ-250', 1);
+        $e->checkout('Abidjan', 'wave');
+        $ep = DB::one("SELECT * FROM payments WHERE provider = 'wave' ORDER BY id DESC LIMIT 1");
+        T::providerSet('wave', $ep['provider_token'], 'succeeded');
+        DB::run('UPDATE orders SET expires_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', time() - 60), (int) $ep['order_id']]);
+        T::eq(0, OrderService::expireOverdue(), 'Expiration : le prestataire est interrogé d\'abord (notification perdue)');
+        T::eq('paid', OrderService::find((int) $ep['order_id'])['status'], 'Paiement reçu juste avant l\'échéance : commande payée, pas annulée');
+        // Prestataire injoignable à l'échéance : pas d'annulation à l'aveugle pendant 24 h, puis annulation signalée.
+        $u = new Client('10.20.0.7');
+        $u->addToCart('MPCI-LIQ-250', 1);
+        $u->checkout('Abidjan', 'wave');
+        $up = DB::one("SELECT * FROM payments WHERE provider = 'wave' ORDER BY id DESC LIMIT 1");
+        DB::run('UPDATE orders SET expires_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', time() - 60), (int) $up['order_id']]);
+        Env::set('WAVE_API_BASE', 'http://127.0.0.1:1');
+        T::eq(0, OrderService::expireOverdue(), 'Prestataire injoignable : commande conservée (nouvel essai plus tard)');
+        T::eq('pending_payment', OrderService::find((int) $up['order_id'])['status'], 'Toujours en attente de paiement');
+        DB::run('UPDATE orders SET expires_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', time() - 86400 - 60), (int) $up['order_id']]);
+        T::eq(1, OrderService::expireOverdue(), 'Après 24 h sans réponse : annulation (stock libéré)');
+        T::contains('invérifiable', (string) DB::value("SELECT note FROM order_status_history WHERE order_id = ? ORDER BY id DESC LIMIT 1", [(int) $up['order_id']]), 'Annulation signalée « à contrôler »');
+        Env::set('WAVE_API_BASE', T::MOCK . '/wave');
+
+        // Prestataire injoignable : message clair, commande conservée
+        Env::set('WAVE_API_BASE', 'http://127.0.0.1:1');
+        $d = new Client('10.20.0.6');
+        $d->addToCart('MPCI-LIQ-250', 1);
+        $r = $d->checkout('Abidjan', 'wave');
+        T::redirectsTo('/commande/', $r, 'Prestataire injoignable : retour à la page de commande');
+        T::contains('momentanément indisponible', implode(' ', (array) ($d->session['_flash']['error'] ?? [])), 'Message d\'indisponibilité');
+        T::eq('failed', DB::value("SELECT status FROM payments WHERE provider = 'wave' ORDER BY id DESC LIMIT 1"), 'Tentative marquée en échec');
+        T::eq(0, (int) DB::value("SELECT COUNT(*) FROM payments WHERE checkout_url LIKE '%card%' OR provider_reference LIKE '4%'"), 'Aucune donnée de carte conservée');
+    },
+
+    '29 Bilinguisme FR/EN et thème clair/sombre' => function (): void {
+        $c = new Client('10.30.0.1');
+        $en = $c->get('/en/boutique/miel-liquide-toutes-fleurs');
+        T::status(200, $en, 'Fiche produit en anglais');
+        T::contains('<html lang="en"', $en->body, 'Langue déclarée');
+        T::eq('en', $en->headers['Content-Language'] ?? '', 'En-tête Content-Language');
+        T::contains('Multifloral liquid honey', $en->body, 'Nom du produit traduit');
+        T::contains('2,500 FCFA', T::plain($en->body), 'Montant au format anglais');
+        T::contains('Add to cart', $en->body, 'Interface traduite');
+        T::notContains('Ajouter au panier', $en->body, 'Aucun libellé français résiduel');
+        T::contains('href="/en/panier"', $en->body, 'Liens internes préfixés par /en');
+        T::contains('hreflang="fr"', $en->body, 'Alternative hreflang');
+        T::contains('<html lang="fr"', $c->get('/boutique/miel-liquide-toutes-fleurs')->body, 'Version française inchangée');
+        $r = $c->post('/en/panier/ajouter', ['variant_id' => (string) T::variant('MPCI-LIQ-500')['id'], 'qty' => '1']);
+        T::redirectsTo('/en/panier', $r, 'Redirections conservées en anglais');
+        $c->get('/en/commande');
+        $z = T::zone('Abidjan');
+        $est = json_decode($c->get('/en/commande/estimation?zone_id=' . $z['id'])->body, true);
+        T::contains('7,000', T::plain($est['formatted']['total']), 'Estimation au format anglais');
+        Mailer::$sent = [];
+        $r = $c->post('/en/commande', ['idempotency_key' => $c->session['checkout_key'], 'expected_total' => (string) $est['total'], 'first_name' => 'John', 'last_name' => 'Doe',
+            'email' => 'john@example.test', 'phone' => '0700000000', 'zone_id' => (string) $z['id'], 'city' => 'Abidjan', 'address' => 'Plateau', 'payment_method' => 'cod', 'cgv' => '1']);
+        T::ok(str_starts_with($r->headers['Location'] ?? '', '/en/commande/MPCI-'), 'Page de commande en anglais');
+        $o = DB::one('SELECT * FROM orders ORDER BY id DESC LIMIT 1');
+        T::eq('en', $o['locale'], 'Langue de la commande mémorisée');
+        T::contains('received', Mailer::$sent[0]['subject'] ?? '', 'E-mail de confirmation en anglais');
+        T::contains('/en/commande/' . $o['number'], Mailer::$sent[0]['body'] ?? '', 'Lien anglais dans l\'e-mail');
+        OrderService::transition((int) $o['id'], 'preparing', null);
+        T::contains('being prepared', end(Mailer::$sent)['body'], 'Notification de statut dans la langue du client');
+        $bad = $c->post('/en/contact', T::spamOk() + ['name' => '', 'email' => 'x', 'subject' => '', 'message' => '']);
+        T::contains('Invalid email address.', $bad->body, 'Messages de validation traduits');
+        $a = new Client('10.30.0.2');
+        $a->loginAs(T::user('admin', 'i18n-admin@example.test'));
+        T::contains('Tableau de bord', $a->get('/en/admin')->body, 'Administration toujours en français');
+        foreach (DB::all('SELECT id FROM products') as $p) {
+            T::ok(count(\App\Services\I18n::get('product', (int) $p['id'])) >= 5, 'Produit ' . $p['id'] . ' traduit');
+        }
+        foreach (DB::all('SELECT id FROM pages') as $p) {
+            T::ok(isset(\App\Services\I18n::get('page', (int) $p['id'])['body']), 'Page ' . $p['id'] . ' traduite');
+        }
+        $sm = $c->get('/sitemap.xml')->body;
+        T::contains('/en/boutique/miel-liquide-toutes-fleurs', $sm, 'Plan du site bilingue');
+        T::contains('hreflang="en"', $sm, 'Alternatives dans le plan du site');
+        // Thème
+        $dark = new Client('10.30.0.3');
+        $dark->cookies['mpci_theme'] = 'dark';
+        T::contains('data-theme="dark"', $dark->get('/')->body, 'Thème sombre mémorisé (sans flash)');
+        $evil = new Client('10.30.0.4');
+        $evil->cookies['mpci_theme'] = '"><script>';
+        T::notContains('<script>"', $evil->get('/')->body, 'Valeur de thème non valide ignorée');
+        $t = new Client('10.30.0.5');
+        $r = $t->post('/preferences/theme', ['theme' => 'light', 'retour' => '/menu']);
+        T::eq('light', $t->cookies['mpci_theme'] ?? null, 'Choix du thème sans JavaScript');
+        T::redirectsTo('/menu', $r, 'Retour à la page d\'origine');
+        $t->post('/preferences/theme', ['theme' => 'auto']);
+        T::ok(!isset($t->cookies['mpci_theme']), 'Retour au thème automatique');
+        T::redirectsTo('/', $t->post('/preferences/theme', ['theme' => 'dark', 'retour' => 'https://evil.example']), 'Pas de redirection ouverte via le thème');
+    },
+
+    '30 Traductions anglaises saisies dans l\'administration' => function (): void {
+        $a = new Client('10.31.0.1');
+        $a->loginAs(T::user('admin', 'trad@example.test'));
+        $p = DB::one("SELECT * FROM products WHERE slug = 'miel-liquide-toutes-fleurs'");
+        $form = $a->get('/admin/produits/' . $p['id'])->body;
+        T::contains('Traduction anglaise', $form, 'Encadré de traduction sur la fiche produit');
+        T::contains('name="en[description]"', $form, 'Champ description anglaise');
+        // Produit : nom anglais + tentative d'injection (champ non prévu, script).
+        $a->post('/admin/produits/' . $p['id'], ['name' => $p['name'], 'slug' => $p['slug'], 'category_id' => (string) $p['category_id'], 'is_active' => '1',
+            'description' => (string) $p['description'], 'en' => ['name' => 'Wildflower honey (edited)', 'short_description' => '<script>alert(1)</script>', 'price' => '1']]);
+        $en = (new Client('10.31.0.2'))->get('/en/boutique/miel-liquide-toutes-fleurs')->body;
+        T::contains('Wildflower honey (edited)', $en, 'Nom anglais affiché sur /en');
+        T::notContains('<script>alert(1)</script>', $en, 'Texte anglais échappé');
+        T::contains($p['name'], (new Client('10.31.0.3'))->get('/boutique/miel-liquide-toutes-fleurs')->body, 'Version française inchangée');
+        T::eq(0, (int) DB::value("SELECT COUNT(*) FROM translations WHERE field = 'price'"), 'Champ non prévu ignoré');
+        T::ok(DB::value("SELECT id FROM audit_log WHERE action = 'translation.save' AND entity_type = 'product'") !== null, 'Traduction journalisée');
+        // Champ vidé = retour au texte français.
+        $a->post('/admin/produits/' . $p['id'], ['name' => $p['name'], 'slug' => $p['slug'], 'category_id' => (string) $p['category_id'], 'is_active' => '1', 'en' => ['name' => '']]);
+        T::notContains('Wildflower honey (edited)', (new Client('10.31.0.4'))->get('/en/boutique/miel-liquide-toutes-fleurs')->body, 'Traduction vidée : plus affichée');
+        // Sans champ en[...] (autre formulaire), la traduction existante n'est pas effacée.
+        T::ok((\App\Services\I18n::get('product', (int) $p['id'])['description'] ?? '') !== '', 'Traduction conservée quand le formulaire ne l\'envoie pas');
+        // Variante
+        $v = T::variant('MPCI-LIQ-500');
+        $a->post('/admin/variantes/' . $v['id'], ['label' => $v['label'], 'format' => $v['format'], 'sku' => $v['sku'], 'price' => (string) $v['price'], 'sort_order' => '0', 'is_active' => '1', 'en' => ['label' => '500 g jar']]);
+        T::contains('500 g jar', (new Client('10.31.0.5'))->get('/en/boutique/miel-liquide-toutes-fleurs')->body, 'Format traduit');
+        // FAQ
+        $a->post('/admin/faq', ['question' => 'Question test ?', 'answer' => 'Réponse test.', 'category' => 'Général', 'sort_order' => '0', 'is_active' => '1',
+            'en' => ['question' => 'Test question in English?', 'answer' => 'English answer.']]);
+        T::contains('Test question in English?', (new Client('10.31.0.6'))->get('/en/faq')->body, 'FAQ traduite');
+        $faqId = (int) DB::value("SELECT id FROM faqs WHERE question = 'Question test ?'");
+        $a->post('/admin/faq/' . $faqId . '/supprimer');
+        T::eq(0, (int) DB::value("SELECT COUNT(*) FROM translations WHERE entity_type = 'faq' AND entity_id = ?", [$faqId]), 'Traductions supprimées avec la question');
+        // Zone
+        $z = T::zone('Bouaké');
+        $a->post('/admin/livraison', ['id' => (string) $z['id'], 'name' => $z['name'], 'fee' => (string) $z['fee'], 'sort_order' => '0', 'allows_cod' => '1', 'is_active' => '1',
+            'en' => ['name' => 'Bouake (city)', 'delay_text' => '2 to 3 days']]);
+        $buyer = new Client('10.31.0.7');
+        $buyer->addToCart('MPCI-LIQ-500', 1);
+        T::contains('Bouake (city)', $buyer->get('/en/commande')->body, 'Zone traduite au paiement');
+        // Page
+        $page = DB::one("SELECT * FROM pages WHERE slug = 'a-propos'");
+        $a->post('/admin/pages/' . $page['id'], ['title' => $page['title'], 'body' => $page['body'], 'en' => ['title' => 'About us (edited)', 'body' => $page['body']]]);
+        T::contains('About us (edited)', (new Client('10.31.0.8'))->get('/en/a-propos')->body, 'Page traduite');
+        // Accueil
+        $keys = \App\Controllers\Admin\ContentController::HOME_KEYS;
+        $a->post('/admin/contenu', array_merge(array_combine($keys, array_map(static fn ($k) => \App\Services\Settings::get($k), $keys)),
+            ['home_hero_title_en' => 'Honey straight from Katiola (edited)']));
+        T::contains('Honey straight from Katiola (edited)', (new Client('10.31.0.9'))->get('/en')->body, 'Accueil anglais modifiable');
     },
 ];

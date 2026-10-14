@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 use App\Core\Csrf;
 use App\Core\Env;
+use App\Core\Lang;
 use App\Core\Response;
 use App\Core\View;
 use App\Services\Settings;
@@ -10,6 +11,17 @@ use App\Services\Settings;
 function e(mixed $value): string
 {
     return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+/** Chaîne d'interface traduite (app/lang/fr.php, app/lang/en.php). */
+function t(string $key, array $params = []): string
+{
+    return Lang::t($key, $params);
+}
+
+function locale(): string
+{
+    return Lang::get();
 }
 
 function base_url(): string
@@ -23,9 +35,10 @@ function url(string $path = '/', array $query = []): string
     return $path . ($query ? '?' . http_build_query($query) : '');
 }
 
-function abs_url(string $path = '/'): string
+/** URL absolue localisée (e-mails, SEO). */
+function abs_url(string $path = '/', ?string $locale = null): string
 {
-    return base_url() . $path;
+    return base_url() . Lang::path($path, $locale);
 }
 
 function asset(string $path): string
@@ -34,10 +47,11 @@ function asset(string $path): string
     return '/assets/' . $path . (is_file($file) ? '?v=' . filemtime($file) : '');
 }
 
-/** Montant entier en FCFA, ex. « 12 500 FCFA ». */
+/** Montant entier en FCFA : « 12 500 FCFA » (fr) ou « 12,500 FCFA » (en). */
 function money(int|string|null $amount): string
 {
-    return number_format((int) $amount, 0, ',', "\u{202F}") . "\u{00A0}FCFA";
+    $sep = Lang::get() === 'en' ? ',' : "\u{202F}";
+    return number_format((int) $amount, 0, '.', $sep) . "\u{00A0}FCFA";
 }
 
 function now(): string
@@ -52,7 +66,7 @@ function csrf_field(): string
 
 function setting(string $key): string
 {
-    return Settings::get($key);
+    return Settings::localized($key);
 }
 
 function view(string $template, array $data = [], int $status = 200, ?string $layout = 'layouts/main'): Response
@@ -90,12 +104,14 @@ function excerpt(?string $text, int $length = 160): string
 {
     $text = trim(preg_replace('/\s+/', ' ', strip_tags((string) $text)) ?? '');
     $text = str_replace(['## ', '**'], '', $text);
+    $text = preg_replace('/\[([^\]]+)\]\([^)]*\)/u', '$1', $text) ?? $text;
     return mb_strlen($text) > $length ? rtrim(mb_substr($text, 0, $length - 1)) . '…' : $text;
 }
 
 const MONTHS_FR = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** Date UTC (= heure d'Abidjan, GMT) au format français. */
+/** Date UTC (= heure d'Abidjan, GMT) dans la langue courante. */
 function date_fr(?string $datetime, bool $withTime = true): string
 {
     if (!$datetime) {
@@ -105,48 +121,27 @@ function date_fr(?string $datetime, bool $withTime = true): string
     if ($ts === false) {
         return '—';
     }
-    $s = (int) gmdate('j', $ts) . ' ' . MONTHS_FR[(int) gmdate('n', $ts) - 1] . ' ' . gmdate('Y', $ts);
-    return $withTime ? $s . ' à ' . gmdate('H:i', $ts) : $s;
+    $months = Lang::get() === 'en' ? MONTHS_EN : MONTHS_FR;
+    $s = (int) gmdate('j', $ts) . ' ' . $months[(int) gmdate('n', $ts) - 1] . ' ' . gmdate('Y', $ts);
+    return $withTime ? $s . (Lang::get() === 'en' ? ', ' : ' à ') . gmdate('H:i', $ts) : $s;
 }
 
 function status_label(string $status): string
 {
-    return [
-        'pending_confirmation' => 'En attente de confirmation',
-        'pending_payment' => 'En attente de paiement',
-        'paid' => 'Payée',
-        'preparing' => 'En préparation',
-        'shipped' => 'Expédiée',
-        'delivered' => 'Livrée',
-        'cancelled' => 'Annulée',
-        'refunded' => 'Remboursée',
-    ][$status] ?? $status;
+    return Lang::has('status.' . $status) ? t('status.' . $status) : $status;
 }
 
 function payment_status_label(string $status): string
 {
-    return [
-        'unpaid' => 'Non payée',
-        'pending' => 'Paiement en attente',
-        'paid' => 'Payée',
-        'failed' => 'Paiement échoué',
-        'refunded' => 'Remboursée',
-    ][$status] ?? $status;
+    return Lang::has('pstatus.' . $status) ? t('pstatus.' . $status) : $status;
 }
 
 function payment_method_label(string $method): string
 {
-    return [
-        'cod' => 'Paiement à la livraison',
-        'demo' => 'Paiement SIMULÉ (démonstration)',
-        'orange_money' => 'Orange Money',
-        'mtn_momo' => 'MTN Mobile Money',
-        'wave' => 'Wave',
-        'card' => 'Carte bancaire',
-    ][$method] ?? $method;
+    return Lang::has('pay.' . $method) ? t('pay.' . $method) : $method;
 }
 
-/** Échappe puis met en forme : **gras**, [lien](/chemin|https://…) et marqueurs [À CONFIRMER]. */
+/** Échappe puis met en forme : **gras** et [lien](/chemin|https://…). */
 function rich_inline(string $text): string
 {
     $html = e($text);
@@ -234,6 +229,11 @@ function wa_link(string $text = ''): ?string
     return 'https://wa.me/' . $number . ($text !== '' ? '?text=' . rawurlencode($text) : '');
 }
 
+function tel_link(string $phone): string
+{
+    return 'tel:' . preg_replace('/[^0-9+]/', '', $phone);
+}
+
 function app_key(): string
 {
     $key = (string) Env::get('APP_KEY', '');
@@ -248,7 +248,7 @@ function spam_fields(): string
 {
     $ts = (string) time();
     $sig = hash_hmac('sha256', 'form|' . $ts, app_key());
-    return '<div class="hp" aria-hidden="true"><label>Ne pas remplir <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>'
+    return '<div class="hp" aria-hidden="true"><label>' . e(t('form.honeypot')) . ' <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>'
         . '<input type="hidden" name="_ts" value="' . e($ts . '.' . $sig) . '">';
 }
 
@@ -256,7 +256,7 @@ function spam_fields(): string
 function spam_check(App\Core\Request $r, bool $requireTiming = true): ?string
 {
     if (trim((string) ($r->post['website'] ?? '')) !== '') {
-        return 'Envoi refusé.';
+        return t('spam.refused');
     }
     if (!$requireTiming) {
         return null;
@@ -264,15 +264,15 @@ function spam_check(App\Core\Request $r, bool $requireTiming = true): ?string
     $raw = (string) ($r->post['_ts'] ?? '');
     $parts = explode('.', $raw, 2);
     if (count($parts) !== 2 || !ctype_digit($parts[0]) || !hash_equals(hash_hmac('sha256', 'form|' . $parts[0], app_key()), $parts[1])) {
-        return 'Formulaire invalide. Rechargez la page.';
+        return t('spam.invalid');
     }
     $elapsed = time() - (int) $parts[0];
     $min = (int) Env::get('ANTISPAM_MIN_SECONDS', '3');
     if ($elapsed < $min) {
-        return 'Envoi trop rapide. Patientez quelques secondes puis réessayez.';
+        return t('spam.too_fast');
     }
     if ($elapsed > 86400) {
-        return 'Le formulaire a expiré. Rechargez la page.';
+        return t('spam.expired');
     }
     return null;
 }
@@ -294,4 +294,64 @@ function field_error(array $errors, string $field): string
 function aria_invalid(array $errors, string $field): string
 {
     return isset($errors[$field]) ? ' aria-invalid="true" aria-describedby="err-' . e($field) . '"' : '';
+}
+
+/**
+ * Icônes au trait (style « symboles » iOS), dessinées à la main, décoratives par défaut.
+ */
+function icon(string $name, string $class = 'icon'): string
+{
+    static $paths = [
+        'home' => '<path d="M3.5 10.5 12 3.5l8.5 7"/><path d="M5.5 9v10.5h4.5V14h4v5.5h4.5V9"/>',
+        'bag' => '<path d="M5 8h14l-1 12.5H6z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/>',
+        'grid' => '<rect x="4" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8"/>',
+        'person' => '<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.4-3.8 4.2-5.7 7.5-5.7s6.1 1.9 7.5 5.7"/>',
+        'more' => '<circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/>',
+        'search' => '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
+        'sun' => '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
+        'moon' => '<path d="M19.5 14.5A8 8 0 0 1 9.5 4.5a8 8 0 1 0 10 10z"/>',
+        'globe' => '<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.7 5.4 3.7 8.5s-1.2 5.9-3.7 8.5c-2.5-2.6-3.7-5.4-3.7-8.5s1.2-5.9 3.7-8.5z"/>',
+        'chevron' => '<path d="m9.5 5.5 6.5 6.5-6.5 6.5"/>',
+        'chevron-left' => '<path d="m14.5 5.5-6.5 6.5 6.5 6.5"/>',
+        'check' => '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+        'plus' => '<path d="M12 5v14M5 12h14"/>',
+        'minus' => '<path d="M5 12h14"/>',
+        'truck' => '<path d="M3.5 6.5h10v9h-10z"/><path d="M13.5 9.5h4l3 3v3h-7"/><circle cx="7.5" cy="17.5" r="1.8"/><circle cx="17" cy="17.5" r="1.8"/>',
+        'shield' => '<path d="M12 3.5 19 6v6c0 4.2-2.9 7.5-7 8.5-4.1-1-7-4.3-7-8.5V6z"/><path d="m8.8 12 2.2 2.2 4.2-4.4"/>',
+        'leaf' => '<path d="M5 19c0-8 5-13.5 14.5-14.5C19 14 14 19 6 19z"/><path d="M5 19c3-4 6-6.5 9.5-8.5"/>',
+        'phone' => '<rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+        'chat' => '<path d="M4 12a8 8 0 1 1 3.4 6.5L3.5 20l1.3-3.6A8 8 0 0 1 4 12z"/>',
+        'mail' => '<rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="m4.5 7 7.5 6 7.5-6"/>',
+        'pin' => '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0C18.5 15.4 12 21 12 21z"/><circle cx="12" cy="10" r="2.4"/>',
+        'clock' => '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+        'card' => '<rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 9.5h18M6.5 15h4"/>',
+        'cash' => '<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.6"/><path d="M6 9.5v5M18 9.5v5"/>',
+        'box' => '<path d="m12 3 8.5 4.5v9L12 21l-8.5-4.5v-9z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/>',
+        'star' => '<path d="m12 4 2.4 5 5.4.6-4 3.7 1.1 5.4L12 16l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/>',
+        'hex' => '<path d="M12 2.8 20 7.4v9.2l-8 4.6-8-4.6V7.4z"/>',
+        'arrow-right' => '<path d="M4.5 12h15M13.5 6l6 6-6 6"/>',
+        'close' => '<path d="m6 6 12 12M18 6 6 18"/>',
+        'lock' => '<rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/>',
+        'receipt' => '<path d="M6 3.5h12v17l-2.5-1.5-2 1.5-1.5-1.5-1.5 1.5-2-1.5L6 20.5z"/><path d="M9 8h6M9 11.5h6M9 15h3.5"/>',
+        'filter' => '<path d="M4 6.5h16M7 12h10M10 17.5h4"/>',
+        'logout' => '<path d="M14 4.5H6.5v15H14"/><path d="M10.5 12h10M17 8.5l3.5 3.5-3.5 3.5"/>',
+        'info' => '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.8v.2"/>',
+        'building' => '<path d="M4.5 20.5v-15l8-2v17M12.5 8.5h7v12"/><path d="M7.5 8.5h2M7.5 12h2M7.5 15.5h2M15.5 12h1.5M15.5 15.5h1.5M3 20.5h18"/>',
+    ];
+    $svg = $paths[$name] ?? $paths['hex'];
+    return '<svg class="' . e($class) . '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' . $svg . '</svg>';
+}
+
+/** Pastille d'un moyen de paiement (couleurs génériques, sans logo de marque). */
+function pay_logo(string $code): string
+{
+    $inner = match ($code) {
+        'cod' => icon('cash'),
+        'card' => icon('card'),
+        'orange_money' => 'OM',
+        'mtn_momo' => 'MoMo',
+        'wave' => 'W',
+        default => icon('lock'),
+    };
+    return '<span class="pay-logo ' . e($code) . '" aria-hidden="true">' . $inner . '</span>';
 }

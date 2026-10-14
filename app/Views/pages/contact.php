@@ -3,50 +3,54 @@ use App\Core\View;
 use App\Services\Settings;
 /** @var array $errors @var array $old */
 $val = static fn (string $k) => e($old[$k] ?? '');
-$wa = wa_link('Bonjour, je souhaite un renseignement.');
+$wa = wa_link(t('wa.greeting'));
 ?>
-<div class="page-head"><div class="wrap"><h1>Contact</h1><p class="lead">Une question sur un produit, une commande ou une livraison ? Écrivez-nous.</p></div></div>
+<div class="wrap page-head"><h1><?= e(t('nav.contact')) ?></h1><p class="lead"><?= e(t('contact.lead')) ?></p></div>
 <div class="wrap two-cols">
-  <form action="/contact" method="post" class="card form-grid" novalidate>
+  <form action="/contact" method="post" class="form-card form-grid" novalidate>
     <?= csrf_field() ?><?= spam_fields() ?>
     <div class="field-full"><?= View::partial('errors-summary', ['errors' => $errors]) ?></div>
     <div class="field">
-      <label for="f-name">Nom</label>
+      <label for="f-name"><?= e(t('field.name_short')) ?></label>
       <input id="f-name" name="name" autocomplete="name" maxlength="150" required value="<?= $val('name') ?>"<?= aria_invalid($errors, 'name') ?>>
       <?= field_error($errors, 'name') ?>
     </div>
     <div class="field">
-      <label for="f-email">E-mail</label>
+      <label for="f-email"><?= e(t('field.email')) ?></label>
       <input id="f-email" name="email" type="email" autocomplete="email" maxlength="190" required value="<?= $val('email') ?>"<?= aria_invalid($errors, 'email') ?>>
       <?= field_error($errors, 'email') ?>
     </div>
     <div class="field">
-      <label for="f-phone">Téléphone <span class="hint">(facultatif)</span></label>
+      <label for="f-phone"><?= e(t('field.phone_short')) ?> <span class="hint"><?= e(t('form.optional')) ?></span></label>
       <input id="f-phone" name="phone" type="tel" autocomplete="tel" maxlength="20" value="<?= $val('phone') ?>"<?= aria_invalid($errors, 'phone') ?>>
       <?= field_error($errors, 'phone') ?>
     </div>
     <div class="field">
-      <label for="f-subject">Objet</label>
+      <label for="f-subject"><?= e(t('field.subject_short')) ?></label>
       <input id="f-subject" name="subject" maxlength="160" required value="<?= $val('subject') ?>"<?= aria_invalid($errors, 'subject') ?>>
       <?= field_error($errors, 'subject') ?>
     </div>
     <div class="field field-full">
-      <label for="f-message">Message</label>
+      <label for="f-message"><?= e(t('field.message_short')) ?></label>
       <textarea id="f-message" name="message" rows="6" maxlength="5000" required<?= aria_invalid($errors, 'message') ?>><?= $val('message') ?></textarea>
       <?= field_error($errors, 'message') ?>
     </div>
-    <label class="check field-full" id="f-consent"><input type="checkbox" name="consent" value="1" required<?= !empty($old['consent']) ? ' checked' : '' ?>> J'accepte que mes données soient utilisées pour répondre à ma demande (<a href="/politique-de-confidentialite">confidentialité</a>).</label>
-    <?= field_error($errors, 'consent') ?>
-    <div class="field-full"><button class="btn btn-primary" type="submit">Envoyer</button></div>
+    <label class="check field-full" id="f-consent"><input type="checkbox" name="consent" value="1" required<?= !empty($old['consent']) ? ' checked' : '' ?>> <span><?= e(t('contact.consent')) ?> <a href="/politique-de-confidentialite"><?= e(t('footer.privacy')) ?></a></span></label>
+    <div class="field-full"><?= field_error($errors, 'consent') ?></div>
+    <div class="field-full"><button class="btn btn-large" type="submit"><?= e(t('contact.send')) ?></button></div>
   </form>
-  <aside class="card contact-card">
-    <h2>Nos coordonnées</h2>
-    <ul class="hex-list">
-      <li><?= rich_inline(Settings::get('store_address')) ?>, <?= rich_inline(Settings::get('store_city')) ?></li>
-      <li>Téléphone : <?= rich_inline(Settings::get('store_phone')) ?></li>
-      <li>E-mail : <?= rich_inline(Settings::get('store_email')) ?></li>
-      <li>Horaires : <?= rich_inline(Settings::get('opening_hours')) ?></li>
-    </ul>
-    <?php if ($wa): ?><p><a class="btn btn-ghost" href="<?= e($wa) ?>" rel="noopener" target="_blank">Écrire sur WhatsApp</a></p><?php endif; ?>
+  <aside>
+    <div class="action-tiles">
+      <?php if (Settings::get('store_phone') !== ''): ?><a class="action-tile" href="<?= e(tel_link(Settings::get('store_phone'))) ?>"><?= icon('phone') ?><?= e(t('product.call')) ?></a><?php endif; ?>
+      <?php if ($wa): ?><a class="action-tile" href="<?= e($wa) ?>" rel="noopener" target="_blank"><?= icon('chat') ?>WhatsApp</a><?php endif; ?>
+      <?php if (Settings::get('store_email') !== ''): ?><a class="action-tile" href="mailto:<?= e(Settings::get('store_email')) ?>"><?= icon('mail') ?>E-mail</a><?php endif; ?>
+    </div>
+    <h2 class="group-title"><?= e(t('contact.details')) ?></h2>
+    <div class="group">
+      <div class="cell"><span class="cell-icon"><?= icon('pin') ?></span><span class="cell-body"><?= e(Settings::get('store_address') !== '' ? Settings::get('store_address') . ', ' : '') ?><?= e(Settings::get('store_city')) ?>, Côte d'Ivoire</span></div>
+      <?php if (Settings::get('store_phone') !== ''): ?><a class="cell" href="<?= e(tel_link(Settings::get('store_phone'))) ?>"><span class="cell-icon green"><?= icon('phone') ?></span><span class="cell-body"><?= e(Settings::get('store_phone')) ?></span><span class="cell-chevron"><?= icon('chevron') ?></span></a><?php endif; ?>
+      <?php if (Settings::get('store_email') !== ''): ?><a class="cell" href="mailto:<?= e(Settings::get('store_email')) ?>"><span class="cell-icon gray"><?= icon('mail') ?></span><span class="cell-body"><?= e(Settings::get('store_email')) ?></span><span class="cell-chevron"><?= icon('chevron') ?></span></a><?php endif; ?>
+      <?php if (setting('opening_hours') !== ''): ?><div class="cell"><span class="cell-icon gray"><?= icon('clock') ?></span><span class="cell-body"><?= e(setting('opening_hours')) ?></span></div><?php endif; ?>
+    </div>
   </aside>
 </div>

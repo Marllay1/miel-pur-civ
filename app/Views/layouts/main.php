@@ -1,14 +1,15 @@
 <?php
 /** @var string $content */
-use App\Core\Auth;
-use App\Core\Session;
 use App\Core\App;
+use App\Core\Auth;
+use App\Core\Lang;
+use App\Core\Session;
 use App\Services\CartService;
 use App\Services\Settings;
 
 $storeName = Settings::get('store_name');
-$pageTitle = isset($pageTitle) && $pageTitle !== '' ? $pageTitle . ' — ' . $storeName : $storeName . ' — ' . Settings::get('store_tagline');
-$metaDescription = $metaDescription ?? excerpt(Settings::get('home_hero_text'), 158);
+$pageTitle = isset($pageTitle) && $pageTitle !== '' ? $pageTitle . ' — ' . $storeName : $storeName . ' — ' . setting('store_tagline');
+$metaDescription = $metaDescription ?? excerpt(setting('home_hero_text'), 158);
 $canonical = $canonical ?? null;
 $ogImage = $ogImage ?? asset('img/og-default.png');
 $cartCount = 0;
@@ -19,136 +20,150 @@ try {
 $user = Auth::user();
 $flashes = Session::pullFlashes();
 $path = App::$request?->path ?? '/';
-$navItems = ['/boutique' => 'Boutique', '/a-propos' => 'À propos', '/commandes-professionnelles' => 'Professionnels', '/faq' => 'FAQ', '/contact' => 'Contact'];
+$query = App::$request?->query ?? [];
+$navItems = ['/boutique' => t('nav.shop'), '/a-propos' => t('nav.about'), '/commandes-professionnelles' => t('nav.pro'), '/faq' => t('nav.faq'), '/contact' => t('nav.contact')];
+$isActive = static fn (string $href) => $path === $href || str_starts_with($path, $href . '/');
 $analytics = Settings::get('analytics_provider');
-$wa = wa_link('Bonjour, je souhaite un renseignement sur vos produits.');
+$wa = wa_link(t('wa.greeting'));
+$other = Lang::get() === 'fr' ? 'en' : 'fr';
+$here = $path . ($query ? '?' . http_build_query($query) : '');
+$altUrl = abs_url($here, $other);
+$jsI18n = [
+    'added' => t('js.added'), 'viewCart' => t('js.view_cart'), 'error' => t('js.error'), 'sending' => t('js.sending'),
+    'chooseZone' => t('checkout.choose_zone'), 'free' => t('checkout.free'), 'themeLight' => t('theme.light'), 'themeDark' => t('theme.dark'),
+];
+$tabs = [
+    ['/', 'home', t('tab.home'), $path === '/'],
+    ['/boutique', 'grid', t('tab.shop'), $isActive('/boutique')],
+    ['/panier', 'bag', t('tab.cart'), $isActive('/panier') || $isActive('/commande')],
+    [$user ? ($user['role'] === 'customer' ? '/compte' : '/admin') : '/compte/connexion', 'person', t('tab.account'), $isActive('/compte')],
+    ['/menu', 'more', t('tab.more'), $isActive('/menu')],
+];
 ?><!doctype html>
-<html lang="fr">
+<html lang="<?= e(Lang::get()) ?>"<?= $theme ? ' data-theme="' . e($theme) . '"' : '' ?> data-i18n="<?= e(json_encode($jsI18n, JSON_UNESCAPED_UNICODE)) ?>">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title><?= e($pageTitle) ?></title>
 <meta name="description" content="<?= e($metaDescription) ?>">
 <?php if (!empty($noindex)): ?><meta name="robots" content="noindex, nofollow"><?php endif; ?>
-<?php if ($canonical): ?><link rel="canonical" href="<?= e(abs_url($canonical)) ?>"><?php endif; ?>
+<?php if ($canonical): ?>
+<link rel="canonical" href="<?= e(abs_url($canonical)) ?>">
+<link rel="alternate" hreflang="fr" href="<?= e(abs_url($canonical, 'fr')) ?>">
+<link rel="alternate" hreflang="en" href="<?= e(abs_url($canonical, 'en')) ?>">
+<link rel="alternate" hreflang="x-default" href="<?= e(abs_url($canonical, 'fr')) ?>">
+<?php endif; ?>
 <meta property="og:site_name" content="<?= e($storeName) ?>">
 <meta property="og:title" content="<?= e($pageTitle) ?>">
 <meta property="og:description" content="<?= e($metaDescription) ?>">
 <meta property="og:type" content="<?= e($ogType ?? 'website') ?>">
-<meta property="og:locale" content="fr_FR">
+<meta property="og:locale" content="<?= Lang::get() === 'en' ? 'en_GB' : 'fr_FR' ?>">
 <?php if ($canonical): ?><meta property="og:url" content="<?= e(abs_url($canonical)) ?>"><?php endif; ?>
-<meta property="og:image" content="<?= e(str_starts_with($ogImage, 'http') ? $ogImage : abs_url($ogImage)) ?>">
+<meta property="og:image" content="<?= e(str_starts_with($ogImage, 'http') ? $ogImage : base_url() . $ogImage) ?>">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="theme-color" content="#2B1B0E">
+<meta name="theme-color" content="#F5F2EC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)">
 <link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
-<link rel="preload" href="/assets/fonts/young-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="apple-touch-icon" href="<?= e(asset('img/apple-touch-icon.png')) ?>">
 <link rel="preload" href="/assets/fonts/figtree-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/figtree-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
 <?php foreach ($jsonLd ?? [] as $ld): ?>
 <script type="application/ld+json"><?= json_encode($ld, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
 <?php endforeach; ?>
 </head>
 <body class="<?= e($bodyClass ?? '') ?>"<?php if ($analytics !== 'none' && Settings::get('analytics_id') !== ''): ?> data-analytics="<?= e($analytics) ?>" data-analytics-id="<?= e(Settings::get('analytics_id')) ?>"<?php endif; ?>>
-<a class="skip-link" href="#contenu">Aller au contenu</a>
-<?php if (is_demo_mode()): ?>
-<div class="demo-banner" role="note">
-  <div class="wrap"><strong>Site de démonstration.</strong> Produits, prix, stocks et illustrations sont fictifs et doivent être confirmés par <?= e($storeName) ?>. Aucun paiement réel n'est encaissé.</div>
-</div>
-<?php endif; ?>
-<header class="site-header">
-  <div class="wrap header-inner">
-    <a class="brand" href="/" aria-label="<?= e($storeName) ?> — accueil">
-      <svg class="brand-mark" viewBox="0 0 48 52" aria-hidden="true" focusable="false">
-        <path d="M24 2 45 14v24L24 50 3 38V14z" class="brand-hex"/>
-        <path d="M24 13c5 7.5 8.5 12.4 8.5 17.4a8.5 8.5 0 0 1-17 0C15.5 25.4 19 20.5 24 13z" class="brand-drop"/>
-      </svg>
+<a class="skip-link" href="#contenu"><?= e(t('a11y.skip')) ?></a>
+<header class="navbar" data-navbar>
+  <div class="wrap navbar-inner">
+    <a class="brand" href="/" aria-label="<?= e($storeName) ?> — <?= e(t('nav.home')) ?>">
+      <svg class="brand-mark" viewBox="0 0 48 52" aria-hidden="true" focusable="false"><path class="hex" d="M24 1.5 46 14v24L24 50.5 2 38V14z"/><path class="drop" d="M24 12.5c5.2 7.6 8.8 12.6 8.8 17.8a8.8 8.8 0 0 1-17.6 0c0-5.2 3.6-10.2 8.8-17.8z"/></svg>
       <span class="brand-text"><span class="brand-name">Miel Pur</span><span class="brand-sub">de Côte d'Ivoire</span></span>
     </a>
-    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav">
-      <span class="nav-toggle-bars" aria-hidden="true"></span><span class="nav-toggle-label">Menu</span>
-    </button>
-    <nav id="site-nav" class="site-nav" aria-label="Navigation principale">
-      <ul>
+    <nav aria-label="<?= e(t('nav.label')) ?>">
+      <ul class="nav-links">
         <?php foreach ($navItems as $href => $label): ?>
-        <li><a href="<?= $href ?>"<?= str_starts_with($path, $href) ? ' aria-current="page"' : '' ?>><?= e($label) ?></a></li>
+        <li><a href="<?= $href ?>"<?= $isActive($href) ? ' aria-current="page"' : '' ?>><?= e($label) ?></a></li>
         <?php endforeach; ?>
       </ul>
-      <form class="header-search" action="/boutique" method="get" role="search">
-        <label class="sr-only" for="header-q">Rechercher un produit</label>
-        <input id="header-q" name="q" type="search" placeholder="Rechercher…" value="<?= e($path === '/boutique' ? (App::$request->query['q'] ?? '') : '') ?>" maxlength="80">
-        <button type="submit" class="search-btn" aria-label="Lancer la recherche">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>
+    </nav>
+    <div class="nav-actions">
+      <a class="icon-btn" href="/boutique#recherche" aria-label="<?= e(t('nav.search')) ?>"><?= icon('search') ?></a>
+      <a class="icon-btn lang-btn" href="<?= e($altUrl) ?>" hreflang="<?= $other ?>" lang="<?= $other ?>" aria-label="<?= e(t('nav.switch_lang')) ?>"><?= strtoupper($other) ?></a>
+      <form action="/preferences/theme" method="post" class="theme-form">
+        <?= csrf_field() ?><input type="hidden" name="retour" value="<?= e(Lang::path($here)) ?>">
+        <button class="icon-btn" type="submit" name="theme" value="<?= $theme === 'dark' ? 'light' : 'dark' ?>" data-theme-toggle aria-label="<?= e(t('nav.theme')) ?>">
+          <span class="ti-moon"><?= icon('moon') ?></span><span class="ti-sun"><?= icon('sun') ?></span>
         </button>
       </form>
-    </nav>
-    <div class="header-actions">
-      <a class="header-link" href="<?= $user ? ($user['role'] === 'customer' ? '/compte' : '/admin') : '/compte/connexion' ?>">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
-        <span class="header-link-label"><?= $user ? 'Mon compte' : 'Connexion' ?></span>
-      </a>
-      <a class="header-link cart-link" href="/panier">
-        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 4h2l2.2 11.2a2 2 0 0 0 2 1.6h7.6a2 2 0 0 0 2-1.5L21 8H6.2"/><circle cx="10" cy="20.5" r="1.2"/><circle cx="17" cy="20.5" r="1.2"/></svg>
-        <span class="header-link-label">Panier</span>
-        <span class="cart-count" data-cart-count aria-label="<?= (int) $cartCount ?> article(s)"><?= (int) $cartCount ?></span>
+      <a class="icon-btn nav-only-desktop" href="<?= $user ? ($user['role'] === 'customer' ? '/compte' : '/admin') : '/compte/connexion' ?>" aria-label="<?= e($user ? t('nav.account') : t('nav.login')) ?>"><?= icon('person') ?></a>
+      <a class="icon-btn nav-only-desktop" href="/panier" aria-label="<?= e(t('nav.cart_count', ['count' => (int) $cartCount])) ?>">
+        <?= icon('bag') ?><span class="badge-count" data-cart-count data-count="<?= (int) $cartCount ?>"><?= (int) $cartCount ?></span>
       </a>
     </div>
   </div>
 </header>
+
 <main id="contenu" tabindex="-1">
+<?php if (is_demo_mode()): ?>
+  <div class="wrap"><p class="notice notice-amber small"><?= icon('info') ?> <?= e(t('demo.banner')) ?></p></div>
+<?php endif; ?>
 <?php if ($flashes): ?>
   <div class="wrap flashes" role="status" aria-live="polite">
   <?php foreach ($flashes as $type => $messages): foreach ($messages as $message): ?>
-    <p class="flash flash-<?= e($type) ?>"><?= e($message) ?></p>
+    <p class="flash flash-<?= e($type) ?>"><?= icon($type === 'success' ? 'check' : ($type === 'error' ? 'info' : 'info')) ?><span><?= e($message) ?></span></p>
   <?php endforeach; endforeach; ?>
   </div>
 <?php endif; ?>
 <div class="sr-only" aria-live="polite" data-live-region></div>
 <?= $content ?>
 </main>
+
 <footer class="site-footer">
-  <div class="hex-rule" aria-hidden="true"></div>
   <div class="wrap footer-grid">
-    <div class="footer-brand">
+    <div>
       <p class="footer-title"><?= e($storeName) ?></p>
-      <p><?= rich_inline(Settings::get('store_tagline')) ?>.</p>
-      <p class="footer-contact">
-        <?= rich_inline(Settings::get('store_city')) ?> — <?= rich_inline(Settings::get('store_address')) ?><br>
-        Tél. : <?= rich_inline(Settings::get('store_phone')) ?><br>
-        E-mail : <?= rich_inline(Settings::get('store_email')) ?><br>
-        Horaires : <?= rich_inline(Settings::get('opening_hours')) ?>
-      </p>
+      <p><?= e(setting('store_tagline')) ?></p>
+      <div class="footer-contact">
+        <span><?= icon('pin') ?><?= e(trim(Settings::get('store_address') !== '' ? Settings::get('store_address') . ', ' . Settings::get('store_city') : Settings::get('store_city') . ', Côte d\'Ivoire')) ?></span>
+        <?php if (Settings::get('store_phone') !== ''): ?><a href="<?= e(tel_link(Settings::get('store_phone'))) ?>"><?= icon('phone') ?><?= e(Settings::get('store_phone')) ?></a><?php endif; ?>
+        <?php if (Settings::get('store_email') !== ''): ?><a href="mailto:<?= e(Settings::get('store_email')) ?>"><?= icon('mail') ?><?= e(Settings::get('store_email')) ?></a><?php endif; ?>
+        <?php if (setting('opening_hours') !== ''): ?><span><?= icon('clock') ?><?= e(setting('opening_hours')) ?></span><?php endif; ?>
+      </div>
     </div>
     <div>
-      <p class="footer-title">Boutique</p>
+      <p class="footer-title"><?= e(t('footer.shop')) ?></p>
       <ul class="footer-links">
-        <li><a href="/boutique">Tous les produits</a></li>
-        <li><a href="/commandes-professionnelles">Commandes professionnelles</a></li>
-        <li><a href="/suivi-commande">Suivre une commande</a></li>
-        <li><a href="/faq">Questions fréquentes</a></li>
-        <li><a href="/contact">Contact</a></li>
+        <li><a href="/boutique"><?= e(t('footer.all_products')) ?></a></li>
+        <li><a href="/commandes-professionnelles"><?= e(t('nav.pro')) ?></a></li>
+        <li><a href="/suivi-commande"><?= e(t('footer.tracking')) ?></a></li>
+        <li><a href="/faq"><?= e(t('nav.faq')) ?></a></li>
+        <li><a href="/contact"><?= e(t('nav.contact')) ?></a></li>
       </ul>
     </div>
     <div>
-      <p class="footer-title">Informations</p>
+      <p class="footer-title"><?= e(t('footer.info')) ?></p>
       <ul class="footer-links">
-        <li><a href="/conditions-generales-de-vente">Conditions générales de vente</a></li>
-        <li><a href="/politique-de-livraison">Livraison</a></li>
-        <li><a href="/retours-et-remboursements">Retours et remboursements</a></li>
-        <li><a href="/politique-de-confidentialite">Confidentialité</a></li>
-        <li><a href="/mentions-legales">Mentions légales</a></li>
+        <li><a href="/conditions-generales-de-vente"><?= e(t('footer.terms')) ?></a></li>
+        <li><a href="/politique-de-livraison"><?= e(t('footer.delivery')) ?></a></li>
+        <li><a href="/retours-et-remboursements"><?= e(t('footer.returns')) ?></a></li>
+        <li><a href="/politique-de-confidentialite"><?= e(t('footer.privacy')) ?></a></li>
+        <li><a href="/mentions-legales"><?= e(t('footer.legal')) ?></a></li>
       </ul>
     </div>
     <div>
-      <p class="footer-title">Lettre d'information</p>
+      <p class="footer-title"><?= e(t('footer.newsletter')) ?></p>
       <form class="newsletter-form" action="/newsletter" method="post">
         <?= csrf_field() ?>
-        <label for="nl-email">Votre e-mail</label>
+        <input type="hidden" name="retour" value="<?= e(Lang::path($here)) ?>">
+        <label class="sr-only" for="nl-email"><?= e(t('field.email')) ?></label>
         <div class="inline-field">
-          <input id="nl-email" name="email" type="email" required maxlength="190" autocomplete="email">
-          <button class="btn btn-small" type="submit">S'inscrire</button>
+          <input id="nl-email" name="email" type="email" required maxlength="190" autocomplete="email" placeholder="<?= e(t('footer.newsletter_placeholder')) ?>">
+          <button class="btn btn-small" type="submit"><?= e(t('footer.subscribe')) ?></button>
         </div>
-        <label class="check"><input type="checkbox" name="consent" value="1" required> J'accepte de recevoir des e-mails (désinscription à tout moment).</label>
-        <div class="hp" aria-hidden="true"><label>Ne pas remplir <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+        <label class="check"><input type="checkbox" name="consent" value="1" required> <span><?= e(t('footer.newsletter_consent')) ?></span></label>
+        <div class="hp" aria-hidden="true"><label><?= e(t('form.honeypot')) ?> <input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
       </form>
       <?php $socials = array_filter(['Facebook' => Settings::get('social_facebook'), 'Instagram' => Settings::get('social_instagram'), 'TikTok' => Settings::get('social_tiktok')]); ?>
       <?php if ($socials): ?>
@@ -159,21 +174,29 @@ $wa = wa_link('Bonjour, je souhaite un renseignement sur vos produits.');
     </div>
   </div>
   <div class="wrap footer-bottom">
-    <p>© <?= gmdate('Y') ?> <?= e($storeName) ?>. Prix en francs CFA (FCFA).</p>
-    <p>Site réalisé par <strong>HELIX TECHNOLOGIES</strong>.</p>
+    <p>© <?= gmdate('Y') ?> <?= e($storeName) ?> · <?= e(t('footer.prices')) ?></p>
+    <p><?= e(t('footer.made_by')) ?> <strong>HELIX TECHNOLOGIES</strong></p>
   </div>
 </footer>
+
+<nav class="tabbar" aria-label="<?= e(t('nav.tabs')) ?>">
+  <ul>
+    <?php foreach ($tabs as [$href, $ic, $label, $active]): ?>
+    <li><a href="<?= e($href) ?>"<?= $active ? ' aria-current="page"' : '' ?>><?= icon($ic) ?><span><?= e($label) ?></span><?php if ($ic === 'bag'): ?><span class="badge-count" data-cart-count data-count="<?= (int) $cartCount ?>"><?= (int) $cartCount ?></span><?php endif; ?></a></li>
+    <?php endforeach; ?>
+  </ul>
+</nav>
+
 <?php if ($wa): ?>
-<a class="wa-float" href="<?= e($wa) ?>" rel="noopener" target="_blank" aria-label="Nous écrire sur WhatsApp">
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 3a9 9 0 0 0-7.8 13.5L3 21l4.6-1.2A9 9 0 1 0 12 3z"/><path d="M8.5 8.5c0 4 3 7 7 7l1-1.6-2-1-1 .8c-1.2-.5-2.2-1.5-2.7-2.7l.8-1-1-2z" class="wa-handset"/></svg>
-</a>
+<a class="wa-float" href="<?= e($wa) ?>" rel="noopener" target="_blank" aria-label="<?= e(t('wa.label')) ?>"><?= icon('chat') ?></a>
 <?php endif; ?>
+<div class="toast" data-toast role="status" aria-live="polite"></div>
 <?php if ($analytics !== 'none' && Settings::get('analytics_id') !== ''): ?>
 <div class="consent" data-consent hidden>
-  <p>Nous aimerions mesurer l'audience du site (<?= e($analytics === 'ga4' ? 'Google Analytics' : 'Plausible') ?>). Acceptez-vous ?</p>
-  <div class="consent-actions">
-    <button class="btn btn-small" type="button" data-consent-accept>Accepter</button>
-    <button class="btn btn-small btn-ghost" type="button" data-consent-refuse>Refuser</button>
+  <p><?= e(t('consent.text', ['tool' => $analytics === 'ga4' ? 'Google Analytics' : 'Plausible'])) ?></p>
+  <div class="btn-row">
+    <button class="btn btn-small" type="button" data-consent-accept><?= e(t('consent.accept')) ?></button>
+    <button class="btn btn-small btn-gray" type="button" data-consent-refuse><?= e(t('consent.refuse')) ?></button>
   </div>
 </div>
 <?php endif; ?>

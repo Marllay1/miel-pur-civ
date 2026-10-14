@@ -1,4 +1,4 @@
-<?php use App\Core\View; /** @var array $faqs @var ?array $edit @var array $old @var array $errors */ $val = static fn (string $k) => e($old[$k] ?? ''); ?>
+<?php use App\Core\View; /** @var array $faqs @var ?array $edit @var array $old @var array $errors @var array $translation */ $val = static fn (string $k) => e($old[$k] ?? ''); ?>
 <h1>FAQ</h1>
 <div class="admin-cols">
   <div class="table-wrap"><table class="table">
@@ -21,6 +21,8 @@
     <div class="field"><label for="f-answer">Réponse</label><textarea id="f-answer" name="answer" rows="6" required><?= $val('answer') ?></textarea></div>
     <div class="field"><label for="f-sort">Ordre</label><input id="f-sort" name="sort_order" type="number" min="0" value="<?= $val('sort_order') ?: '0' ?>"></div>
     <label class="check"><input type="checkbox" name="is_active" value="1"<?= !empty($old['is_active']) ? ' checked' : '' ?>> Publiée</label>
+    <?= View::partial('admin-translation', ['type' => 'faq', 'values' => $translation, 'prefix' => 'en-faq',
+        'labels' => ['question' => 'Question', 'answer' => 'Réponse', 'category' => 'Rubrique'], 'long' => ['answer']]) ?>
     <button class="btn btn-primary btn-small" type="submit">Enregistrer</button>
     <?php if ($edit): ?> <a href="/admin/faq">Annuler</a><?php endif; ?>
   </form>

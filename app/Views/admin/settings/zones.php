@@ -1,6 +1,6 @@
-<?php use App\Core\View; /** @var array $zones @var ?array $edit @var array $old @var array $errors */ $val = static fn (string $k) => e($old[$k] ?? ''); $chk = static fn (string $k) => !empty($old[$k]) ? ' checked' : ''; ?>
+<?php use App\Core\View; /** @var array $zones @var ?array $edit @var array $old @var array $errors @var array $translation */ $val = static fn (string $k) => e($old[$k] ?? ''); $chk = static fn (string $k) => !empty($old[$k]) ? ' checked' : ''; ?>
 <h1>Zones de livraison</h1>
-<p class="muted small">Les frais sont recalculés par le serveur à chaque commande. Les tarifs de démonstration sont marqués [À CONFIRMER].</p>
+<p class="muted small">Les frais sont recalculés par le serveur à chaque commande. Vérifiez les tarifs, seuils de gratuité et délais avant l'ouverture. Une zone sans paiement à la livraison n'est proposée que si un paiement en ligne est actif.</p>
 <div class="admin-cols">
   <div class="table-wrap"><table class="table">
     <thead><tr><th>Zone</th><th class="num">Frais</th><th class="num">Offerte dès</th><th>Délai</th><th>Options</th><th class="num">Cmd.</th></tr></thead>
@@ -26,6 +26,8 @@
     <label class="check"><input type="checkbox" name="allows_cod" value="1"<?= $chk('allows_cod') ?>> Paiement à la livraison possible</label>
     <label class="check"><input type="checkbox" name="is_pickup" value="1"<?= $chk('is_pickup') ?>> Retrait (pas d'adresse demandée)</label>
     <label class="check"><input type="checkbox" name="is_active" value="1"<?= $chk('is_active') ?>> Active</label>
+    <?= \App\Core\View::partial('admin-translation', ['type' => 'zone', 'values' => $translation, 'prefix' => 'en-zone',
+        'labels' => ['name' => 'Nom', 'description' => 'Description', 'delay_text' => 'Délai']]) ?>
     <button class="btn btn-primary btn-small" type="submit">Enregistrer</button>
     <?php if ($edit): ?> <a href="/admin/livraison">Annuler</a><?php endif; ?>
   </form>

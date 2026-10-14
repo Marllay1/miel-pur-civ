@@ -34,7 +34,7 @@ final class HomeController
         return view('home', [
             'featured' => Catalog::featured(4),
             'categories' => Catalog::categories(),
-            'faqs' => DB::all('SELECT * FROM faqs WHERE is_active = 1 ORDER BY sort_order, id LIMIT 3'),
+            'faqs' => \App\Services\I18n::localize('faq', DB::all('SELECT * FROM faqs WHERE is_active = 1 ORDER BY sort_order, id LIMIT 3')),
             'canonical' => '/',
             'pageTitle' => '',
             'jsonLd' => [$org, ['@context' => 'https://schema.org', '@type' => 'WebSite', 'name' => Settings::get('store_name'), 'url' => base_url() . '/',

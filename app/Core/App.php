@@ -33,7 +33,17 @@ final class App
         self::$request = $r;
         Auth::reset();
         Audit::$ip = $r->ip();
-        View::$shared = ['request' => $r];
+        $locale = Lang::DEFAULT;
+        if ($r->path === '/en' || str_starts_with($r->path, '/en/')) {
+            $locale = 'en';
+            $r->path = substr($r->path, 3) ?: '/';
+        }
+        if ($r->path === '/admin' || str_starts_with($r->path, '/admin/')) {
+            $locale = Lang::DEFAULT;
+        }
+        Lang::set($locale);
+        $theme = $r->cookie('mpci_theme');
+        View::$shared = ['request' => $r, 'theme' => in_array($theme, ['light', 'dark'], true) ? $theme : null];
         try {
             if (preg_match('/[\x00-\x1F\x7F]/', $r->path . ($r->server['REQUEST_URI'] ?? '')) === 1 || str_contains((string) ($r->server['REQUEST_URI'] ?? ''), '%00')) {
                 throw new HttpException(400, 'Requête invalide.');
@@ -42,11 +52,20 @@ final class App
             $r->params = $params;
             $response = self::guard($r, $route['middleware']) ?? self::call($route['handler'], $r);
         } catch (HttpException $e) {
-            $response = self::error($r, $e->status, $e->getMessage());
+            $response = self::error($r, $e->status, $e->getMessage(), $e->kind);
         } catch (\Throwable $e) {
             Log::error($e->getMessage(), ['file' => $e->getFile() . ':' . $e->getLine(), 'path' => $r->path]);
             $response = self::error($r, 500, Env::bool('APP_DEBUG') ? $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine() : '');
         }
+        if (!Lang::isDefault()) {
+            if (isset($response->headers['Location'])) {
+                $response->headers['Location'] = Lang::path($response->headers['Location']);
+            }
+            if (str_starts_with($response->headers['Content-Type'] ?? '', 'text/html')) {
+                $response->body = Lang::localizeHtml($response->body);
+            }
+        }
+        $response->headers['Content-Language'] = Lang::get();
         return self::secure($r, $response);
     }
 
@@ -60,7 +79,7 @@ final class App
     private static function guard(Request $r, array $middleware): ?Response
     {
         if (in_array($r->method, ['POST', 'PUT', 'PATCH', 'DELETE'], true) && !in_array('nocsrf', $middleware, true) && !Csrf::check($r)) {
-            throw new HttpException(419, 'La session a expiré ou le formulaire n\'est plus valide. Rechargez la page et réessayez.');
+            throw new HttpException(403, Lang::t('error.csrf'), 'csrf');
         }
         foreach ($middleware as $mw) {
             if ($mw === 'auth' && !Auth::check()) {
@@ -93,19 +112,16 @@ final class App
         return null;
     }
 
-    public static function error(Request $r, int $status, string $message = ''): Response
+    public static function error(Request $r, int $status, string $message = '', string $kind = ''): Response
     {
-        $titles = [
-            403 => 'Accès refusé', 404 => 'Page introuvable', 405 => 'Méthode non autorisée',
-            419 => 'Formulaire expiré', 429 => 'Trop de requêtes', 500 => 'Erreur interne', 503 => 'Service indisponible',
-        ];
-        $title = $titles[$status] ?? 'Erreur';
+        $kind = $kind !== '' ? $kind : (string) $status;
+        $title = Lang::has('error.title.' . $kind) ? Lang::t('error.title.' . $kind) : Lang::t('error.title.default');
         if ($r->wantsJson() || str_starts_with($r->path, '/webhooks/')) {
             return Response::json(['error' => $message !== '' ? $message : $title], $status);
         }
         try {
             $layout = str_starts_with($r->path, '/admin') && Auth::isStaff() ? 'layouts/admin' : 'layouts/main';
-            $html = View::render('errors/error', ['status' => $status, 'title' => $title, 'message' => $message, 'pageTitle' => $title, 'noindex' => true], $layout);
+            $html = View::render('errors/error', ['status' => $status, 'kind' => $kind, 'title' => $title, 'message' => $message, 'pageTitle' => $title, 'noindex' => true], $layout);
         } catch (\Throwable $e) {
             Log::error('Rendu de la page d\'erreur impossible : ' . $e->getMessage());
             $html = '<!doctype html><meta charset="utf-8"><title>' . e($title) . '</title><h1>' . e($title) . '</h1><p>' . e($message) . '</p>';
@@ -117,6 +133,19 @@ final class App
     {
         $extraScript = '';
         $extraConnect = '';
+        // Les formulaires de paiement redirigent vers les pages hébergées des prestataires (Wave, Orange, CinetPay).
+        $formTargets = '';
+        if ($r->path === '/commande' || str_starts_with($r->path, '/commande/')) {
+            foreach (['wave', 'orange_money', 'card'] as $code) {
+                try {
+                    if (\App\Services\PaymentService::gateway($code)?->isEnabled()) {
+                        $formTargets = ' https:';
+                        break;
+                    }
+                } catch (\Throwable) {
+                }
+            }
+        }
         try {
             $provider = \App\Services\Settings::get('analytics_provider');
             if ($provider === 'plausible') {
@@ -129,7 +158,7 @@ final class App
         } catch (\Throwable) {
         }
         $csp = "default-src 'self'; script-src 'self'$extraScript; style-src 'self'; img-src 'self' data:; font-src 'self'; "
-            . "connect-src 'self'$extraConnect; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'";
+            . "connect-src 'self'$extraConnect; form-action 'self'$formTargets; frame-ancestors 'none'; base-uri 'self'; object-src 'none'";
         $resp->headers += [
             'Content-Security-Policy' => $csp,
             'X-Content-Type-Options' => 'nosniff',

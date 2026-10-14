@@ -35,6 +35,19 @@ final class Settings
         return self::$cache[$key] ?? (string) ($defs[$key]['default'] ?? '');
     }
 
+    /** Valeur dans la langue courante : clé « xxx_en » si elle existe et n'est pas vide, sinon la valeur française. */
+    public static function localized(string $key): string
+    {
+        $locale = \App\Core\Lang::get();
+        if ($locale !== \App\Core\Lang::DEFAULT && isset(self::definitions()[$key . '_' . $locale])) {
+            $v = self::get($key . '_' . $locale);
+            if ($v !== '') {
+                return $v;
+            }
+        }
+        return self::get($key);
+    }
+
     public static function int(string $key): int
     {
         return (int) self::get($key);

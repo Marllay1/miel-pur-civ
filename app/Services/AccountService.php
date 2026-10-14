@@ -13,13 +13,13 @@ final class AccountService
     public static function passwordProblem(string $password): ?string
     {
         if (mb_strlen($password) < self::MIN_PASSWORD) {
-            return 'Le mot de passe doit contenir au moins ' . self::MIN_PASSWORD . ' caractères.';
+            return t('password.min', ['min' => self::MIN_PASSWORD]);
         }
         if (mb_strlen($password) > 200) {
-            return 'Le mot de passe est trop long.';
+            return t('password.too_long');
         }
         if (!preg_match('/[A-Za-z]/', $password) || !preg_match('/\d/', $password)) {
-            return 'Le mot de passe doit contenir au moins une lettre et un chiffre.';
+            return t('password.letters_digits');
         }
         return null;
     }
@@ -38,7 +38,7 @@ final class AccountService
     {
         $email = mb_strtolower(trim($data['email']));
         if (DB::value('SELECT id FROM users WHERE email = ?', [$email]) !== null) {
-            return ['ok' => false, 'error' => 'Un compte existe déjà avec cette adresse e-mail. Connectez-vous ou réinitialisez votre mot de passe.'];
+            return ['ok' => false, 'error' => t('account.exists_long')];
         }
         $now = gmdate('Y-m-d H:i:s');
         try {
@@ -56,7 +56,7 @@ final class AccountService
             ]);
         } catch (\PDOException $e) {
             if (DB::isUniqueViolation($e)) {
-                return ['ok' => false, 'error' => 'Un compte existe déjà avec cette adresse e-mail.'];
+                return ['ok' => false, 'error' => t('account.exists')];
             }
             throw $e;
         }
@@ -83,7 +83,7 @@ final class AccountService
             'used_at' => null,
             'created_at' => gmdate('Y-m-d H:i:s'),
         ]);
-        Notifier::passwordReset($user, $token);
+        Notifier::passwordReset($user, $token, \App\Core\Lang::get());
     }
 
     public static function findReset(string $token): ?array

@@ -1,25 +1,23 @@
 <?php /** @var array $payment @var array $order @var string $token */ ?>
-<div class="wrap narrow demo-pay">
-  <div class="demo-pay-banner" role="alert">
-    <p class="demo-pay-title">PAIEMENT SIMULÉ</p>
-    <p>Cette page imite un prestataire de paiement pour tester le parcours. <strong>Aucune somme n'est débitée</strong> et aucune donnée bancaire n'est demandée.</p>
-  </div>
-  <div class="card">
+<div class="wrap narrow page-head">
+  <div class="simulated" role="alert"><strong><?= e(t('pay.demo')) ?></strong><br><?= e(t('pay.demo_text')) ?></div>
+  <div class="group summary">
     <dl class="totals">
-      <div><dt>Commande</dt><dd><?= e($order['number']) ?></dd></div>
-      <div><dt>Référence de paiement</dt><dd><?= e($payment['reference']) ?></dd></div>
-      <div class="grand-total"><dt>Montant</dt><dd><?= money((int) $payment['amount']) ?></dd></div>
+      <div><dt><?= e(t('order.label')) ?></dt><dd><?= e($order['number']) ?></dd></div>
+      <div><dt><?= e(t('pay.reference')) ?></dt><dd><?= e($payment['reference']) ?></dd></div>
+      <div class="grand-total"><dt><?= e(t('pay.amount')) ?></dt><dd><?= money((int) $payment['amount']) ?></dd></div>
     </dl>
     <?php if ($payment['status'] === 'initiated'): ?>
-    <form action="/paiement/demo/<?= e($payment['reference']) ?>" method="post" class="demo-pay-actions">
+    <form action="/paiement/demo/<?= e($payment['reference']) ?>" method="post" class="btn-row">
       <?= csrf_field() ?><input type="hidden" name="t" value="<?= e($token) ?>">
-      <button class="btn btn-primary" type="submit" name="outcome" value="succeeded">Simuler un paiement réussi</button>
-      <button class="btn btn-ghost" type="submit" name="outcome" value="failed">Simuler un refus</button>
-      <button class="link-btn" type="submit" name="outcome" value="cancelled">Annuler</button>
+      <button class="btn btn-green" type="submit" name="outcome" value="succeeded"><?= e(t('pay.demo_success')) ?></button>
+      <button class="btn btn-destructive" type="submit" name="outcome" value="failed"><?= e(t('pay.demo_fail')) ?></button>
+      <button class="btn btn-plain" type="submit" name="outcome" value="cancelled"><?= e(t('pay.demo_cancel')) ?></button>
     </form>
     <?php else: ?>
-    <p>Ce paiement a déjà été traité (statut : <?= e($payment['status']) ?>).</p>
-    <p><a class="btn btn-ghost" href="<?= e(url('/commande/' . $order['number'], ['t' => $token])) ?>">Retour à la commande</a></p>
+    <p><?= e(t('pay.result.already')) ?></p>
+    <a class="btn btn-gray" href="<?= e(url('/commande/' . $order['number'], ['t' => $token])) ?>"><?= e(t('pay.wait_back')) ?></a>
     <?php endif; ?>
   </div>
 </div>
+<div class="section"></div>

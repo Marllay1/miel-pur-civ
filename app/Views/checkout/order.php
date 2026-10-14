@@ -1,5 +1,5 @@
 <?php
-/** @var array $order @var string $token @var array $items @var array $history @var ?array $shipment @var bool $canPay */
+/** @var array $order @var string $token @var array $items @var array $history @var ?array $shipment @var bool $canPay @var bool $needsPhone @var ?array $lastPayment */
 $flow = $order['payment_method'] === 'cod'
     ? ['pending_confirmation', 'preparing', 'shipped', 'delivered']
     : ['pending_payment', 'paid', 'preparing', 'shipped', 'delivered'];
@@ -8,97 +8,97 @@ if ((int) $order['is_pickup'] === 1) {
 }
 $reached = array_column($history, 'to_status');
 $closed = in_array($order['status'], ['cancelled', 'refunded'], true);
+$currentIndex = array_search($order['status'], $flow, true);
 ?>
-<div class="page-head">
-  <div class="wrap">
-    <p class="eyebrow">Commande</p>
-    <h1><?= e($order['number']) ?></h1>
-    <p>Passée le <?= e(date_fr($order['created_at'])) ?> (heure d'Abidjan) · <span class="status status-<?= e($order['status']) ?>"><?= e(status_label($order['status'])) ?></span></p>
-  </div>
+<div class="wrap page-head">
+  <p class="product-card-cat"><?= e(t('order.label')) ?></p>
+  <h1><?= e($order['number']) ?></h1>
+  <p class="muted"><?= e(t('order.placed_on', ['date' => date_fr($order['created_at'])])) ?> · <span class="status status-<?= e($order['status']) ?>"><?= e(status_label($order['status'])) ?></span></p>
 </div>
 <div class="wrap order-layout">
   <div>
-    <?php if (!$closed): ?>
-    <ol class="order-progress" aria-label="Avancement de la commande">
-      <?php foreach ($flow as $s): $done = in_array($s, $reached, true) || $order['status'] === $s; ?>
-      <li class="<?= $done ? 'is-done' : '' ?><?= $order['status'] === $s ? ' is-current' : '' ?>"<?= $order['status'] === $s ? ' aria-current="step"' : '' ?>>
-        <span class="hex-num" aria-hidden="true"></span><?= e(status_label($s)) ?>
-      </li>
-      <?php endforeach; ?>
-    </ol>
-    <?php endif; ?>
-
     <?php if ($order['status'] === 'pending_confirmation'): ?>
-    <div class="notice">
-      <p><strong>Paiement à la livraison.</strong> Notre équipe va vous appeler au <?= e($order['customer_phone']) ?> pour confirmer la commande et convenir de la livraison. Vous réglerez <?= money((int) $order['total']) ?> à la réception.</p>
-    </div>
+    <div class="notice notice-green"><?= icon('phone') ?><p><?= e(t('order.cod_notice', ['phone' => $order['customer_phone'], 'total' => money((int) $order['total'])])) ?></p></div>
     <?php elseif ($order['status'] === 'pending_payment'): ?>
-    <div class="notice notice-amber">
+    <div class="group order-status-card">
       <?php if ($canPay): ?>
-      <p><strong>En attente de paiement.</strong> Cette commande sera annulée automatiquement si elle n'est pas payée avant le <?= e(date_fr($order['expires_at'])) ?>.</p>
-      <?php if ($order['payment_status'] === 'failed'): ?><p class="stock-out">La dernière tentative de paiement a échoué.</p><?php endif; ?>
+      <h2><?= e(t('order.pay_title')) ?></h2>
+      <p class="muted"><?= e(t('order.pay_deadline', ['date' => date_fr($order['expires_at'])])) ?></p>
+      <?php if ($order['payment_status'] === 'failed'): ?><p class="notice notice-amber"><?= icon('info') ?> <?= e(t('order.pay_failed')) ?></p><?php endif; ?>
       <form action="/commande/<?= e($order['number']) ?>/payer" method="post">
         <?= csrf_field() ?><input type="hidden" name="t" value="<?= e($token) ?>">
-        <button class="btn btn-primary btn-large" type="submit">Payer <?= money((int) $order['total']) ?><?= $order['payment_method'] === 'demo' ? ' (paiement SIMULÉ)' : '' ?></button>
+        <?php if ($needsPhone): ?>
+        <div class="field">
+          <label for="f-payer_phone"><?= e(t('field.payer_phone_short')) ?></label>
+          <input id="f-payer_phone" name="payer_phone" type="tel" inputmode="tel" maxlength="20" required value="<?= e($lastPayment['payer_phone'] ?? $order['customer_phone']) ?>">
+        </div>
+        <?php endif; ?>
+        <button class="btn btn-large btn-block" type="submit"><?= pay_logo($order['payment_method']) ?> <?= e(t('order.pay_with', ['method' => payment_method_label($order['payment_method']), 'total' => money((int) $order['total'])])) ?></button>
       </form>
       <?php else: ?>
-      <p><strong>Paiement en ligne indisponible</strong> pour cette commande. Contactez-nous pour la finaliser.</p>
+      <p><?= e(t('order.pay_unavailable')) ?></p>
       <?php endif; ?>
     </div>
     <?php elseif ($order['status'] === 'cancelled'): ?>
-    <div class="notice"><p>Cette commande a été annulée<?= $order['cancelled_at'] ? ' le ' . e(date_fr($order['cancelled_at'])) : '' ?>.</p></div>
+    <div class="notice"><?= icon('info') ?><p><?= e(t('order.cancelled_on', ['date' => date_fr($order['cancelled_at'])])) ?></p></div>
     <?php endif; ?>
 
-    <section aria-labelledby="h-items">
-      <h2 id="h-items">Articles</h2>
+    <?php if (!$closed): ?>
+    <h2 class="group-title"><?= e(t('order.progress')) ?></h2>
+    <div class="group order-status-card">
+      <ol class="order-progress">
+        <?php foreach ($flow as $i => $s): $done = $currentIndex !== false && $i < $currentIndex || in_array($s, $reached, true) && $s !== $order['status']; ?>
+        <li class="<?= $done ? 'is-done' : '' ?><?= $order['status'] === $s ? ' is-current' : '' ?>"<?= $order['status'] === $s ? ' aria-current="step"' : '' ?>><?= e(status_label($s)) ?></li>
+        <?php endforeach; ?>
+      </ol>
+    </div>
+    <?php endif; ?>
+
+    <h2 class="group-title"><?= e(t('order.items')) ?></h2>
+    <div class="group table-wrap">
       <table class="table">
-        <caption class="sr-only">Articles commandés</caption>
-        <thead><tr><th scope="col">Produit</th><th scope="col" class="num">Prix</th><th scope="col" class="num">Qté</th><th scope="col" class="num">Total</th></tr></thead>
+        <caption class="sr-only"><?= e(t('order.items')) ?></caption>
+        <thead><tr><th scope="col"><?= e(t('order.product')) ?></th><th scope="col" class="num"><?= e(t('order.qty')) ?></th><th scope="col" class="num"><?= e(t('totals.total')) ?></th></tr></thead>
         <tbody>
           <?php foreach ($items as $i): ?>
-          <tr><td><?= e($i['product_name']) ?> <span class="muted">– <?= e($i['variant_label']) ?></span></td><td class="num"><?= money((int) $i['unit_price']) ?></td><td class="num"><?= (int) $i['quantity'] ?></td><td class="num"><?= money((int) $i['line_total']) ?></td></tr>
+          <tr><td><?= e($i['product_name']) ?><br><span class="muted small"><?= e($i['variant_label']) ?> · <?= money((int) $i['unit_price']) ?></span></td><td class="num"><?= (int) $i['quantity'] ?></td><td class="num"><?= money((int) $i['line_total']) ?></td></tr>
           <?php endforeach; ?>
         </tbody>
         <tfoot>
-          <tr><th scope="row" colspan="3">Sous-total</th><td class="num"><?= money((int) $order['subtotal']) ?></td></tr>
-          <?php if ((int) $order['discount'] > 0): ?><tr><th scope="row" colspan="3">Remise<?= $order['promo_code'] ? ' (' . e($order['promo_code']) . ')' : '' ?></th><td class="num">−<?= money((int) $order['discount']) ?></td></tr><?php endif; ?>
-          <tr><th scope="row" colspan="3">Livraison (<?= e($order['shipping_zone_name']) ?>)</th><td class="num"><?= (int) $order['shipping_fee'] === 0 ? 'Offerte' : money((int) $order['shipping_fee']) ?></td></tr>
-          <tr class="grand-total"><th scope="row" colspan="3">Total</th><td class="num"><?= money((int) $order['total']) ?></td></tr>
+          <tr><th scope="row" colspan="2"><?= e(t('totals.subtotal')) ?></th><td class="num"><?= money((int) $order['subtotal']) ?></td></tr>
+          <?php if ((int) $order['discount'] > 0): ?><tr><th scope="row" colspan="2"><?= e(t('totals.discount')) ?><?= $order['promo_code'] ? ' (' . e($order['promo_code']) . ')' : '' ?></th><td class="num">−<?= money((int) $order['discount']) ?></td></tr><?php endif; ?>
+          <tr><th scope="row" colspan="2"><?= e(t('totals.shipping')) ?> · <?= e($order['shipping_zone_name']) ?></th><td class="num"><?= (int) $order['shipping_fee'] === 0 ? e(t('checkout.free')) : money((int) $order['shipping_fee']) ?></td></tr>
+          <tr class="grand-total"><th scope="row" colspan="2"><?= e(t('totals.total')) ?></th><td class="num"><?= money((int) $order['total']) ?></td></tr>
         </tfoot>
       </table>
-    </section>
+    </div>
 
     <?php if ($history): ?>
-    <section aria-labelledby="h-history">
-      <h2 id="h-history">Historique</h2>
-      <ul class="timeline">
-        <?php foreach ($history as $h): ?>
-        <li><time datetime="<?= e(str_replace(' ', 'T', $h['created_at'])) ?>Z"><?= e(date_fr($h['created_at'])) ?></time> — <strong><?= e(status_label($h['to_status'])) ?></strong><?= $h['note'] ? ' · ' . e($h['note']) : '' ?></li>
-        <?php endforeach; ?>
-      </ul>
-    </section>
+    <h2 class="group-title"><?= e(t('order.history')) ?></h2>
+    <ul class="group timeline">
+      <?php foreach ($history as $h): ?>
+      <li><time datetime="<?= e(str_replace(' ', 'T', $h['created_at'])) ?>Z"><?= e(date_fr($h['created_at'])) ?></time><strong><?= e(status_label($h['to_status'])) ?></strong><?= $h['user_id'] !== null && $h['note'] ? ' · ' . e($h['note']) : '' ?></li>
+      <?php endforeach; ?>
+    </ul>
     <?php endif; ?>
   </div>
 
-  <aside class="order-aside">
-    <section class="card">
-      <h2>Livraison</h2>
-      <p><strong><?= e($order['shipping_zone_name']) ?></strong></p>
-      <?php if ((int) $order['is_pickup'] === 1): ?>
-      <p>Retrait sur rendez-vous.</p>
-      <?php else: ?>
-      <p><?= e($order['customer_first_name'] . ' ' . $order['customer_last_name']) ?><br><?= e($order['shipping_address']) ?><br><?= e(trim(($order['shipping_district'] ? $order['shipping_district'] . ', ' : '') . $order['shipping_city'])) ?><?php if ($order['shipping_landmark']): ?><br>Repère : <?= e($order['shipping_landmark']) ?><?php endif; ?></p>
-      <?php endif; ?>
+  <aside class="sticky-aside">
+    <h2 class="group-title"><?= e(t('order.delivery')) ?></h2>
+    <div class="group">
+      <div class="cell"><span class="cell-icon"><?= icon('truck') ?></span><span class="cell-body"><span class="cell-title"><?= e($order['shipping_zone_name']) ?></span><br>
+        <span class="cell-sub"><?php if ((int) $order['is_pickup'] === 1): ?><?= e(t('order.pickup')) ?><?php else: ?><?= e($order['customer_first_name'] . ' ' . $order['customer_last_name']) ?>, <?= e($order['shipping_address']) ?>, <?= e(trim(($order['shipping_district'] ? $order['shipping_district'] . ', ' : '') . $order['shipping_city'])) ?><?php if ($order['shipping_landmark']): ?> · <?= e($order['shipping_landmark']) ?><?php endif; ?><?php endif; ?></span></span></div>
       <?php if ($shipment && ($shipment['carrier'] || $shipment['tracking_number'])): ?>
-      <p>Transporteur : <?= e($shipment['carrier'] ?: '—') ?><?php if ($shipment['tracking_number']): ?><br>N° de suivi : <?= e($shipment['tracking_number']) ?><?php endif; ?></p>
+      <div class="cell"><span class="cell-icon gray"><?= icon('box') ?></span><span class="cell-body"><span class="cell-title"><?= e($shipment['carrier'] ?: '—') ?></span><br><span class="cell-sub"><?= e($shipment['tracking_number']) ?></span></span></div>
       <?php endif; ?>
-    </section>
-    <section class="card">
-      <h2>Paiement</h2>
-      <p><?= e(payment_method_label($order['payment_method'])) ?><br><span class="muted"><?= e(payment_status_label($order['payment_status'])) ?></span></p>
-      <?php if ($order['payment_method'] === 'demo'): ?><p class="small"><span class="badge badge-demo">SIMULÉ</span> Aucune somme réelle n'est encaissée.</p><?php endif; ?>
-    </section>
-    <p><a class="btn btn-ghost btn-block" href="<?= e(url('/commande/' . $order['number'] . '/recu', ['t' => $token])) ?>">Récapitulatif imprimable</a></p>
-    <?php if ($token !== ''): ?><p class="muted small">Conservez ce lien : il permet de retrouver votre commande sans compte. Ne le partagez pas.</p><?php endif; ?>
+    </div>
+    <h2 class="group-title"><?= e(t('order.payment')) ?></h2>
+    <div class="group">
+      <div class="cell"><?= pay_logo($order['payment_method']) ?><span class="cell-body"><span class="cell-title"><?= e(payment_method_label($order['payment_method'])) ?></span><br><span class="cell-sub"><?= e(payment_status_label($order['payment_status'])) ?></span></span></div>
+    </div>
+    <div class="btn-row mt">
+      <a class="btn btn-gray btn-block" href="<?= e(url('/commande/' . $order['number'] . '/recu', ['t' => $token])) ?>"><?= icon('receipt') ?><?= e(t('order.receipt')) ?></a>
+    </div>
+    <?php if ($token !== ''): ?><p class="group-footer"><?= e(t('order.keep_link')) ?></p><?php endif; ?>
   </aside>
 </div>

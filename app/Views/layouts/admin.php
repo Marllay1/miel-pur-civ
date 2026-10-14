@@ -17,7 +17,7 @@ $sections = [
 ];
 $isCurrent = static fn (string $href) => $href === '/admin' ? $path === '/admin' : ($path === $href || str_starts_with($path, $href . '/'));
 ?><!doctype html>
-<html lang="fr">
+<html lang="fr"<?= !empty($theme) ? ' data-theme="' . e($theme) . '"' : '' ?>>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -31,7 +31,7 @@ $isCurrent = static fn (string $href) => $href === '/admin' ? $path === '/admin'
 <a class="skip-link" href="#contenu">Aller au contenu</a>
 <header class="admin-top">
   <a class="brand" href="/admin">
-    <svg class="brand-mark" viewBox="0 0 48 52" aria-hidden="true" focusable="false"><path d="M24 2 45 14v24L24 50 3 38V14z" class="brand-hex"/><path d="M24 13c5 7.5 8.5 12.4 8.5 17.4a8.5 8.5 0 0 1-17 0C15.5 25.4 19 20.5 24 13z" class="brand-drop"/></svg>
+    <svg class="brand-mark" viewBox="0 0 48 52" aria-hidden="true" focusable="false"><path d="M24 2 45 14v24L24 50 3 38V14z" class="hex"/><path d="M24 13c5 7.5 8.5 12.4 8.5 17.4a8.5 8.5 0 0 1-17 0C15.5 25.4 19 20.5 24 13z" class="drop"/></svg>
     <span class="brand-text"><span class="brand-name">Miel Pur</span><span class="brand-sub">Administration</span></span>
   </a>
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="admin-nav"><span class="nav-toggle-bars" aria-hidden="true"></span><span class="nav-toggle-label">Menu</span></button>

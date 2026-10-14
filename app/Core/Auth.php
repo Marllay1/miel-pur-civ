@@ -145,7 +145,7 @@ final class Auth
         $kAccount = 'login:' . $email . '|' . $ip;
         $kIp = 'login-ip:' . $ip;
         if (RateLimiter::tooMany($kAccount, self::MAX_PER_ACCOUNT) || RateLimiter::tooMany($kIp, self::MAX_PER_IP)) {
-            return ['ok' => false, 'user' => null, 'error' => 'Trop de tentatives. Réessayez dans 15 minutes.'];
+            return ['ok' => false, 'user' => null, 'error' => Lang::t('auth.throttled')];
         }
         $user = DB::one(
             'SELECT u.*, r.name AS role FROM users u JOIN roles r ON r.id = u.role_id WHERE u.email = ?',
@@ -159,7 +159,7 @@ final class Auth
         if (!$allowed) {
             RateLimiter::hit($kAccount, self::MAX_PER_ACCOUNT, self::WINDOW);
             RateLimiter::hit($kIp, self::MAX_PER_IP, self::WINDOW);
-            return ['ok' => false, 'user' => null, 'error' => 'Identifiants incorrects.'];
+            return ['ok' => false, 'user' => null, 'error' => Lang::t('auth.failed')];
         }
         RateLimiter::clear($kAccount);
         if (password_needs_rehash($user['password_hash'], PASSWORD_DEFAULT)) {

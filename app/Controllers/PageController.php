@@ -20,7 +20,7 @@ final class PageController
         if ($page === null) {
             throw new HttpException(404);
         }
-        return $page;
+        return \App\Services\I18n::localizeOne('page', $page);
     }
 
     public function about(Request $r): Response
@@ -38,7 +38,7 @@ final class PageController
 
     public function faq(Request $r): Response
     {
-        $faqs = DB::all('SELECT * FROM faqs WHERE is_active = 1 ORDER BY sort_order, id');
+        $faqs = \App\Services\I18n::localize('faq', DB::all('SELECT * FROM faqs WHERE is_active = 1 ORDER BY sort_order, id'));
         $groups = [];
         foreach ($faqs as $f) {
             $groups[$f['category']][] = $f;
@@ -46,14 +46,14 @@ final class PageController
         $ld = ['@context' => 'https://schema.org', '@type' => 'FAQPage', 'mainEntity' => array_map(static fn ($f) => [
             '@type' => 'Question', 'name' => $f['question'], 'acceptedAnswer' => ['@type' => 'Answer', 'text' => excerpt($f['answer'], 1000)],
         ], $faqs)];
-        return view('pages/faq', ['groups' => $groups, 'pageTitle' => 'Questions fréquentes', 'canonical' => '/faq', 'jsonLd' => $faqs ? [$ld] : [],
-            'metaDescription' => 'Commande, paiement à la livraison, zones de livraison, conservation du miel : les réponses à vos questions.']);
+        return view('pages/faq', ['groups' => $groups, 'pageTitle' => t('faq.title'), 'canonical' => '/faq', 'jsonLd' => $faqs ? [$ld] : [],
+            'metaDescription' => t('faq.meta')]);
     }
 
     public function contact(Request $r, array $errors = [], array $old = [], int $status = 200): Response
     {
-        return view('pages/contact', ['errors' => $errors, 'old' => $old, 'pageTitle' => 'Contact', 'canonical' => '/contact',
-            'metaDescription' => 'Contactez Miel Pur de Côte d\'Ivoire : questions sur les produits, les commandes ou la livraison.'], $status);
+        return view('pages/contact', ['errors' => $errors, 'old' => $old, 'pageTitle' => t('nav.contact'), 'canonical' => '/contact',
+            'metaDescription' => t('contact.meta')], $status);
     }
 
     public function contactSubmit(Request $r): Response
@@ -61,13 +61,13 @@ final class PageController
         $v = Validator::make($r->post, [
             'name' => 'required|max:150', 'email' => 'required|email', 'phone' => 'phone',
             'subject' => 'required|max:160', 'message' => 'required|min:10|max:5000', 'consent' => 'accepted',
-        ], ['name' => 'Votre nom', 'email' => 'L\'e-mail', 'phone' => 'Le téléphone', 'subject' => 'L\'objet', 'message' => 'Le message']);
+        ], ['name' => t('field.your_name'), 'email' => t('field.email_label'), 'phone' => t('field.phone'), 'subject' => t('field.subject'), 'message' => t('field.message')]);
         $errors = $v->errors;
         if ($spam = spam_check($r)) {
             $errors['_'] = $spam;
         }
         if (!$errors && !RateLimiter::hit('contact:' . $r->ip(), 5, 3600)) {
-            $errors['_'] = 'Trop de messages envoyés. Réessayez dans une heure.';
+            $errors['_'] = t('contact.throttled');
         }
         if ($errors) {
             return $this->contact($r, $errors, $r->post, 422);
@@ -77,7 +77,7 @@ final class PageController
             'subject' => $v->data['subject'], 'message' => $v->data['message'], 'status' => 'new', 'ip' => $r->ip(), 'created_at' => gmdate('Y-m-d H:i:s'),
         ]);
         Notifier::staffNotice('Nouveau message : ' . $v->data['subject'], 'Message de ' . $v->data['name'] . ' (' . $v->data['email'] . ")\n\n" . $v->data['message']);
-        Session::flash('success', 'Merci, votre message a bien été envoyé. Nous vous répondrons dès que possible.');
+        Session::flash('success', t('contact.thanks'));
         return redirect('/contact');
     }
 
@@ -86,8 +86,8 @@ final class PageController
 
     public function pro(Request $r, array $errors = [], array $old = [], int $status = 200): Response
     {
-        return view('pages/pro', ['errors' => $errors, 'old' => $old, 'activities' => self::ACTIVITIES, 'pageTitle' => 'Commandes professionnelles', 'canonical' => '/commandes-professionnelles',
-            'metaDescription' => 'Hôtels, restaurants, pâtisseries, épiceries, cosmétique : demandez un devis pour du miel et de la cire d\'abeille en volume.'], $status);
+        return view('pages/pro', ['errors' => $errors, 'old' => $old, 'activities' => self::ACTIVITIES, 'pageTitle' => t('nav.pro'), 'canonical' => '/commandes-professionnelles',
+            'metaDescription' => t('pro.meta')], $status);
     }
 
     public function proSubmit(Request $r): Response
@@ -97,14 +97,14 @@ final class PageController
             'activity' => 'required|in:' . implode(',', array_keys(self::ACTIVITIES)), 'products_interest' => 'max:255',
             'estimated_volume' => 'max:120', 'frequency' => 'in:ponctuelle,mensuelle,hebdomadaire,autre', 'city' => 'max:100',
             'message' => 'max:5000', 'consent' => 'accepted',
-        ], ['company' => 'L\'établissement', 'contact_name' => 'Le nom du contact', 'email' => 'L\'e-mail', 'phone' => 'Le téléphone', 'activity' => 'Le type d\'activité',
-            'products_interest' => 'Les produits', 'estimated_volume' => 'Le volume', 'frequency' => 'La fréquence', 'city' => 'La ville', 'message' => 'Le message']);
+        ], ['company' => t('field.company'), 'contact_name' => t('field.contact_name'), 'email' => t('field.email_label'), 'phone' => t('field.phone'), 'activity' => t('field.activity'),
+            'products_interest' => t('field.products_interest'), 'estimated_volume' => t('field.volume'), 'frequency' => t('field.frequency'), 'city' => t('field.city'), 'message' => t('field.message')]);
         $errors = $v->errors;
         if ($spam = spam_check($r)) {
             $errors['_'] = $spam;
         }
         if (!$errors && !RateLimiter::hit('quote:' . $r->ip(), 5, 3600)) {
-            $errors['_'] = 'Trop de demandes envoyées. Réessayez dans une heure.';
+            $errors['_'] = t('quote.throttled');
         }
         if ($errors) {
             return $this->pro($r, $errors, $r->post, 422);
@@ -117,7 +117,7 @@ final class PageController
             'status' => 'new', 'admin_note' => null, 'ip' => $r->ip(), 'created_at' => $now, 'updated_at' => $now,
         ]);
         Notifier::staffNotice('Nouvelle demande de devis : ' . $v->data['company'], 'Contact : ' . $v->data['contact_name'] . ' — ' . $v->data['phone'] . "\nVolume : " . $v->data['estimated_volume']);
-        Session::flash('success', 'Merci, votre demande de devis a bien été transmise. Nous vous recontactons rapidement.');
+        Session::flash('success', t('quote.thanks'));
         return redirect('/commandes-professionnelles');
     }
 
@@ -130,21 +130,21 @@ final class PageController
                 static fn ($h) => !str_starts_with((string) $h['note'], 'Note interne')
             ));
         }
-        return view('pages/tracking', ['errors' => $errors, 'old' => $old, 'order' => $order, 'history' => $history, 'pageTitle' => 'Suivi de commande', 'noindex' => true], $status);
+        return view('pages/tracking', ['errors' => $errors, 'old' => $old, 'order' => $order, 'history' => $history, 'pageTitle' => t('tracking.title'), 'noindex' => true], $status);
     }
 
     public function trackingLookup(Request $r): Response
     {
-        $v = Validator::make($r->post, ['number' => 'required|max:40', 'email' => 'required|email'], ['number' => 'Le numéro de commande', 'email' => 'L\'e-mail']);
+        $v = Validator::make($r->post, ['number' => 'required|max:40', 'email' => 'required|email'], ['number' => t('field.order_number'), 'email' => t('field.email_label')]);
         if ($v->fails()) {
             return $this->tracking($r, $v->errors, $r->post, null, 422);
         }
         if (!RateLimiter::hit('tracking:' . $r->ip(), 10, 900)) {
-            return $this->tracking($r, ['_' => 'Trop de recherches. Réessayez dans 15 minutes.'], $r->post, null, 429);
+            return $this->tracking($r, ['_' => t('tracking.throttled')], $r->post, null, 429);
         }
         $order = DB::one('SELECT * FROM orders WHERE number = ? AND customer_email = ?', [strtoupper($v->data['number']), mb_strtolower($v->data['email'])]);
         if ($order === null) {
-            return $this->tracking($r, ['_' => 'Aucune commande ne correspond à ce numéro et à cet e-mail.'], $r->post, null, 404);
+            return $this->tracking($r, ['_' => t('tracking.not_found')], $r->post, null, 404);
         }
         return $this->tracking($r, [], $r->post, $order);
     }
@@ -154,11 +154,11 @@ final class PageController
         $email = mb_strtolower($r->str('email'));
         $back = safe_return($r->str('retour'), '/');
         if (spam_check($r, false) !== null || !filter_var($email, FILTER_VALIDATE_EMAIL) || $r->str('consent') !== '1') {
-            Session::flash('error', 'Inscription impossible : vérifiez votre e-mail et cochez la case de consentement.');
+            Session::flash('error', t('newsletter.invalid'));
             return redirect($back);
         }
         if (!RateLimiter::hit('newsletter:' . $r->ip(), 10, 3600)) {
-            Session::flash('error', 'Trop de tentatives. Réessayez plus tard.');
+            Session::flash('error', t('newsletter.throttled'));
             return redirect($back);
         }
         $now = gmdate('Y-m-d H:i:s');
@@ -168,8 +168,26 @@ final class PageController
         } elseif ($existing['status'] !== 'subscribed') {
             DB::update('newsletter_subscribers', ['status' => 'subscribed', 'consent_at' => $now], 'id = ?', [(int) $existing['id']]);
         }
-        Session::flash('success', 'Merci ! Votre inscription à la lettre d\'information est enregistrée.');
+        Session::flash('success', t('newsletter.thanks'));
         return redirect($back);
+    }
+
+    /** Page « Plus » (navigation secondaire, langue, apparence), pensée pour la barre d'onglets mobile. */
+    public function menu(Request $r): Response
+    {
+        return view('pages/menu', ['pageTitle' => t('menu.title'), 'canonical' => '/menu', 'noindex' => true]);
+    }
+
+    /** Préférence d'apparence (auto, clair, sombre) mémorisée dans un cookie ; fonctionne sans JavaScript. */
+    public function theme(Request $r): Response
+    {
+        $theme = $r->str('theme');
+        if (in_array($theme, ['light', 'dark'], true)) {
+            \App\Core\Cookie::queue('mpci_theme', $theme, 365 * 86400, false);
+        } else {
+            \App\Core\Cookie::forget('mpci_theme');
+        }
+        return redirect(safe_return($r->str('retour'), '/'));
     }
 
     public function unsubscribe(Request $r): Response
@@ -178,7 +196,7 @@ final class PageController
         if (strlen($token) === 32) {
             DB::run("UPDATE newsletter_subscribers SET status = 'unsubscribed' WHERE unsubscribe_token = ?", [$token]);
         }
-        Session::flash('success', 'Vous êtes désinscrit(e) de la lettre d\'information.');
+        Session::flash('success', t('newsletter.unsubscribed'));
         return redirect('/');
     }
 }
