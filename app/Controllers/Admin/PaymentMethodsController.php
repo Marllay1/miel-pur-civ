@@ -71,6 +71,17 @@ final class PaymentMethodsController extends Base
         }
         $data['name'] = (string) $data['name'];
         $data['sort_order'] = (int) ($v->data['sort_order'] ?? 0);
+        // Montants de commande autorisés pour ce moyen (vides = sans limite).
+        foreach (['min_amount' => 'Montant minimum', 'max_amount' => 'Montant maximum'] as $f => $label) {
+            $val = trim($r->str($f));
+            if ($val !== '' && !preg_match('/^\d{1,9}$/', $val)) {
+                $v->errors[$f] = $label . ' : montant entier en FCFA, ou vide.';
+            }
+            $data[$f] = $val === '' ? null : (int) $val;
+        }
+        if ($data['min_amount'] !== null && $data['max_amount'] !== null && $data['min_amount'] > $data['max_amount']) {
+            $v->errors['max_amount'] = 'Le montant maximum doit être supérieur au minimum.';
+        }
         $data['is_enabled'] = $r->str('is_enabled') === '1' ? 1 : 0;
         $data['show_logo'] = $r->str('show_logo') === '1' ? 1 : 0;
         return [$data, $v->errors];
@@ -113,7 +124,7 @@ final class PaymentMethodsController extends Base
             Session::flash('error', 'Indiquez le nom du moyen de paiement (80 caractères maximum).');
             return redirect('/admin/paiements');
         }
-        if ($code === '' || PaymentMethods::find($code) !== null || in_array($code, ['demo', 'cod'], true)) {
+        if ($code === '' || PaymentMethods::find($code) !== null || in_array($code, ['demo', 'cod', 'journal', 'cash', 'transfer', 'cheque', 'other'], true)) {
             Session::flash('error', 'Un moyen de paiement porte déjà ce nom.');
             return redirect('/admin/paiements');
         }

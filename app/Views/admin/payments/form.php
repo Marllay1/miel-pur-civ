@@ -25,6 +25,8 @@ $kind = $method['kind'];
   <div class="field"><label for="f-name">Nom affiché</label><input id="f-name" name="name" required maxlength="80" value="<?= $val('name') ?>"></div>
   <div class="field"><label for="f-name_en">Nom affiché (anglais)</label><input id="f-name_en" name="name_en" maxlength="80" value="<?= $val('name_en') ?>"></div>
   <div class="field"><label for="f-sort">Ordre d'apparition</label><input id="f-sort" name="sort_order" type="number" min="0" max="1000" value="<?= (int) ($old['sort_order'] ?? 0) ?>"></div>
+  <div class="field"><label for="f-min">Commande minimum (FCFA) <span class="hint">vide = sans minimum</span></label><input id="f-min" name="min_amount" type="number" min="0" value="<?= e((string) ($old['min_amount'] ?? '')) ?>"<?= aria_invalid($errors, 'min_amount') ?>><?= field_error($errors, 'min_amount') ?></div>
+  <div class="field"><label for="f-max">Commande maximum (FCFA) <span class="hint">vide = sans maximum</span></label><input id="f-max" name="max_amount" type="number" min="0" value="<?= e((string) ($old['max_amount'] ?? '')) ?>"<?= aria_invalid($errors, 'max_amount') ?>><?= field_error($errors, 'max_amount') ?></div>
   <div class="field field-full"><label for="f-desc">Courte description (vide = texte standard)</label><input id="f-desc" name="description" maxlength="255" value="<?= $val('description') ?>"></div>
   <div class="field field-full"><label for="f-desc_en">Courte description (anglais)</label><input id="f-desc_en" name="description_en" maxlength="255" value="<?= $val('description_en') ?>"></div>
   <?php if ($kind === 'manual'): ?>

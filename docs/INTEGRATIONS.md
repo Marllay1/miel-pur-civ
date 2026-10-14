@@ -8,6 +8,8 @@
 | MTN Mobile Money | **Intégré, testé contre simulateur** | API Collections (demande de paiement validée sur le téléphone du client). À valider en bac à sable MTN |
 | Carte bancaire | **Intégré via CinetPay, testé contre simulateur** | Page de paiement hébergée par CinetPay : aucun numéro de carte ne transite par ce serveur |
 | Paiement manuel (Moov Money, virement…) | **Opérationnel dès que renseigné, testé** | Instructions affichées au client et dans l'e-mail ; confirmation par l'équipe (aucune vérification automatique). Voir ci-dessous |
+| Acompte + solde | **Opérationnel, testé** | Désactivé par défaut (Paramètres de paiement). Acompte calculé par le serveur, payé en ligne ou par paiement manuel ; solde payable ensuite en ligne ou constaté par l'équipe |
+| Paiement sur facture | **Opérationnel, testé** | Désactivé par défaut ; réservé aux professionnels autorisés par un administrateur (plafond, délai) ; règlement enregistré par l'équipe |
 | Paiement SIMULÉ | **Désactivé par défaut** | Réservé aux tests (`DEMO_PAYMENT_ENABLED=1` + réglage). Étiqueté « SIMULÉ », aucune somme débitée |
 | E-mails | **Opérationnel (SMTP), testé** | Client SMTP intégré : STARTTLS (587) ou TLS (465), authentification, message texte + HTML. Testé contre un serveur Mailpit local (15 contrôles) ; **envoi réel à valider avec vos identifiants** |
 | WhatsApp | **Lien simple** | Bouton `wa.me` si un numéro est renseigné ; pas d'API WhatsApp Business |
@@ -26,7 +28,15 @@ Les moyens de paiement sont des lignes de la table `payment_methods` (nom FR/EN,
 | `gateway` (Wave, Orange Money, MTN MoMo, carte) | activé **et** toutes les variables `.env` présentes | en ligne, confirmé par le prestataire |
 | `manual` (Moov Money, virement, autre) | activé **et** numéro de réception ou instructions renseignés | par le client selon les instructions ; **l'équipe vérifie la réception** puis passe la commande à « Payée » |
 
-Seuls les moyens proposés apparaissent sur le site, avec leur logo : un logo ne signifie jamais qu'une intégration existe. Une commande en paiement manuel n'expire pas automatiquement ; le stock reste réservé jusqu'à paiement ou annulation par l'équipe.
+Seuls les moyens proposés apparaissent sur le site, avec leur logo : un logo ne signifie jamais qu'une intégration existe. Un quatrième type, `invoice` (paiement sur facture), n'est proposé qu'aux professionnels autorisés. Chaque moyen peut avoir un montant de commande minimum et maximum.
+
+## Encaissements, acomptes et remboursements
+
+Chaque commande enregistre ses conditions (`payment_terms` : `full`, `deposit`, `cod`, `invoice`), le type de client, le caractère « en gros », l'acompte, le montant **encaissé** (`amount_paid`), le montant **remboursé** et l'échéance. Le journal `order_transactions` garde chaque encaissement et remboursement (moyen, montant, référence, motif, auteur, lien vers la tentative de paiement du prestataire) ; une même tentative ne peut y figurer qu'une fois (index unique), en plus de l'idempotence des notifications (`payment_events`).
+
+États du paiement : en attente, en cours de vérification (déclaration du client, non probante), acompte reçu, partiellement payée, payée intégralement, à encaisser à la livraison, paiement différé autorisé, échec, annulé, remboursée, partiellement remboursée. Ils sont **déduits des montants** par le serveur (`PaymentLedger::computeStatus`), jamais fournis par le navigateur.
+
+Choix au moment de la commande (`PaymentService::availableMethods`) : moyens opérationnels, autorisés dans la zone, compatibles avec le montant (minimum / maximum par moyen), paiement à la livraison exclu des commandes en gros si l'entreprise le décide, facture seulement pour un professionnel autorisé dans la limite de son plafond ; acompte seulement avec un moyen encaissé avant livraison et au-delà du montant minimum. Une commande en paiement manuel n'expire pas automatiquement ; le stock reste réservé jusqu'à paiement ou annulation par l'équipe.
 
 ## Ce qui a été testé, et ce qui ne l'a pas été
 
@@ -43,6 +53,7 @@ Seuls les moyens proposés apparaissent sur le site, avec leur logo : un logo ne
 - Le retour du client sur le site (« je reviens de Wave ») ne valide rien : l'état est vérifié auprès du prestataire ; une page d'attente interroge le serveur tant que le paiement est en cours.
 - Les commandes payables en ligne restées impayées expirent (`bin/expire-orders.php`, réglage *Délai de paiement*) et le stock est restitué.
 - Aucune donnée de carte ni code secret Mobile Money n'est saisi ou stocké sur ce site.
+- Avec un acompte, le montant demandé au prestataire est l'acompte, puis le solde ; un paiement vérifié reçu sur une commande déjà annulée est tout de même inscrit au journal (pour pouvoir le rembourser) et signalé à l'équipe.
 
 ## Paramétrage par prestataire
 

@@ -10,6 +10,7 @@ use App\Core\Auth;
 use App\Core\DB;
 use App\Core\Env;
 use App\Core\Mailer;
+use App\Core\Response;
 use App\Services\OrderService;
 use App\Services\PaymentService;
 
@@ -119,7 +120,7 @@ return [
         [$number, $token] = Client::orderRef($r);
         $o = OrderService::findByNumber($number);
         T::eq('pending_confirmation', $o['status'], 'Statut initial COD');
-        T::eq('unpaid', $o['payment_status'], 'Non payée');
+        T::eq('cod', $o['payment_status'], 'Paiement à la livraison, non encaissé');
         T::eq(9000 + 2500, (int) $o['total'], 'Total = 9 000 + 2 500 de livraison');
         T::eq($before - 2, T::stock('MPCI-LIQ-500'), 'Stock décrémenté');
         $item = DB::one('SELECT * FROM order_items WHERE order_id = ?', [(int) $o['id']]);
@@ -451,11 +452,11 @@ return [
         $a->post('/admin/commandes/' . $o['id'] . '/statut', ['status' => 'refunded']);
         T::eq('pending_confirmation', OrderService::find((int) $o['id'])['status'], 'Remboursement impossible sans paiement');
         foreach (['preparing', 'shipped', 'delivered'] as $s) {
-            $a->post('/admin/commandes/' . $o['id'] . '/statut', ['status' => $s, 'note' => "→ $s"]);
+            $a->post('/admin/commandes/' . $o['id'] . '/statut', ['status' => $s, 'note' => "→ $s"] + ($s === 'delivered' ? ['collected' => '1'] : []));
             T::eq($s, OrderService::find((int) $o['id'])['status'], "Transition vers $s");
         }
         $o = OrderService::find((int) $o['id']);
-        T::eq('paid', $o['payment_status'], 'Livraison COD = paiement encaissé');
+        T::eq('paid', $o['payment_status'], 'Livraison COD avec encaissement confirmé = payée');
         $a->post('/admin/commandes/' . $o['id'] . '/statut', ['status' => 'refunded']);
         T::eq('refunded', OrderService::find((int) $o['id'])['payment_status'], 'Remboursement après paiement');
         T::eq(4, (int) DB::value("SELECT COUNT(*) FROM audit_log WHERE action = 'order.status'"), 'Transitions journalisées');
@@ -521,7 +522,7 @@ return [
         T::contains('aria-invalid="true"', $r->body, 'Champs marqués invalides');
         T::contains('Adresse e-mail invalide', $r->body, 'Message e-mail');
         T::contains('value="pas-un-email"', $r->body, 'Saisie conservée');
-        $valid = ['name' => 'Aminata', 'email' => 'aminata@example.test', 'phone' => '', 'subject' => 'Question', 'message' => 'Bonjour, livrez-vous à Korhogo ?', 'consent' => '1'];
+        $valid = ['name' => 'Aminata', 'email' => 'aminata@example.test', 'phone' => '', 'reason' => 'delivery', 'subject' => 'Question', 'message' => 'Bonjour, livrez-vous à Korhogo ?', 'consent' => '1'];
         T::redirectsTo('/contact', $c->post('/contact', T::spamOk() + $valid), 'Contact valide');
         T::eq(1, (int) DB::value('SELECT COUNT(*) FROM contact_messages'), 'Message enregistré');
         T::status(422, $c->post('/contact', ['website' => 'http://spam'] + T::spamOk() + $valid), 'Champ piège rempli refusé');
@@ -701,7 +702,7 @@ return [
         $clean($c->post('/suivi-commande', ['number' => $x, 'email' => $x])->body, 'suivi');
         // Stocké : avis, contact, devis, commande.
         $c->post('/boutique/miel-cremeux/avis', T::spamOk() + ['author_name' => mb_substr($x, 0, 100), 'rating' => '5', 'comment' => $x . ' texte suffisant']);
-        $c->post('/contact', T::spamOk() + ['name' => mb_substr($x, 0, 150), 'email' => 'xss@example.test', 'subject' => mb_substr($x, 0, 160), 'message' => $x, 'consent' => '1']);
+        $c->post('/contact', T::spamOk() + ['name' => mb_substr($x, 0, 150), 'email' => 'xss@example.test', 'reason' => 'other', 'subject' => mb_substr($x, 0, 160), 'message' => $x, 'consent' => '1']);
         $c->post('/commandes-professionnelles', T::spamOk() + ['company' => $x, 'contact_name' => $x, 'email' => 'xss@example.test', 'phone' => '0102030405', 'activity' => 'hotel', 'message' => $x, 'products_interest' => $x, 'consent' => '1']);
         $c->addToCart('MPCI-LIQ-250', 1);
         [$number, $token] = Client::orderRef($c->checkout('Abidjan', 'cod', ['first_name' => mb_substr($x, 0, 100), 'last_name' => 'X', 'address' => $x, 'landmark' => $x, 'note' => $x]));
@@ -819,7 +820,7 @@ return [
         $o = OrderService::findByNumber(Client::orderRef($r)[0]);
         T::eq((int) $customer['id'], (int) $o['user_id'], 'user_id imposé par la session');
         T::eq('pending_confirmation', $o['status'], 'Statut non injectable');
-        T::eq('unpaid', $o['payment_status'], 'État de paiement non injectable');
+        T::eq('cod', $o['payment_status'], 'État de paiement non injectable');
         T::redirectsTo('/compte/connexion', (new Client())->get('/compte/adresses'), 'Espace client protégé');
     },
 
@@ -883,7 +884,7 @@ return [
         }
         T::status(429, $tr->post('/suivi-commande', ['number' => 'MPCI-1-X', 'email' => 'a@example.test']), 'Suivi : énumération limitée');
         $ct = new Client('172.16.0.4');
-        $msg = ['name' => 'A', 'email' => 'a@example.test', 'subject' => 'S', 'message' => 'Message de test assez long', 'consent' => '1'];
+        $msg = ['name' => 'A', 'email' => 'a@example.test', 'reason' => 'other', 'subject' => 'S', 'message' => 'Message de test assez long', 'consent' => '1'];
         for ($i = 0; $i < 5; $i++) {
             $ct->post('/contact', T::spamOk() + $msg);
         }
@@ -1355,15 +1356,15 @@ return [
             T::notContains('/assets/img/products/', $body, "Plus d'illustration générique SVG sur $p");
         }
         T::contains('fb-miel-en-rayon-vente', $anon->get('/')->body, 'Accueil : vraie photo de l\'entreprise');
-        T::contains('Photo d\'illustration', html_entity_decode($anon->get('/boutique/miel-cremeux')->body), 'Photo générique signalée comme illustration');
+        // Uniquement des photos de l'entreprise : sans photo vérifiable, un visuel neutre (initiale), jamais une photo d'une autre source.
+        $cremeux = html_entity_decode($anon->get('/boutique/miel-cremeux')->body);
+        T::contains('media-placeholder', $cremeux, 'Produit sans photo : visuel neutre');
+        T::notContains('Photo d\'illustration', $cremeux, 'Aucune photo d\'illustration');
         $credits = html_entity_decode($anon->get('/credits-photos')->body);
-        T::contains('Alabama Extension', $credits, 'Crédit de la photo d\'ouverture');
+        T::notContains('Wikimedia', $credits, 'Aucune photo de banque d\'images');
         foreach (photos() as $key => $p) {
             T::ok(is_file(BASE_PATH . '/public/assets/img/photos/' . $p['file']), "Photo $key présente");
-            if ($p['origin'] === 'illustration') {
-                T::contains($p['author'], $credits, "Crédit de $key (auteur)");
-                T::contains($p['license'], $credits, "Crédit de $key (licence)");
-            }
+            T::eq('company', $p['origin'], "Photo $key : photo de l'entreprise");
         }
     },
 
@@ -1390,7 +1391,7 @@ return [
         // Carte « Katiola · Côte d'Ivoire » retirée du haut de l'accueil ; coordonnées toujours dans le pied de page
         T::notContains('<span class="dot">', explode('</section>', $html)[0], 'Plus de carte de localisation en haut de page');
         T::contains('Katiola', $footer, 'Coordonnées conservées dans le pied de page');
-        T::contains('wm-pot-miel-rayon', $html, 'Photo d\'ouverture de qualité');
+        T::notContains('/assets/img/photos/wm-', $html, 'Aucune photo d\'illustration à l\'ouverture');
         // Sélecteur de langue
         T::contains('class="lang-menu"', $html, 'Sélecteur de langue présent');
         T::contains('href="/langue/en?retour=%2F"', $html, 'Choix « English »');
@@ -1602,7 +1603,8 @@ return [
             // Carrousel : ajout, réordonnancement, désactivation, suppression
             T::contains('class="carousel"', $pub(), 'Carrousel affiché (diapositives initiales)');
             $before = count(\App\Services\Slides::all());
-            $r = $a->upload('/admin/carrousel', ['title' => 'Diapositive test', 'body' => 'Texte test', 'button_label' => 'Voir', 'link_url' => '/boutique', 'is_active' => '1'], ['image' => $png(1400, 600)]);
+            $r = $a->upload('/admin/carrousel', ['title' => 'Diapositive test', 'body' => 'Texte test', 'button_label' => 'Voir', 'link_url' => '/boutique', 'is_active' => '1',
+                'source_note' => 'Page Facebook, test', 'source_confirm' => '1'], ['image' => $png(1400, 600)]);
             T::redirectsTo('/admin/carrousel', $r, 'Diapositive ajoutée');
             $slide = DB::one("SELECT * FROM home_slides WHERE title = 'Diapositive test'");
             T::eq($before, (int) $slide['sort_order'], 'Ajoutée en dernière position');
@@ -1659,5 +1661,458 @@ return [
                 file_put_contents(BASE_PATH . '/public/favicon.ico', $icoBackup);
             }
         }
+    },
+
+    '34 Produits administrables, photos de l\'entreprise, carrousel et messagerie de contact' => function (): void {
+        $a = new Client('10.35.0.1');
+        $a->loginAs(T::user('admin', 'contenus@example.test'));
+        $anon = new Client('10.35.0.2');
+        $uploads = static fn (): array => array_merge(glob(BASE_PATH . '/public/uploads/products/*') ?: [], glob(BASE_PATH . '/public/uploads/media/*') ?: [], glob(BASE_PATH . '/public/uploads/slides/*') ?: []);
+        $before = $uploads();
+        $tmp = [];
+        $png = static function (int $w, int $h, array $rgb = [24, 70, 38]) use (&$tmp): string {
+            $file = tempnam(sys_get_temp_dir(), 'img') . '.png';
+            $im = imagecreatetruecolor($w, $h);
+            imagefill($im, 0, 0, imagecolorallocate($im, ...$rgb));
+            imagepng($im, $file);
+            $tmp[] = $file;
+            return $file;
+        };
+        try {
+            // Catégorie et sous-catégorie
+            $miels = (int) DB::value("SELECT id FROM categories WHERE slug = 'miels'");
+            $a->post('/admin/categories', ['name' => 'Miels de saison', 'parent_id' => (string) $miels, 'is_active' => '1', 'sort_order' => '5']);
+            $sub = DB::one("SELECT * FROM categories WHERE name = 'Miels de saison'");
+            T::eq($miels, (int) $sub['parent_id'], 'Sous-catégorie créée sous « Miels »');
+            T::status(422, $a->post('/admin/categories', ['name' => 'Niveau 3', 'parent_id' => (string) $sub['id']]), 'Un seul niveau de sous-catégorie');
+
+            // 1. Création d'un produit (brouillon), référence commerciale distincte de l'identifiant technique
+            $fields = ['name' => 'Miel de karité test', 'slug' => 'miel-de-karite-test', 'reference' => 'mpci-kar-01', 'category_id' => (string) $sub['id'], 'short_description' => 'Résumé test',
+                'description' => 'Description détaillée test', 'extra_info' => 'Récolte de mars', 'status' => 'draft'];
+            $r = $a->post('/admin/produits', $fields);
+            $p = DB::one("SELECT * FROM products WHERE slug = 'miel-de-karite-test'");
+            T::redirectsTo('/admin/produits/' . $p['id'], $r, 'Produit créé');
+            T::eq('MPCI-KAR-01', $p['reference'], 'Référence commerciale enregistrée (normalisée)');
+            T::eq('draft', $p['status'], 'Statut brouillon');
+            T::eq(0, (int) $p['is_active'], 'Brouillon non publié');
+            T::status(422, $a->post('/admin/produits', ['name' => 'Doublon', 'reference' => 'MPCI-KAR-01']), 'Référence commerciale unique');
+            T::status(422, $a->post('/admin/produits', ['name' => 'Réf invalide', 'reference' => '<b>x</b>']), 'Référence invalide refusée');
+            $a->post('/admin/produits/' . $p['id'] . '/variantes', ['label' => '500 g', 'format' => 'pot-verre', 'sku' => 'MPCI-KAR-500', 'weight_grams' => '500', 'volume_ml' => '350',
+                'price' => '6000', 'compare_at_price' => '7000', 'stock' => '12', 'is_active' => '1']);
+            T::eq(350, (int) DB::value("SELECT volume_ml FROM product_variants WHERE sku = 'MPCI-KAR-500'"), 'Volume de la variante');
+            T::status(404, $anon->get('/boutique/miel-de-karite-test'), 'Brouillon invisible sur le site');
+
+            // Photos : provenance obligatoire, plusieurs photos, chemin en base, fichier sur disque
+            $a->upload('/admin/produits/' . $p['id'] . '/images', ['alt' => 'Pot de karité'], ['image' => $png(800, 800)]);
+            T::eq(0, (int) DB::value('SELECT COUNT(*) FROM product_images WHERE product_id = ?', [(int) $p['id']]), 'Photo refusée sans déclaration de provenance');
+            $a->upload('/admin/produits/' . $p['id'] . '/images', ['alt' => 'Pot de karité', 'source_note' => 'Page Facebook, publication test', 'source_confirm' => '1'], ['image' => $png(800, 800, [200, 150, 20])]);
+            $a->upload('/admin/produits/' . $p['id'] . '/images', ['alt' => 'Étiquette du pot', 'source_note' => 'Photo fournie par l\'entreprise', 'source_confirm' => '1'], ['image' => $png(800, 600, [20, 80, 40])]);
+            $imgs = DB::all('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order, id', [(int) $p['id']]);
+            T::eq(2, count($imgs), 'Deux photos enregistrées');
+            T::ok(str_starts_with($imgs[0]['path'], '/uploads/products/') && is_file(BASE_PATH . '/public' . $imgs[0]['path']), 'Fichier stocké sur le serveur, chemin en base');
+            T::eq('Page Facebook, publication test', $imgs[0]['source_note'], 'Provenance enregistrée');
+
+            // Publication : titre, référence, prix, photos et informations visibles
+            $a->post('/admin/produits/' . $p['id'], ['status' => 'published'] + $fields);
+            $page = $anon->get('/boutique/miel-de-karite-test');
+            T::status(200, $page, 'Produit publié visible');
+            T::contains('Miel de karité test', $page->body, 'Titre affiché');
+            T::contains('MPCI-KAR-01', $page->body, 'Référence affichée');
+            T::contains('6 000 FCFA', $page->body, 'Prix affiché');
+            T::contains($imgs[0]['path'], $page->body, 'Photo principale affichée');
+            T::contains($imgs[1]['path'], $page->body, 'Seconde photo affichée');
+            T::contains('Récolte de mars', $page->body, 'Informations complémentaires');
+            T::contains('Miel de karité test', $anon->get('/boutique?categorie=miels')->body, 'Produit de la sous-catégorie visible dans la catégorie principale');
+
+            // 2. Photo principale, ordre, remplacement, suppression, titre modifié — sans toucher au code
+            $a->post('/admin/images/' . $imgs[1]['id'] . '/principale');
+            T::eq((int) $imgs[1]['id'], (int) DB::value('SELECT id FROM product_images WHERE product_id = ? ORDER BY sort_order, id LIMIT 1', [(int) $p['id']]), 'Photo principale changée');
+            $card = explode('Miel de karité test', $anon->get('/boutique')->body)[0];
+            T::contains($imgs[1]['path'], (string) substr($card, -1500), 'Nouvelle photo principale sur la carte produit');
+            $a->post('/admin/images/' . $imgs[1]['id'] . '/deplacer/bas');
+            T::eq((int) $imgs[0]['id'], (int) DB::value('SELECT id FROM product_images WHERE product_id = ? ORDER BY sort_order, id LIMIT 1', [(int) $p['id']]), 'Ordre des photos modifié');
+            $a->upload('/admin/images/' . $imgs[0]['id'] . '/remplacer', ['source_note' => 'Page Facebook, nouvelle photo', 'source_confirm' => '1'], ['image' => $png(900, 900, [10, 10, 200])]);
+            $newPath = (string) DB::value('SELECT path FROM product_images WHERE id = ?', [(int) $imgs[0]['id']]);
+            T::ok($newPath !== $imgs[0]['path'] && !is_file(BASE_PATH . '/public' . $imgs[0]['path']), 'Photo remplacée, ancien fichier supprimé');
+            $a->post('/admin/produits/' . $p['id'], ['name' => 'Miel de karité (récolte 2026)', 'status' => 'published'] + $fields);
+            $page = $anon->get('/boutique/miel-de-karite-test')->body;
+            T::contains('Miel de karité (récolte 2026)', html_entity_decode($page), 'Titre modifié affiché');
+            T::contains($newPath, $page, 'Nouvelle photo affichée');
+            $a->post('/admin/images/' . $imgs[1]['id'] . '/supprimer');
+            T::eq(1, (int) DB::value('SELECT COUNT(*) FROM product_images WHERE product_id = ?', [(int) $p['id']]), 'Photo supprimée');
+            $a->post('/admin/produits/' . $p['id'], ['status' => 'disabled'] + $fields);
+            T::status(404, $anon->get('/boutique/miel-de-karite-test'), 'Produit désactivé retiré du site');
+            T::contains('Miel crémeux', $a->get('/admin/produits?statut=a-verifier')->body, 'Produit sans photo signalé « à vérifier »');
+            T::contains('Photo à fournir', $a->get('/admin/produits/' . DB::value("SELECT id FROM products WHERE slug = 'miel-cremeux'"))->body, 'Point à vérifier affiché sur la fiche');
+            T::contains('media-placeholder', $anon->get('/boutique/miel-cremeux')->body, 'Produit sans photo : visuel neutre');
+
+            // 8. Aucune image extérieure aux ressources de l'entreprise
+            foreach (['/', '/boutique', '/a-propos', '/boutique/miel-liquide-toutes-fleurs', '/commandes-professionnelles'] as $path) {
+                $body = $anon->get($path)->body;
+                T::notContains('/assets/img/photos/wm-', $body, "Aucune photo d'illustration sur $path");
+                preg_match_all('#<img[^>]+src="([^"]+)"#', $body, $m);
+                foreach ($m[1] as $src) {
+                    T::ok(str_starts_with($src, '/') && !str_starts_with($src, '//'), "Image locale uniquement ($src sur $path)");
+                }
+            }
+
+            // Photothèque de l'entreprise (galeries)
+            $count = (int) DB::value('SELECT COUNT(*) FROM media');
+            $a->upload('/admin/photos', ['alt' => 'Rucher test', 'source_note' => 'Page Facebook', 'in_home_gallery' => '1'], ['image' => $png(800, 600)]);
+            T::eq($count, (int) DB::value('SELECT COUNT(*) FROM media'), 'Photothèque : provenance à confirmer');
+            $a->upload('/admin/photos', ['alt' => 'Rucher test', 'source_note' => 'Page Facebook', 'in_home_gallery' => '1', 'source_confirm' => '1'], ['image' => $png(800, 600)]);
+            $media = DB::one("SELECT * FROM media WHERE alt = 'Rucher test'");
+            T::contains($media['path'], $anon->get('/')->body, 'Photo ajoutée à la galerie de l\'accueil');
+            $a->post('/admin/photos/' . $media['id'], ['alt' => 'Rucher test', 'source_note' => 'Page Facebook', 'in_about_gallery' => '1']);
+            T::notContains($media['path'], $anon->get('/')->body, 'Retirée de la galerie de l\'accueil');
+            T::contains($media['path'], $anon->get('/a-propos')->body, 'Ajoutée à la galerie « À propos »');
+            $a->post('/admin/photos/' . $media['id'] . '/supprimer');
+            T::ok(!is_file(BASE_PATH . '/public' . $media['path']), 'Photo retirée et fichier supprimé');
+
+            // 3-4. Carrousel : deux diapositives, ordre, désactivation
+            DB::run('UPDATE home_slides SET is_active = 0');
+            T::status(422, $a->upload('/admin/carrousel', ['title' => 'Sans provenance', 'is_active' => '1'], ['image' => $png(1400, 600)]), 'Diapositive : provenance de la photo obligatoire');
+            foreach (['Diapo Alpha', 'Diapo Beta'] as $title) {
+                $a->upload('/admin/carrousel', ['title' => $title, 'is_active' => '1', 'source_note' => 'Page Facebook', 'source_confirm' => '1'], ['image' => $png(1400, 600)]);
+            }
+            $home = $anon->get('/')->body;
+            T::ok(strpos($home, 'Diapo Alpha') !== false && strpos($home, 'Diapo Alpha') < strpos($home, 'Diapo Beta'), 'Deux diapositives, dans l\'ordre');
+            $beta = (int) DB::value("SELECT id FROM home_slides WHERE title = 'Diapo Beta'");
+            $a->post('/admin/carrousel/' . $beta . '/deplacer/haut');
+            $home = $anon->get('/')->body;
+            T::ok(strpos($home, 'Diapo Beta') < strpos($home, 'Diapo Alpha'), 'Ordre modifié visible sur l\'accueil');
+            $a->post('/admin/carrousel/' . DB::value("SELECT id FROM home_slides WHERE title = 'Diapo Alpha'") . '/basculer');
+            T::notContains('Diapo Alpha', $anon->get('/')->body, 'Diapositive désactivée retirée');
+            T::contains('Diapo Beta', $anon->get('/')->body, 'Autre diapositive toujours affichée');
+
+            // 5. Messagerie : formulaire public → base de données → boîte de réception
+            \App\Services\Settings::set('order_notification_email', 'equipe@example.test');
+            Mailer::$deliveryOverride = false;
+            Mailer::$sent = [];
+            $v = new Client('10.35.0.3');
+            $form = $v->get('/contact')->body;
+            T::contains('name="reason"', $form, 'Motif de contact proposé');
+            T::contains('autocomplete="email"', $form, 'Champs adaptés au mobile (autocomplétion)');
+            T::redirectsTo('/contact', $v->post('/contact', T::spamOk() + ['name' => 'Kouassi', 'email' => 'kouassi@example.test', 'phone' => '07 01 02 03 04', 'reason' => 'payment',
+                'subject' => 'Paiement Wave', 'message' => 'Bonjour, puis-je payer par Wave ?', 'consent' => '1']), 'Message envoyé sans compte');
+            T::contains('Paiement Wave', end(Mailer::$sent)['subject'] ?? '', 'Équipe prévenue (adresse de notification)');
+            $m = DB::one("SELECT * FROM contact_messages WHERE subject = 'Paiement Wave'");
+            T::eq('payment', $m['reason'], 'Motif enregistré');
+            T::eq('new', $m['status'], 'Statut « nouveau »');
+            $list = $a->get('/admin/messages')->body;
+            T::contains('Paiement Wave', $list, 'Message dans la boîte de réception');
+            T::contains('inactive', $list, 'Notification annoncée inactive tant que l\'envoi d\'e-mails n\'est pas configuré');
+            T::contains('Paiement Wave', $a->get('/admin/messages?q=Wave')->body, 'Recherche');
+            T::notContains('Paiement Wave', $a->get('/admin/messages?motif=product')->body, 'Filtre par motif');
+            $show = $a->get('/admin/messages/' . $m['id'])->body;
+            T::contains('kouassi@example.test', $show, 'Coordonnées affichées');
+            T::contains('mailto:kouassi%40example.test', $show, 'Réponse par lien mailto si l\'envoi n\'est pas configuré');
+            T::eq('read', DB::value('SELECT status FROM contact_messages WHERE id = ?', [(int) $m['id']]), 'Ouvert : marqué lu');
+            $a->post('/admin/messages/' . $m['id'] . '/reponse', ['body' => 'Réponse test']);
+            T::eq(0, (int) DB::value('SELECT COUNT(*) FROM message_replies'), 'Aucune réponse « envoyée » sans envoi d\'e-mails configuré');
+            // 6. Statut traité, persistant après rechargement et reconnexion
+            $a->post('/admin/messages/' . $m['id'], ['status' => 'in_progress']);
+            $a->post('/admin/messages/' . $m['id'], ['status' => 'resolved']);
+            $a->post('/admin/deconnexion');
+            $a2 = new Client('10.35.0.4');
+            $a2->loginAs(DB::one("SELECT * FROM users WHERE email = 'contenus@example.test'"));
+            T::contains('Résolu', $a2->get('/admin/messages/' . $m['id'])->body, 'Statut « résolu » conservé après reconnexion');
+            T::eq('resolved', DB::value('SELECT status FROM contact_messages WHERE id = ?', [(int) $m['id']]), 'Statut persistant en base');
+            T::status(422, $a2->post('/admin/messages/' . $m['id'], ['status' => 'pirate']), 'Statut inconnu refusé');
+            // Réponse par e-mail quand l'envoi est configuré
+            Mailer::$deliveryOverride = true;
+            $a2->post('/admin/messages/' . $m['id'] . '/reponse', ['body' => 'Oui, Wave est accepté.']);
+            T::eq('kouassi@example.test', end(Mailer::$sent)['to'] ?? '', 'Réponse envoyée au visiteur');
+            T::eq(1, (int) DB::value('SELECT COUNT(*) FROM message_replies WHERE message_id = ?', [(int) $m['id']]), 'Réponse enregistrée');
+            // Client connecté : retrouve ses échanges
+            $cust = new Client('10.35.0.5');
+            $cust->loginAs(T::user('customer', 'msg-client@example.test'));
+            $cust->post('/contact', T::spamOk() + ['name' => 'Client Test', 'email' => 'msg-client@example.test', 'reason' => 'order', 'subject' => 'Ma commande', 'message' => 'Où en est ma commande ?', 'consent' => '1']);
+            $mine = (int) DB::value("SELECT id FROM contact_messages WHERE subject = 'Ma commande'");
+            $a2->post('/admin/messages/' . $mine . '/reponse', ['body' => 'Elle part demain.']);
+            $space = $cust->get('/compte/messages')->body;
+            T::contains('Ma commande', $space, 'Message visible dans l\'espace client');
+            T::contains('Elle part demain.', $space, 'Réponse visible dans l\'espace client');
+            T::notContains('Paiement Wave', $space, 'Messages des autres visiteurs non visibles');
+            // Accès : jamais de message privé côté public
+            foreach (['/admin/messages', '/admin/messages/' . $m['id'], '/admin/photos'] as $path) {
+                T::status(403, $cust->get($path), "Client : $path refusé");
+            }
+            T::status(403, $cust->post('/admin/messages/' . $m['id'] . '/supprimer'), 'Client : suppression refusée');
+            // Suppression (message résolu uniquement)
+            T::redirectsTo('/admin/messages/' . $mine, $a2->post('/admin/messages/' . $mine . '/supprimer'), 'Message non résolu non supprimable');
+            $a2->post('/admin/messages/' . $m['id'] . '/supprimer');
+            T::eq(null, DB::one('SELECT id FROM contact_messages WHERE id = ?', [(int) $m['id']]), 'Message résolu supprimé');
+        } finally {
+            Mailer::$deliveryOverride = null;
+            foreach (array_diff($uploads(), $before) as $f) {
+                @unlink($f);
+            }
+            foreach ($tmp as $f) {
+                @unlink($f);
+            }
+        }
+    },
+
+    '35 Paiement : acompte, solde, à la livraison, en gros, sur facture, échecs, doublons, remboursements, zones' => function (): void {
+        $a = new Client('10.36.0.1');
+        $admin = T::user('admin', 'paiements@example.test');
+        $a->loginAs($admin);
+        $order = static fn (string $number): array => OrderService::findByNumber($number);
+        $tx = static fn (array $o): int => (int) DB::value('SELECT COUNT(*) FROM order_transactions WHERE order_id = ?', [(int) $o['id']]);
+        // Paiement simulé (prestataire de test) : suit la redirection et choisit l'issue.
+        $demo = static function (Client $c, Response $r, string $outcome = 'succeeded'): array {
+            if (!preg_match('#/paiement/demo/(PAY-[A-F0-9]+)\?t=([a-f0-9]{32})#', $r->headers['Location'] ?? '', $m)) {
+                throw new AssertionFailed('Pas de redirection vers le paiement simulé (' . $r->status . ' ' . ($r->headers['Location'] ?? '—') . ')');
+            }
+            $c->post('/paiement/demo/' . $m[1], ['t' => $m[2], 'outcome' => $outcome]);
+            return [(string) DB::value('SELECT o.number FROM payments p JOIN orders o ON o.id = p.order_id WHERE p.reference = ?', [$m[1]]), $m[2], $m[1]];
+        };
+
+        // Paramètres de paiement (valeurs de test), contrôlés par le serveur
+        $settings = ['payment_settings_reviewed' => '1', 'min_order_amount' => '0', 'payment_timeout_minutes' => '60', 'deposit_enabled' => '1', 'deposit_mode' => 'percent',
+            'deposit_value' => '30', 'deposit_min_order' => '5000', 'deposit_allows_preparation' => '1', 'deposit_balance_before_shipping' => '1', 'deposit_balance_days' => '10',
+            'deposit_terms' => 'Solde à régler avant expédition.', 'wholesale_threshold' => '30000', 'invoice_default_days' => '30', 'invoice_terms' => 'Facture payable à 30 jours.',
+            'cancellation_policy' => 'Annulation gratuite avant expédition.'];
+        T::status(422, $a->post('/admin/parametres/paiement', ['deposit_value' => '150'] + $settings), 'Acompte de 150 % refusé');
+        T::redirectsTo('/admin/parametres/paiement', $a->post('/admin/parametres/paiement', $settings), 'Paramètres de paiement enregistrés');
+        T::notContains('Valeurs initiales, non validées', $a->get('/admin/parametres/paiement')->body, 'Paramètres signalés comme validés');
+        DB::run("UPDATE payment_methods SET is_enabled = 1, receiver_number = '01 02 03 04 05', beneficiary = 'Miel Pur CI' WHERE code = 'moov_money'");
+        DB::run("UPDATE payment_methods SET is_enabled = 1 WHERE code = 'invoice'");
+        \App\Services\PaymentMethods::flush();
+
+        // 1. Petite commande payée intégralement (prestataire, vérification serveur)
+        $c1 = new Client('10.36.0.2');
+        $c1->addToCart('MPCI-CIRE-250', 1);
+        $form = html_entity_decode($c1->get('/commande')->body);
+        T::contains('Annulation gratuite avant expédition.', $form, 'Conditions d\'annulation présentées avant la confirmation');
+        [$n1] = $demo($c1, $c1->checkout('Abidjan', 'demo'));
+        $o1 = $order($n1);
+        T::eq('full', $o1['payment_terms'], 'Paiement intégral');
+        T::eq('paid', $o1['status'], 'Commande payée');
+        T::eq(6000, (int) $o1['amount_paid'], 'Montant encaissé = total (3 500 + 2 500 de livraison)');
+        T::eq('paid', $o1['payment_status'], 'Payée intégralement');
+        T::eq(1, $tx($o1), 'Encaissement inscrit au journal');
+        T::ok(DB::value('SELECT payment_id FROM order_transactions WHERE order_id = ?', [(int) $o1['id']]) !== null, 'Encaissement rattaché au paiement du prestataire');
+        $a->post('/admin/commandes/' . $o1['id'] . '/statut', ['status' => 'preparing']);
+        $a->post('/admin/commandes/' . $o1['id'] . '/statut', ['status' => 'shipped']);
+        T::eq('shipped', $order($n1)['status'], 'Expédition autorisée après encaissement');
+
+        // 2. Acompte et solde (prestataire) : montant calculé par le serveur
+        $c2 = new Client('10.36.0.3');
+        $c2->addToCart('MPCI-LIQ-500', 2);
+        T::contains('name="pay_mode" value="deposit"', $c2->get('/commande')->body, 'Choix de l\'acompte proposé');
+        T::eq(3450, json_decode($c2->get('/commande/estimation?zone_id=' . T::zone('Abidjan')['id'])->body, true)['deposit']['amount'] ?? null, 'Acompte annoncé avant la commande (30 % de 11 500)');
+        $r2 = $c2->checkout('Abidjan', 'demo', ['pay_mode' => 'deposit', 'deposit_amount' => '1', 'amount_paid' => '99999', 'payment_status' => 'paid']);
+        T::eq(3450, (int) DB::value('SELECT amount FROM payments WHERE reference = ?', [explode('?', basename((string) $r2->headers['Location']))[0]]), 'Montant demandé au prestataire = acompte');
+        [$n2, $t2] = $demo($c2, $r2);
+        $o2 = $order($n2);
+        T::eq('deposit', $o2['payment_terms'], 'Conditions : acompte + solde');
+        T::eq(3450, (int) $o2['deposit_amount'], 'Acompte calculé par le serveur (champs injectés ignorés)');
+        T::eq('deposit_paid', $o2['status'], 'Commande : acompte reçu');
+        T::eq('deposit_paid', $o2['payment_status'], 'Paiement : acompte reçu');
+        T::eq(3450, (int) $o2['amount_paid'], 'Montant encaissé');
+        T::ok($o2['balance_due_at'] !== null, 'Échéance du solde (10 jours)');
+        $page = $c2->get("/commande/$n2?t=$t2")->body;
+        T::contains('8 050', $page, 'Solde restant affiché au client');
+        $a->post('/admin/commandes/' . $o2['id'] . '/statut', ['status' => 'preparing']);
+        T::eq('preparing', $order($n2)['status'], 'Préparation autorisée après acompte (paramètre)');
+        $a->post('/admin/commandes/' . $o2['id'] . '/statut', ['status' => 'shipped']);
+        T::eq('preparing', $order($n2)['status'], 'Expédition bloquée tant que le solde n\'est pas encaissé');
+        T::contains('Expédition bloquée', $a->get('/admin/commandes/' . $o2['id'])->body, 'Blocage expliqué à l\'équipe');
+        [, , $ref2b] = $demo($c2, $c2->post("/commande/$n2/payer", ['t' => $t2]));
+        T::eq(8050, (int) DB::value('SELECT amount FROM payments WHERE reference = ?', [$ref2b]), 'Paiement du solde : montant = reste dû');
+        $o2 = $order($n2);
+        T::eq('paid', $o2['payment_status'], 'Solde encaissé : payée intégralement');
+        T::eq(11500, (int) $o2['amount_paid'], 'Total encaissé');
+        T::eq('preparing', $o2['status'], 'Statut de préparation conservé');
+        $a->post('/admin/commandes/' . $o2['id'] . '/statut', ['status' => 'shipped']);
+        T::eq('shipped', $order($n2)['status'], 'Expédition possible après le solde');
+
+        // Acompte avec paiement manuel : la déclaration du client n'est pas une preuve
+        $c2b = new Client('10.36.0.4');
+        $c2b->addToCart('MPCI-LIQ-500', 2);
+        [$n2b, $t2b] = Client::orderRef($c2b->checkout('Abidjan', 'moov_money', ['pay_mode' => 'deposit']));
+        $page = $c2b->get("/commande/$n2b?t=$t2b")->body;
+        T::contains('3 450', $page, 'Acompte à payer affiché avec les instructions');
+        T::contains('01 02 03 04 05', $page, 'Numéro de réception affiché');
+        $c2b->post("/commande/$n2b/paiement-effectue", ['t' => $t2b, 'reference' => '']);
+        T::eq(null, $order($n2b)['payment_declared_at'], 'Déclaration sans référence refusée');
+        $c2b->post("/commande/$n2b/paiement-effectue", ['t' => $t2b, 'reference' => 'MP2610.1234']);
+        $o2b = $order($n2b);
+        T::eq('verifying', $o2b['payment_status'], 'Paiement en cours de vérification');
+        T::eq(0, (int) $o2b['amount_paid'], 'Déclaration : rien n\'est encaissé');
+        T::eq('pending_payment', $o2b['status'], 'Commande toujours en attente de paiement');
+        $a->post('/admin/commandes/' . $o2b['id'] . '/encaissement', ['amount' => '99999', 'method' => 'moov_money', 'reference' => 'MP2610.1234']);
+        T::eq(0, (int) $order($n2b)['amount_paid'], 'Montant supérieur au reste dû refusé');
+        $a->post('/admin/commandes/' . $o2b['id'] . '/encaissement', ['amount' => '3450', 'method' => 'moov_money', 'reference' => 'MP2610.1234']);
+        $o2b = $order($n2b);
+        T::eq('deposit_paid', $o2b['status'], 'Réception constatée par l\'équipe : acompte reçu');
+        T::eq(null, $o2b['payment_declared_at'], 'Déclaration soldée par l\'encaissement');
+        // Acompte impossible à la livraison ou sous le minimum
+        $c2c = new Client('10.36.0.5');
+        $c2c->addToCart('MPCI-LIQ-500', 2);
+        T::status(422, $c2c->checkout('Abidjan', 'cod', ['pay_mode' => 'deposit']), 'Acompte refusé avec le paiement à la livraison');
+        $c2d = new Client('10.36.0.6');
+        $c2d->addToCart('MPCI-CIRE-250', 1);
+        T::status(422, $c2d->checkout('Retrait à Katiola', 'demo', ['pay_mode' => 'deposit']), 'Acompte refusé sous le montant minimum');
+
+        // 3. Paiement à la livraison : non payé tant que l'encaissement n'est pas confirmé
+        $c3 = new Client('10.36.0.7');
+        $c3->addToCart('MPCI-LIQ-250', 1);
+        [$n3] = Client::orderRef($c3->checkout('Abidjan', 'cod'));
+        $o3 = $order($n3);
+        T::eq('cod', $o3['payment_status'], 'À encaisser à la livraison');
+        foreach (['preparing', 'shipped', 'delivered'] as $s) {
+            $a->post('/admin/commandes/' . $o3['id'] . '/statut', ['status' => $s]);
+        }
+        $o3 = $order($n3);
+        T::eq('delivered', $o3['status'], 'Livrée');
+        T::eq('cod', $o3['payment_status'], 'Livrée sans confirmation : pas considérée comme payée');
+        T::eq(0, (int) $o3['amount_paid'], 'Aucun encaissement supposé');
+        T::contains('À encaisser par le livreur', $a->get('/admin/commandes/' . $o3['id'])->body, 'Montant à encaisser signalé');
+        $a->post('/admin/commandes/' . $o3['id'] . '/encaissement', ['amount' => '5000', 'method' => 'cash', 'reference' => 'Reçu 0042']);
+        T::eq('paid', $order($n3)['payment_status'], 'Encaissement confirmé : payée');
+
+        // 4. Commande en gros (seuil 30 000 FCFA ; paiement à la livraison exclu par le paramètre)
+        $c4 = new Client('10.36.0.8');
+        $c4->addToCart('MPCI-VRAC-5', 1);
+        $form = $c4->get('/commande')->body;
+        T::contains('Commande en gros', $form, 'Commande en gros signalée');
+        T::notContains('name="payment_method" value="cod"', $form, 'Paiement à la livraison non proposé pour une commande en gros');
+        T::status(422, $c4->checkout('Abidjan', 'cod'), 'Paiement à la livraison refusé côté serveur (commande en gros)');
+        [$n4] = $demo($c4, $c4->checkout('Abidjan', 'demo'));
+        T::eq(1, (int) $order($n4)['is_wholesale'], 'Commande en gros enregistrée');
+
+        // 5. Professionnel autorisé : paiement sur facture dans la limite du plafond
+        $proUser = T::user('customer', 'pro@example.test');
+        T::status(422, $a->post('/admin/professionnels', ['email' => 'inconnu@example.test', 'company' => 'X']), 'Compte professionnel : client existant requis');
+        $a->post('/admin/professionnels', ['email' => 'pro@example.test', 'company' => 'Hôtel Test', 'credit_limit' => '50000', 'payment_days' => '15', 'invoice_allowed' => '1', 'is_active' => '1']);
+        $pro = DB::one('SELECT * FROM pro_accounts WHERE user_id = ?', [(int) $proUser['id']]);
+        T::eq(1, (int) $pro['invoice_allowed'], 'Paiement sur facture accordé par un administrateur');
+        T::eq((int) $admin['id'], (int) $pro['approved_by'], 'Autorisation tracée');
+        $c5 = new Client('10.36.0.9');
+        $c5->loginAs($proUser);
+        $c5->addToCart('MPCI-LIQ-500', 2);
+        T::contains('value="invoice"', $c5->get('/commande')->body, 'Facture proposée au professionnel autorisé');
+        [$n5] = Client::orderRef($c5->checkout('Abidjan', 'invoice'));
+        $o5 = $order($n5);
+        T::eq('invoice', $o5['payment_terms'], 'Paiement sur facture');
+        T::eq('professional', $o5['customer_type'], 'Client professionnel');
+        T::eq('deferred', $o5['payment_status'], 'Paiement différé autorisé');
+        T::eq('pending_confirmation', $o5['status'], 'Commande à confirmer par l\'équipe');
+        T::ok(abs(strtotime($o5['balance_due_at'] . ' UTC') - (time() + 15 * 86400)) < 120, 'Échéance à 15 jours');
+        foreach (['preparing', 'shipped'] as $s) {
+            $a->post('/admin/commandes/' . $o5['id'] . '/statut', ['status' => $s]);
+        }
+        T::eq('shipped', $order($n5)['status'], 'Expédition autorisée (crédit accordé)');
+        $c5->addToCart('MPCI-VRAC-5', 1);
+        T::contains('plafond disponible', html_entity_decode($c5->get('/commande')->body), 'Plafond insuffisant signalé');
+        T::status(422, $c5->checkout('Abidjan', 'invoice'), 'Commande au-delà du plafond refusée sur facture');
+        $a->post('/admin/commandes/' . $o5['id'] . '/encaissement', ['amount' => '11500', 'method' => 'transfer', 'reference' => 'VIR-889']);
+        T::eq('paid', $order($n5)['payment_status'], 'Facture réglée');
+        T::eq(0, \App\Services\PaymentPolicy::outstanding((int) $proUser['id']), 'Encours soldé');
+
+        // 6. Professionnel sans autorisation de crédit, particulier : pas de facture
+        $pro2 = T::user('customer', 'pro2@example.test');
+        $a->post('/admin/professionnels', ['email' => 'pro2@example.test', 'company' => 'Restaurant Test', 'is_active' => '1']);
+        $c6 = new Client('10.36.0.10');
+        $c6->loginAs($pro2);
+        $c6->addToCart('MPCI-LIQ-500', 1);
+        $form = $c6->get('/commande')->body;
+        T::contains('Restaurant Test', $form, 'Client reconnu comme professionnel');
+        T::notContains('value="invoice"', $form, 'Facture non proposée sans autorisation');
+        T::status(422, $c6->checkout('Abidjan', 'invoice'), 'Facture refusée côté serveur sans autorisation');
+        $c6b = new Client('10.36.0.11');
+        $c6b->addToCart('MPCI-LIQ-500', 1);
+        T::status(422, $c6b->checkout('Abidjan', 'invoice'), 'Facture refusée à un visiteur');
+
+        // 7. Transaction échouée puis abandonnée
+        $c7 = new Client('10.36.0.12');
+        $c7->addToCart('MPCI-CIRE-250', 1);
+        [$n7] = $demo($c7, $c7->checkout('Abidjan', 'demo'), 'failed');
+        $o7 = $order($n7);
+        T::eq('failed', $o7['payment_status'], 'Échec enregistré');
+        T::eq(0, (int) $o7['amount_paid'], 'Échec : rien encaissé');
+        T::eq(0, $tx($o7), 'Échec : aucun encaissement au journal');
+        DB::run('UPDATE orders SET expires_at = ? WHERE id = ?', [gmdate('Y-m-d H:i:s', time() - 60), (int) $o7['id']]);
+        OrderService::expireOverdue();
+        $o7 = $order($n7);
+        T::eq('cancelled', $o7['status'], 'Paiement abandonné : commande annulée');
+        T::eq('cancelled', $o7['payment_status'], 'Paiement annulé (jamais marqué payé)');
+
+        // 8. Notification reçue plusieurs fois : traitée une seule fois
+        $c8 = new Client('10.36.0.13');
+        $c8->addToCart('MPCI-CIRE-250', 1);
+        [$n8, $t8] = Client::orderRef($c8->checkout('Abidjan', 'demo'));
+        $p8 = PaymentService::latestForOrder((int) $order($n8)['id']);
+        $event = ['event_id' => 'evt-dup-1', 'reference' => $p8['reference'], 'status' => 'succeeded', 'amount' => (int) $p8['amount'], 'provider_reference' => 'PRV-1'];
+        T::eq('paid', PaymentService::applyResult('demo', $event, '{}'), 'Première notification appliquée');
+        T::eq('duplicate', PaymentService::applyResult('demo', $event, '{}'), 'Notification rejouée ignorée');
+        T::eq('already_processed', PaymentService::applyResult('demo', ['event_id' => 'evt-dup-2'] + $event, '{}'), 'Seconde notification du même paiement ignorée');
+        $o8 = $order($n8);
+        T::eq(1, $tx($o8), 'Un seul encaissement');
+        T::eq((int) $o8['total'], (int) $o8['amount_paid'], 'Montant encaissé non doublé');
+
+        // 9. Annulation avec acompte, remboursement (motif obligatoire, en attente puis effectué), remboursement partiel
+        $a->post('/admin/commandes/' . $o2b['id'] . '/statut', ['status' => 'cancelled', 'note' => 'Demande du client']);
+        $o2b = $order($n2b);
+        T::eq('cancelled', $o2b['status'], 'Commande annulée');
+        T::eq(3450, (int) $o2b['amount_paid'], 'Acompte toujours enregistré');
+        T::eq('deposit_paid', $o2b['payment_status'], 'Acompte non conservé automatiquement : remboursement à décider');
+        T::contains('remboursement à traiter', $a->get('/admin/commandes/' . $o2b['id'])->body, 'Remboursement à traiter signalé');
+        $a->post('/admin/commandes/' . $o2b['id'] . '/remboursement', ['amount' => '3450', 'reason' => '', 'method' => 'moov_money', 'completed' => '1']);
+        T::eq(0, (int) DB::value("SELECT COUNT(*) FROM order_transactions WHERE order_id = ? AND type = 'refund'", [(int) $o2b['id']]), 'Motif obligatoire');
+        $a->post('/admin/commandes/' . $o2b['id'] . '/remboursement', ['amount' => '5000', 'reason' => 'Trop', 'method' => 'moov_money', 'completed' => '1']);
+        T::eq(0, (int) DB::value("SELECT COUNT(*) FROM order_transactions WHERE order_id = ? AND type = 'refund'", [(int) $o2b['id']]), 'Remboursement supérieur à l\'encaissé refusé');
+        $a->post('/admin/commandes/' . $o2b['id'] . '/remboursement', ['amount' => '3450', 'reason' => 'Annulation avant expédition', 'method' => 'moov_money']);
+        $refund = DB::one("SELECT * FROM order_transactions WHERE order_id = ? AND type = 'refund'", [(int) $o2b['id']]);
+        T::eq('pending', $refund['status'], 'Remboursement à effectuer enregistré');
+        T::eq('Annulation avant expédition', $refund['reason'], 'Motif enregistré');
+        T::eq(0, (int) $order($n2b)['amount_refunded'], 'Pas encore remboursé');
+        $a->post('/admin/remboursements/' . $refund['id'] . '/effectue', ['reference' => 'RMB-77']);
+        $o2b = $order($n2b);
+        T::eq(3450, (int) $o2b['amount_refunded'], 'Remboursement effectué');
+        T::eq('refunded', $o2b['payment_status'], 'Paiement remboursé');
+        T::eq('refunded', $o2b['status'], 'Commande remboursée');
+        $a->post('/admin/commandes/' . $o1['id'] . '/remboursement', ['amount' => '1000', 'reason' => 'Geste commercial', 'method' => 'cash', 'completed' => '1']);
+        $o1 = $order($n1);
+        T::eq('partially_refunded', $o1['payment_status'], 'Remboursement partiel');
+        T::eq('shipped', $o1['status'], 'Statut de livraison inchangé');
+
+        // 10. Restrictions selon la zone et le montant
+        $z = T::zone('Autres villes de Côte d\'Ivoire');
+        $c10 = new Client('10.36.0.14');
+        $c10->addToCart('MPCI-LIQ-250', 1);
+        $est = json_decode($c10->get('/commande/estimation?zone_id=' . $z['id'])->body, true);
+        T::ok(!in_array('cod', $est['methods'], true), 'Zone sans paiement à la livraison : non proposé');
+        T::status(422, $c10->checkout('Autres villes de Côte d\'Ivoire', 'cod'), 'Paiement à la livraison refusé hors zone autorisée');
+        $a->post('/admin/paiements/cod', ['name' => 'Paiement à la livraison', 'sort_order' => '0', 'is_enabled' => '1', 'show_logo' => '1', 'max_amount' => '4000']);
+        $est = json_decode($c10->get('/commande/estimation?zone_id=' . T::zone('Abidjan')['id'])->body, true);
+        T::ok(!in_array('cod', $est['methods'], true), 'Montant maximum du moyen : non proposé au-delà');
+        T::status(422, $c10->checkout('Abidjan', 'cod'), 'Montant maximum appliqué côté serveur');
+        T::status(422, $a->post('/admin/paiements/cod', ['name' => 'Paiement à la livraison', 'sort_order' => '0', 'is_enabled' => '1', 'min_amount' => '9000', 'max_amount' => '4000']), 'Minimum supérieur au maximum refusé');
+        $a->post('/admin/paiements/cod', ['name' => 'Paiement à la livraison', 'sort_order' => '0', 'is_enabled' => '1', 'show_logo' => '1']);
+        T::ok(in_array('cod', json_decode($c10->get('/commande/estimation?zone_id=' . T::zone('Abidjan')['id'])->body, true)['methods'], true), 'Sans limite : proposé');
+
+        // Sécurité : statut et montants non modifiables par un client ; journal de rapprochement
+        $cust = new Client('10.36.0.15');
+        $cust->loginAs(T::user('customer', 'curieux@example.test'));
+        T::status(403, $cust->post('/admin/commandes/' . $o3['id'] . '/encaissement', ['amount' => '1', 'method' => 'cash']), 'Client : encaissement refusé');
+        T::status(403, $cust->post('/admin/commandes/' . $o1['id'] . '/remboursement', ['amount' => '1', 'reason' => 'x', 'method' => 'cash']), 'Client : remboursement refusé');
+        T::status(403, $cust->get('/admin/paiements/journal'), 'Client : journal refusé');
+        T::status(403, $cust->get('/admin/professionnels'), 'Client : professionnels refusés');
+        T::status(403, $cust->post('/admin/parametres/paiement', $settings), 'Client : paramètres de paiement refusés');
+        T::ok(DB::value("SELECT COUNT(*) FROM audit_log WHERE action IN ('payment.record', 'payment.refund', 'pro.create', 'settings.update')") > 0, 'Changements tracés au journal d\'audit');
+        $a->post('/admin/deconnexion');
+        $a2 = new Client('10.36.0.16');
+        $a2->loginAs($admin);
+        $journal = $a2->get('/admin/paiements/journal')->body;
+        foreach ([$n1, $n2, $n3, $n5, $n2b] as $n) {
+            T::contains($n, $journal, "Journal : commande $n (persistant après reconnexion)");
+        }
+        T::contains('Remboursement', $journal, 'Journal : remboursements');
+        $csv = $a2->get('/admin/paiements/journal/export');
+        T::contains('Commande', $csv->body, 'Export CSV du journal');
     },
 ];

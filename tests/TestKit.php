@@ -28,7 +28,7 @@ final class T
     public static int $assertions = 0;
     private static bool $mysqlMigrated = false;
     /** Données de référence insérées par les migrations (vidées par TRUNCATE entre scénarios MySQL). */
-    private const REFERENCE_TABLES = ['payment_methods', 'home_slides', 'currencies'];
+    private const REFERENCE_TABLES = ['payment_methods', 'home_slides', 'currencies', 'media'];
     /** @var array<string, array> */
     private static array $reference = [];
 

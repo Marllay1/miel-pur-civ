@@ -14,7 +14,7 @@ use App\Core\Lang;
 final class I18n
 {
     public const FIELDS = [
-        'product' => ['name', 'short_description', 'description', 'origin', 'usage_tips', 'storage_tips', 'meta_title', 'meta_description'],
+        'product' => ['name', 'short_description', 'description', 'origin', 'usage_tips', 'storage_tips', 'extra_info', 'meta_title', 'meta_description'],
         'category' => ['name', 'description'],
         'variant' => ['label'],
         'page' => ['title', 'body', 'meta_description'],

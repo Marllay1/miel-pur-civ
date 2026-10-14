@@ -15,6 +15,22 @@ final class Mailer
     /** Messages envoyés pendant la requête (lus par les tests). */
     public static array $sent = [];
 
+    /** Tests uniquement : force la réponse de deliversForReal(). */
+    public static ?bool $deliveryOverride = null;
+
+    /**
+     * Les e-mails partent-ils réellement (et pas seulement dans storage/mail) ? Sert à ne jamais annoncer
+     * comme opérationnel un envoi (réponse à un message, notification) qui ne l'est pas.
+     */
+    public static function deliversForReal(): bool
+    {
+        if (self::$deliveryOverride !== null) {
+            return self::$deliveryOverride;
+        }
+        $driver = Env::get('MAIL_DRIVER', 'log');
+        return ($driver === 'smtp' && (string) Env::get('SMTP_HOST', '') !== '') || $driver === 'mail';
+    }
+
     public static function send(string $to, string $subject, string $text): bool
     {
         $to = trim($to);

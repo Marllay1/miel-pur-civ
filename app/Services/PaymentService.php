@@ -35,35 +35,64 @@ final class PaymentService
     }
 
     /**
-     * Moyens de paiement réellement proposables pour une zone.
-     * @return array<int, array{code:string, label:string, description:string, online:bool, needs_phone:bool}>
+     * Moyens de paiement réellement proposables pour une zone et, si connus, un montant, un client et le caractère « en gros » de la commande.
+     * Paiement sur facture : seulement pour un professionnel autorisé par un administrateur, dans la limite de son plafond.
+     * @return array<int, array{code:string, kind:string, label:string, description:string, online:bool, needs_phone:bool, logos:array, deposit:bool}>
      */
-    public static function availableMethods(?array $zone): array
+    public static function availableMethods(?array $zone, ?int $total = null, ?int $userId = null, bool $wholesale = false): array
     {
         // Source unique : Administration → Moyens de paiement (seuls les moyens opérationnels sont proposés).
         $methods = [];
         foreach (PaymentMethods::operational() as $code => $m) {
+            if ($total !== null && !PaymentMethods::allowsAmount($m, $total)) {
+                continue;
+            }
             $custom = PaymentMethods::description($m);
+            if ($m['kind'] === 'invoice') {
+                if ($total === null || !PaymentPolicy::invoice($userId, $total)['ok']) {
+                    continue;
+                }
+                $methods[] = ['code' => $code, 'kind' => 'invoice', 'label' => PaymentMethods::name($m), 'description' => $custom !== '' ? $custom : t('pay.desc.invoice'),
+                    'online' => false, 'needs_phone' => false, 'logos' => PaymentMethods::logos($m), 'deposit' => false];
+                continue;
+            }
             if ($m['kind'] === 'cod') {
                 if ($zone !== null && (int) $zone['allows_cod'] !== 1) {
                     continue;
                 }
+                if ($wholesale && !Settings::bool('wholesale_cod_allowed')) {
+                    continue;
+                }
                 $description = $custom !== '' ? $custom : ($zone !== null && (int) $zone['is_pickup'] === 1 ? t('pay.desc.cod_pickup') : t('pay.desc.cod'));
-                $methods[] = ['code' => $code, 'kind' => 'cod', 'label' => PaymentMethods::name($m), 'description' => $description, 'online' => false, 'needs_phone' => false, 'logos' => PaymentMethods::logos($m)];
+                $methods[] = ['code' => $code, 'kind' => 'cod', 'label' => PaymentMethods::name($m), 'description' => $description, 'online' => false, 'needs_phone' => false,
+                    'logos' => PaymentMethods::logos($m), 'deposit' => false];
             } elseif ($m['kind'] === 'gateway') {
                 $gateway = self::gateway($code);
                 $methods[] = ['code' => $code, 'kind' => 'gateway', 'label' => PaymentMethods::name($m), 'description' => $custom !== '' ? $custom : $gateway->description(),
-                    'online' => true, 'needs_phone' => $gateway->needsPhone(), 'logos' => PaymentMethods::logos($m)];
+                    'online' => true, 'needs_phone' => $gateway->needsPhone(), 'logos' => PaymentMethods::logos($m), 'deposit' => true];
             } else {
                 $methods[] = ['code' => $code, 'kind' => 'manual', 'label' => PaymentMethods::name($m), 'description' => $custom !== '' ? $custom : t('pay.desc.manual'),
-                    'online' => false, 'needs_phone' => false, 'logos' => PaymentMethods::logos($m)];
+                    'online' => false, 'needs_phone' => false, 'logos' => PaymentMethods::logos($m), 'deposit' => true];
             }
         }
         $demo = self::gateway('demo');
         if ($demo !== null && $demo->isEnabled()) {
-            $methods[] = ['code' => 'demo', 'kind' => 'gateway', 'label' => $demo->label(), 'description' => $demo->description(), 'online' => true, 'needs_phone' => false, 'logos' => []];
+            $methods[] = ['code' => 'demo', 'kind' => 'gateway', 'label' => $demo->label(), 'description' => $demo->description(), 'online' => true, 'needs_phone' => false, 'logos' => [], 'deposit' => true];
         }
         return $methods;
+    }
+
+    /** Paiement en ligne possible : en attente de paiement, ou solde restant d'une commande avec acompte non annulée. */
+    public static function canPayOnline(array $order): bool
+    {
+        $gateway = self::gateway((string) $order['payment_method']);
+        if ($gateway === null || !$gateway->isEnabled() || PaymentLedger::dueNow($order) <= 0) {
+            return false;
+        }
+        if ($order['status'] === 'pending_payment') {
+            return $order['expires_at'] === null || $order['expires_at'] > gmdate('Y-m-d H:i:s');
+        }
+        return $order['payment_terms'] === 'deposit' && in_array($order['status'], ['deposit_paid', 'preparing', 'shipped', 'delivered'], true);
     }
 
     public static function findByReference(string $reference): ?array
@@ -88,10 +117,12 @@ final class PaymentService
         if ($gateway === null || !$gateway->isEnabled()) {
             throw new \DomainException(t('pay.unavailable'));
         }
-        if ($order['status'] !== 'pending_payment') {
+        // En attente de paiement (paiement intégral ou acompte), ou solde restant après acompte.
+        $due = PaymentLedger::dueNow($order);
+        if (!self::canPayOnline($order) || $due <= 0) {
             throw new \DomainException(t('pay.not_pending'));
         }
-        if ($order['expires_at'] !== null && $order['expires_at'] < gmdate('Y-m-d H:i:s')) {
+        if ($order['status'] === 'pending_payment' && $order['expires_at'] !== null && $order['expires_at'] < gmdate('Y-m-d H:i:s')) {
             throw new \DomainException(t('pay.expired'));
         }
         if ($gateway->needsPhone() && ($payerPhone === null || MtnMomoGateway::msisdn($payerPhone) === null)) {
@@ -99,7 +130,7 @@ final class PaymentService
         }
         // Une tentative encore ouverte (redirection non utilisée) est réutilisée, sauf paiement poussé sur mobile.
         $existing = DB::one("SELECT * FROM payments WHERE order_id = ? AND provider = ? AND status = 'initiated' ORDER BY id DESC LIMIT 1", [(int) $order['id'], $provider]);
-        if ($existing !== null && (int) $existing['amount'] === (int) $order['total'] && $existing['checkout_url'] && !$gateway->needsPhone()) {
+        if ($existing !== null && (int) $existing['amount'] === $due && $existing['checkout_url'] && !$gateway->needsPhone()) {
             return ['payment' => $existing, 'redirect' => $existing['checkout_url'], 'pending' => false];
         }
         if ($existing !== null) {
@@ -110,7 +141,7 @@ final class PaymentService
             'order_id' => (int) $order['id'],
             'provider' => $provider,
             'reference' => 'PAY-' . strtoupper(bin2hex(random_bytes(6))),
-            'amount' => (int) $order['total'],
+            'amount' => $due,
             'currency' => 'XOF',
             'status' => 'initiated',
             'payer_phone' => $payerPhone !== null ? mb_substr($payerPhone, 0, 30) : null,
@@ -253,8 +284,13 @@ final class PaymentService
             }
             if ($event['status'] === 'succeeded') {
                 DB::update('payments', ['status' => 'succeeded', 'provider_reference' => $event['provider_reference'], 'updated_at' => $now], 'id = ?', [(int) $payment['id']]);
-                if ($order !== null && $order['status'] === 'pending_payment') {
-                    OrderService::transition((int) $order['id'], 'paid', null, 'Paiement confirmé (' . payment_method_label($provider) . ', réf. ' . $payment['reference'] . ').');
+                $open = $order !== null && !in_array($order['status'], ['cancelled', 'refunded'], true);
+                if ($order !== null) {
+                    // Encaissement vérifié chez le prestataire : inscrit au journal (y compris sur une commande close, pour pouvoir le rembourser).
+                    PaymentLedger::record((int) $order['id'], (int) $payment['amount'], $provider, $event['provider_reference'] ?: $payment['reference'], null,
+                        'Paiement confirmé (' . payment_method_label($provider) . ', réf. ' . $payment['reference'] . ').', (int) $payment['id'], true);
+                }
+                if ($open) {
                     return $finish('paid');
                 }
                 Audit::log('payment.received_on_closed_order', 'order', $order['number'] ?? null, [

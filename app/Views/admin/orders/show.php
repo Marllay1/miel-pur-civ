@@ -1,7 +1,11 @@
 <?php
-/** @var array $order @var array $items @var array $history @var array $payments @var ?array $shipment @var array $transitions */
+/** @var array $order @var array $items @var array $history @var array $payments @var ?array $shipment @var array $transitions @var array $transactions @var int $balance @var int $refundable @var array $ledgerMethods @var ?array $pro */
 $labels = ['preparing' => 'Confirmer / mettre en préparation', 'shipped' => 'Marquer comme expédiée', 'delivered' => 'Marquer comme livrée',
-    'cancelled' => 'Annuler la commande', 'refunded' => 'Marquer comme remboursée', 'paid' => 'Marquer comme payée (paiement reçu hors ligne)'];
+    'cancelled' => 'Annuler la commande', 'refunded' => 'Rembourser le montant encaissé et marquer remboursée', 'paid' => 'Paiement reçu : encaisser le reste dû (' . money($balance) . ')'];
+$termsLabels = ['full' => 'Paiement intégral avant expédition', 'deposit' => 'Acompte puis solde', 'cod' => 'Paiement à la livraison', 'invoice' => 'Paiement sur facture (professionnel autorisé)'];
+$closed = in_array($order['status'], ['cancelled', 'refunded'], true);
+$shipBlocked = $order['status'] === 'preparing' && !\App\Services\OrderService::canShip($order);
+$collectable = $balance > 0 && in_array('delivered', $transitions, true);
 ?>
 <p><a href="/admin/commandes">← Commandes</a></p>
 <div class="admin-head">
@@ -36,9 +40,14 @@ $labels = ['preparing' => 'Confirmer / mettre en préparation', 'shipped' => 'Ma
         <div class="field"><label for="t-status">Nouveau statut</label>
           <select id="t-status" name="status" required><?php foreach ($transitions as $t): ?><option value="<?= e($t) ?>"><?= e($labels[$t] ?? status_label($t)) ?></option><?php endforeach; ?></select></div>
         <div class="field"><label for="t-note">Commentaire (visible par le client)</label><input id="t-note" name="note" maxlength="1000"></div>
-        <div class="field-full"><button class="btn btn-primary btn-small" type="submit">Appliquer</button> <span class="hint">L'annulation restitue le stock et le code promo.</span></div>
+        <?php if ($collectable): ?>
+        <label class="check field-full"><input type="checkbox" name="collected" value="1"> À la livraison : encaissement de <?= money($balance) ?> confirmé (sinon la commande reste « à encaisser »)</label>
+        <?php endif; ?>
+        <div class="field-full"><button class="btn btn-primary btn-small" type="submit">Appliquer</button> <span class="hint">L'annulation restitue le stock et le code promo ; un montant déjà encaissé n'est jamais conservé automatiquement.</span></div>
       </form>
       <?php else: ?><p class="muted">Aucune transition possible depuis ce statut.</p><?php endif; ?>
+      <?php if ($shipBlocked): ?><p class="notice notice-amber small">Expédition bloquée : <?= $order['payment_terms'] === 'deposit' ? 'le solde doit être encaissé avant l\'expédition (Paramètres de paiement).' : 'le paiement intégral doit être encaissé avant l\'expédition.' ?> Reste dû : <?= money($balance) ?>.</p><?php endif; ?>
+      <?php if ($order['status'] === 'deposit_paid' && !in_array('preparing', $transitions, true)): ?><p class="notice notice-amber small">Préparation après acompte désactivée (Paramètres de paiement) : encaissez le solde pour préparer la commande.</p><?php endif; ?>
     </section>
 
     <section class="card">
@@ -78,8 +87,68 @@ $labels = ['preparing' => 'Confirmer / mettre en préparation', 'shipped' => 'Ma
       </form>
       <?php if ($shipment && $shipment['shipped_at']): ?><p class="small muted">Expédiée le <?= e(date_fr($shipment['shipped_at'])) ?><?= $shipment['delivered_at'] ? ' · livrée le ' . e(date_fr($shipment['delivered_at'])) : '' ?></p><?php endif; ?>
     </section>
-    <section class="card">
-      <h2>Paiements</h2>
+    <section class="card" id="paiements">
+      <h2>Paiement</h2>
+      <p class="small"><strong><?= e($termsLabels[$order['payment_terms']] ?? $order['payment_terms']) ?></strong><?= in_array($order['payment_terms'], ['cod', 'invoice'], true) ? '' : ' · ' . e(payment_method_label($order['payment_method'])) ?><br>
+        Client <?= $order['customer_type'] === 'professional' ? 'professionnel' . ($pro ? ' (' . e($pro['company']) . ')' : '') : 'particulier' ?><?= (int) $order['is_wholesale'] === 1 ? ' · <span class="status status-preparing">Commande en gros</span>' : '' ?></p>
+      <dl class="totals small">
+        <div><dt>Total dû</dt><dd><?= money((int) $order['total']) ?></dd></div>
+        <div><dt>dont livraison</dt><dd><?= money((int) $order['shipping_fee']) ?></dd></div>
+        <?php if ($order['deposit_amount'] !== null): ?><div><dt>Acompte demandé</dt><dd><?= money((int) $order['deposit_amount']) ?></dd></div><?php endif; ?>
+        <div><dt>Encaissé</dt><dd><strong><?= money((int) $order['amount_paid']) ?></strong></dd></div>
+        <?php if ((int) $order['amount_refunded'] > 0): ?><div><dt>Remboursé</dt><dd><?= money((int) $order['amount_refunded']) ?></dd></div><?php endif; ?>
+        <div class="grand-total"><dt>Reste à payer</dt><dd><?= money($balance) ?></dd></div>
+        <?php if ($order['balance_due_at'] && $balance > 0): ?><div><dt>Échéance</dt><dd><?= e(date_fr($order['balance_due_at'], false)) ?><?= $order['balance_due_at'] < gmdate('Y-m-d H:i:s') ? ' <span class="status status-cancelled">dépassée</span>' : '' ?></dd></div><?php endif; ?>
+      </dl>
+      <p class="small">État : <span class="status status-<?= e($order['payment_status']) ?>"><?= e(payment_status_label($order['payment_status'])) ?></span></p>
+      <?php if ($order['payment_declared_at']): ?><p class="notice notice-amber small">Le client indique avoir payé le <?= e(date_fr($order['payment_declared_at'])) ?> (réf. « <?= e((string) $order['payment_declaration']) ?> »). Ce n'est pas une preuve : vérifiez la réception sur le relevé avant d'enregistrer l'encaissement.</p><?php endif; ?>
+      <?php if ($order['status'] === 'cancelled' && $refundable > 0): ?><p class="notice notice-amber small">Commande annulée avec <?= money($refundable) ?> encaissé : remboursement à traiter selon les conditions de vente.</p><?php endif; ?>
+      <?php if ((int) $order['is_pickup'] === 0 && $balance > 0 && in_array($order['payment_terms'], ['cod', 'deposit'], true) && !$closed): ?><p class="small">À encaisser par le livreur : <strong><?= money($balance) ?></strong> (indiqué sur le récapitulatif imprimable).</p><?php endif; ?>
+
+      <?php if ($transactions): ?>
+      <h3>Encaissements et remboursements</h3>
+      <ul class="plain-list small">
+        <?php foreach ($transactions as $t): ?>
+        <li><?= e(date_fr($t['created_at'])) ?> · <strong><?= $t['type'] === 'payment' ? 'Encaissement' : 'Remboursement' ?> <?= money((int) $t['amount']) ?></strong> · <?= e($ledgerMethods[$t['method']] ?? $t['method']) ?>
+          <?= $t['reference'] ? ' · réf. <code>' . e($t['reference']) . '</code>' : '' ?><?= $t['reason'] ? ' · ' . e($t['reason']) : '' ?>
+          · <span class="muted"><?= $t['first_name'] ? e($t['first_name'] . ' ' . $t['last_name']) : 'prestataire / système' ?></span>
+          <?php if ($t['status'] === 'pending'): ?><span class="status status-pending_payment">à effectuer</span>
+          <form action="/admin/remboursements/<?= (int) $t['id'] ?>/effectue" method="post" class="inline-form"><?= csrf_field() ?><label class="sr-only" for="rc-<?= (int) $t['id'] ?>">Référence</label><input id="rc-<?= (int) $t['id'] ?>" name="reference" maxlength="120" placeholder="Référence"><button class="btn btn-ghost btn-small" type="submit">Marquer effectué</button></form><?php endif; ?>
+        </li>
+        <?php endforeach; ?>
+      </ul>
+      <?php endif; ?>
+
+      <?php if ($balance > 0 && !$closed): ?>
+      <details class="mt"<?= $order['payment_declared_at'] ? ' open' : '' ?>>
+        <summary>Enregistrer un encaissement constaté</summary>
+        <form action="/admin/commandes/<?= (int) $order['id'] ?>/encaissement" method="post">
+          <?= csrf_field() ?>
+          <div class="field"><label for="p-amount">Montant reçu (FCFA)</label><input id="p-amount" name="amount" type="number" min="1" max="<?= $balance ?>" required value="<?= \App\Services\PaymentLedger::dueNow($order) ?>"></div>
+          <div class="field"><label for="p-method">Moyen</label><select id="p-method" name="method"><?php foreach ($ledgerMethods as $k => $l): ?><option value="<?= e($k) ?>"<?= $k === $order['payment_method'] ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select></div>
+          <div class="field"><label for="p-ref">Référence de la transaction</label><input id="p-ref" name="reference" maxlength="120" value="<?= e((string) $order['payment_declaration']) ?>"></div>
+          <div class="field"><label for="p-note">Note</label><input id="p-note" name="note" maxlength="255"></div>
+          <button class="btn btn-primary btn-small" type="submit">Enregistrer l'encaissement</button>
+          <p class="hint">Uniquement après avoir constaté la réception (relevé Mobile Money ou bancaire, espèces remises).</p>
+        </form>
+      </details>
+      <?php endif; ?>
+      <?php if ($refundable > 0): ?>
+      <details class="mt">
+        <summary>Rembourser (<?= money($refundable) ?> remboursable)</summary>
+        <form action="/admin/commandes/<?= (int) $order['id'] ?>/remboursement" method="post">
+          <?= csrf_field() ?>
+          <div class="field"><label for="r-amount">Montant (FCFA)</label><input id="r-amount" name="amount" type="number" min="1" max="<?= $refundable ?>" required value="<?= $refundable ?>"></div>
+          <div class="field"><label for="r-reason">Motif</label><input id="r-reason" name="reason" maxlength="255" required></div>
+          <div class="field"><label for="r-method">Moyen</label><select id="r-method" name="method"><?php foreach ($ledgerMethods as $k => $l): ?><option value="<?= e($k) ?>"<?= $k === $order['payment_method'] ? ' selected' : '' ?>><?= e($l) ?></option><?php endforeach; ?></select></div>
+          <div class="field"><label for="r-ref">Référence</label><input id="r-ref" name="reference" maxlength="120"></div>
+          <label class="check"><input type="checkbox" name="completed" value="1" checked> Remboursement déjà effectué (décoché : à effectuer)</label>
+          <button class="btn btn-danger btn-small" type="submit">Enregistrer le remboursement</button>
+        </form>
+      </details>
+      <?php endif; ?>
+
+      <h3>Tentatives de paiement en ligne</h3>
       <?php if (!$payments): ?><p class="muted small">Aucune tentative de paiement en ligne.</p><?php endif; ?>
       <ul class="plain-list small">
         <?php foreach ($payments as $p): ?>

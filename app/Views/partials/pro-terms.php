@@ -1,0 +1,6 @@
+<?php /** @var array $old @var array $errors (conditions d'un compte professionnel, administration) */ ?>
+<div class="field"><label for="p-limit">Plafond de crédit (FCFA) <span class="hint">vide = non fixé</span></label><input id="p-limit" name="credit_limit" type="number" min="0" value="<?= e((string) ($old['credit_limit'] ?? '')) ?>"<?= aria_invalid($errors, 'credit_limit') ?>><?= field_error($errors, 'credit_limit') ?></div>
+<div class="field"><label for="p-days">Délai de paiement (jours)</label><input id="p-days" name="payment_days" type="number" min="0" max="365" value="<?= e((string) ($old['payment_days'] ?? setting('invoice_default_days'))) ?>"<?= aria_invalid($errors, 'payment_days') ?>><?= field_error($errors, 'payment_days') ?></div>
+<div class="field field-full"><label for="p-conditions">Conditions particulières (internes)</label><textarea id="p-conditions" name="conditions" rows="3" maxlength="2000"><?= e((string) ($old['conditions'] ?? '')) ?></textarea></div>
+<label class="check field-full"><input type="checkbox" name="invoice_allowed" value="1"<?= !empty($old['invoice_allowed']) ? ' checked' : '' ?>> Paiement sur facture autorisé</label>
+<label class="check field-full"><input type="checkbox" name="is_active" value="1"<?= !empty($old['is_active']) ? ' checked' : '' ?>> Compte professionnel actif</label>

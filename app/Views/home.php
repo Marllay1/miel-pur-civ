@@ -5,9 +5,11 @@ use App\Services\PaymentService;
 $heroImage = \App\Services\Settings::get('home_hero_image');
 // Logos des moyens de paiement réellement proposés (Administration → Moyens de paiement).
 $acceptedPayments = \App\Services\Settings::bool('home_show_payments') ? \App\Services\PaymentMethods::acceptedLogos() : [];
-$catPhotos = ['miels' => 'fb-bouteilles-trio', 'cire-d-abeille' => 'wm-pains-cire', 'coffrets' => 'fb-stand-coffrets'];
 $facebook = \App\Services\Settings::get('social_facebook');
-$gallery = ['fb-miel-en-rayon-vente', 'fb-bouteille-fond-jaune', 'fb-bouteilles-duo'];
+// Photos choisies dans Administration → Photos de l'entreprise (aucune image codée en dur).
+$gallery = \App\Services\Media::homeGallery();
+$story = \App\Services\Media::story();
+$categories = array_values(array_filter($categories, static fn (array $c) => $c['parent_id'] === null));
 ?>
 <?php if ($slides): ?>
 <?= View::partial('carousel', ['slides' => $slides]) ?>
@@ -35,14 +37,11 @@ $gallery = ['fb-miel-en-rayon-vente', 'fb-bouteille-fond-jaune', 'fb-bouteilles-
         <li><?= icon('truck') ?><?= e(t('home.trust_delivery')) ?></li>
       </ul>
     </div>
-    <figure class="hero-visual hero-photo">
-      <?php if ($heroImage !== ''): ?>
-      <img src="<?= e($heroImage) ?>" alt="" fetchpriority="high" decoding="async">
-      <?php else: ?>
-      <?= photo('wm-pot-miel-rayon', '', '(min-width: 960px) 50vw, 100vw', true) ?>
-      <figcaption><?= photo_credit('wm-pot-miel-rayon') ?></figcaption>
-      <?php endif; ?>
-    </figure>
+    <?php if ($heroImage !== ''): ?>
+    <figure class="hero-visual hero-photo"><img src="<?= e($heroImage) ?>" alt="" fetchpriority="high" decoding="async"></figure>
+    <?php elseif ($story !== null): ?>
+    <figure class="hero-visual hero-photo"><?= \App\Services\Media::img($story, '', true) ?></figure>
+    <?php endif; ?>
   </div>
 </section>
 <?php endif; ?>
@@ -68,7 +67,7 @@ $gallery = ['fb-miel-en-rayon-vente', 'fb-bouteille-fond-jaune', 'fb-bouteilles-
     <div class="tiles">
       <?php foreach ($categories as $cat): ?>
       <a class="tile tile-photo" href="/boutique?categorie=<?= e($cat['slug']) ?>">
-        <span class="tile-media"><?= isset($catPhotos[$cat['slug']]) ? photo($catPhotos[$cat['slug']], '', '(min-width: 960px) 33vw, 100vw') : '' ?><?php if ((photos()[$catPhotos[$cat['slug']] ?? '']['origin'] ?? '') === 'illustration'): ?><span class="media-badge"><?= e(t('photo.illustration_short')) ?></span><?php endif; ?></span>
+        <span class="tile-media"><?php if (!empty($cat['image_path'])): ?><img src="<?= e($cat['image_path']) ?>" alt="" loading="lazy" decoding="async"><?php else: ?><span class="media-placeholder" aria-hidden="true"><?= e(mb_substr($cat['name'], 0, 1)) ?></span><?php endif; ?></span>
         <span class="tile-body"><span class="tile-name"><?= e($cat['name']) ?></span><span class="tile-count"><?= e(t('home.products_count', ['count' => (int) $cat['product_count']])) ?></span></span>
       </a>
       <?php endforeach; ?>
@@ -78,11 +77,10 @@ $gallery = ['fb-miel-en-rayon-vente', 'fb-bouteille-fond-jaune', 'fb-bouteilles-
 <?php endif; ?>
 
 <section class="section" aria-labelledby="h-story">
-  <div class="wrap story story-split">
-    <figure class="story-photo">
-      <?= photo('wm-apiculteurs-cameroun', '', '(min-width: 960px) 45vw, 100vw') ?>
-      <figcaption><?= photo_credit('wm-apiculteurs-cameroun') ?></figcaption>
-    </figure>
+  <div class="wrap story<?= $story !== null ? ' story-split' : '' ?>">
+    <?php if ($story !== null): ?>
+    <figure class="story-photo"><?= \App\Services\Media::img($story) ?><figcaption><span class="photo-credit"><?= e(t('photo.company')) ?></span></figcaption></figure>
+    <?php endif; ?>
     <div class="story-card">
       <p class="eyebrow"><?= e(t('home.story_eyebrow')) ?></p>
       <h2 id="h-story"><?= e(setting('home_story_title')) ?></h2>
@@ -93,6 +91,7 @@ $gallery = ['fb-miel-en-rayon-vente', 'fb-bouteille-fond-jaune', 'fb-bouteilles-
   </div>
 </section>
 
+<?php if ($gallery): ?>
 <section class="section" aria-labelledby="h-gallery">
   <div class="wrap">
     <div class="section-head">
@@ -100,10 +99,11 @@ $gallery = ['fb-miel-en-rayon-vente', 'fb-bouteille-fond-jaune', 'fb-bouteilles-
       <?php if ($facebook !== ''): ?><a class="see-all" href="<?= e($facebook) ?>" rel="noopener" target="_blank"><?= e(t('home.follow_fb')) ?><?= icon('chevron') ?></a><?php endif; ?>
     </div>
     <div class="gallery">
-      <?php foreach ($gallery as $g): ?><figure class="gallery-item"><?= photo($g, '', '(min-width: 960px) 33vw, 100vw') ?><figcaption><?= photo_credit($g) ?></figcaption></figure><?php endforeach; ?>
+      <?php foreach ($gallery as $g): ?><figure class="gallery-item"><?= \App\Services\Media::img($g) ?><figcaption><span class="photo-credit"><?= e(t('photo.company')) ?></span></figcaption></figure><?php endforeach; ?>
     </div>
   </div>
 </section>
+<?php endif; ?>
 
 <section class="section" aria-labelledby="h-steps">
   <div class="wrap">

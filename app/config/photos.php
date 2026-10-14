@@ -5,10 +5,9 @@ declare(strict_types=1);
  * Registre des photographies du site (public/assets/img/photos/).
  *  - origin « company » : photo publiée par l'entreprise sur sa page Facebook officielle
  *    (https://www.facebook.com/p/Le-Miel-Pur-de-C%C3%B4te-dIvoire-100062970108746/), consultée le 14/10/2026 ;
- *  - origin « illustration » : photo libre de droits (Wikimedia Commons) ; elle ne représente ni les ruchers ni les produits
- *    de l'entreprise et est toujours légendée « Photo d'illustration » avec son crédit.
- * Les fichiers ont été redimensionnés et convertis en WebP ; pour les photos sous licence CC BY-SA,
- * ces versions adaptées sont diffusées sous la même licence.
+ * Seules les photographies de l'entreprise sont utilisées (les photos d'illustration libres de droits ont été retirées le 14/10/2026).
+ * Les fichiers ont été redimensionnés et convertis en WebP. Les nouvelles photos s'ajoutent depuis l'administration
+ * (Photos de l'entreprise, fiches produits, carrousel).
  */
 return [
     'fb-miel-en-rayon-vente' => [
@@ -35,43 +34,5 @@ return [
         'file' => 'fb-stand-coffrets.webp', 'w' => 590, 'h' => 266, 'origin' => 'company',
         'alt' => ['fr' => 'Stand de vente : bouteilles de miel alignées et paniers cadeaux emballés',
                   'en' => 'Sales stand: rows of honey bottles and wrapped gift baskets'],
-    ],
-    'wm-pot-miel-rayon' => [
-        'file' => 'wm-pot-miel-rayon.webp', 'small' => 'wm-pot-miel-rayon-800.webp', 'w' => 1600, 'h' => 1066, 'origin' => 'illustration',
-        'alt' => ['fr' => 'Pot de miel ambré avec un morceau de rayon et une cuillère', 'en' => 'Jar of amber honey with a piece of honeycomb and a spoon'],
-        'author' => 'Alabama Extension', 'license' => 'CC0 1.0 (domaine public)', 'license_url' => 'https://creativecommons.org/publicdomain/zero/1.0/',
-        'source' => 'https://commons.wikimedia.org/wiki/File:Small_Honey_Jar_with_Honeycomb.jpg',
-    ],
-    'wm-apiculteurs-cameroun' => [
-        'file' => 'wm-apiculteurs-cameroun.webp', 'small' => 'wm-apiculteurs-cameroun-800.webp', 'w' => 1600, 'h' => 1060, 'origin' => 'illustration',
-        'alt' => ['fr' => 'Apiculteurs et apicultrices réunis autour d\'une ruche à barrettes, au Cameroun',
-                  'en' => 'Beekeepers gathered around a top-bar hive in Cameroon'],
-        'author' => 'Usman H Dukku', 'license' => 'CC BY-SA 4.0', 'license_url' => 'https://creativecommons.org/licenses/by-sa/4.0/',
-        'source' => 'https://commons.wikimedia.org/wiki/File:Woman-Beekeeper-Cameroon.jpg',
-    ],
-    'wm-cadre-rayons' => [
-        'file' => 'wm-cadre-rayons.webp', 'small' => 'wm-cadre-rayons-800.webp', 'w' => 1600, 'h' => 1067, 'origin' => 'illustration',
-        'alt' => ['fr' => 'Cadre de ruche couvert d\'abeilles, tenu par un apiculteur',
-                  'en' => 'Beekeeper holding a hive frame covered with bees'],
-        'author' => 'Øyvind Holmstad', 'license' => 'CC BY-SA 4.0', 'license_url' => 'https://creativecommons.org/licenses/by-sa/4.0/',
-        'source' => 'https://commons.wikimedia.org/wiki/File:Honey_comb_frame_2017.jpg',
-    ],
-    'wm-pains-cire' => [
-        'file' => 'wm-pains-cire.webp', 'w' => 1000, 'h' => 749, 'origin' => 'illustration',
-        'alt' => ['fr' => 'Deux pains de cire d\'abeille', 'en' => 'Two blocks of beeswax'],
-        'author' => 'Mauro Cateb', 'license' => 'CC BY-SA 3.0', 'license_url' => 'https://creativecommons.org/licenses/by-sa/3.0/',
-        'source' => 'https://commons.wikimedia.org/wiki/File:Beeswax_blocks.JPG',
-    ],
-    'wm-miel-cremeux' => [
-        'file' => 'wm-miel-cremeux.webp', 'w' => 1000, 'h' => 665, 'origin' => 'illustration',
-        'alt' => ['fr' => 'Pot de miel crémeux à côté d\'un pot de miel liquide', 'en' => 'Jar of creamed honey next to a jar of liquid honey'],
-        'author' => 'Zaereth', 'license' => 'CC BY-SA 4.0', 'license_url' => 'https://creativecommons.org/licenses/by-sa/4.0/',
-        'source' => 'https://commons.wikimedia.org/wiki/File:Creamed_honey_Maillard_reaction_after_aging.jpg',
-    ],
-    'wm-filet-miel' => [
-        'file' => 'wm-filet-miel.webp', 'w' => 960, 'h' => 1280, 'origin' => 'illustration',
-        'alt' => ['fr' => 'Filet de miel qui s\'écoule', 'en' => 'Stream of honey pouring'],
-        'author' => 'Brandy Frisky', 'license' => 'CC BY-SA 3.0', 'license_url' => 'https://creativecommons.org/licenses/by-sa/3.0/',
-        'source' => 'https://commons.wikimedia.org/wiki/File:Honey_Fall.jpg',
     ],
 ];

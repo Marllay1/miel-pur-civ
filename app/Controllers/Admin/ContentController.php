@@ -21,25 +21,6 @@ final class ContentController extends Base
     ];
 
     // ---- Messages de contact
-    public function messages(Request $r): Response
-    {
-        return admin_view('content/messages', [
-            'messages' => DB::all("SELECT * FROM contact_messages ORDER BY (status = 'new') DESC, created_at DESC LIMIT 200"),
-            'pageTitle' => 'Messages',
-        ]);
-    }
-
-    public function messageUpdate(Request $r): Response
-    {
-        $status = $r->str('status');
-        if (!in_array($status, ['new', 'read', 'archived'], true)) {
-            throw new HttpException(422);
-        }
-        DB::update('contact_messages', ['status' => $status], 'id = ?', [(int) $r->params['id']]);
-        Audit::log('message.status', 'message', (int) $r->params['id'], ['status' => $status]);
-        return redirect('/admin/messages');
-    }
-
     // ---- Newsletter
     public function newsletter(Request $r): Response
     {

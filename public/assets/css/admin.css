@@ -141,3 +141,14 @@ code { font-family: ui-monospace, Consolas, monospace; font-size: .85em; backgro
 .preview-values div { display: flex; justify-content: space-between; gap: 8px; }
 .preview-values dd { margin: 0; }
 .admin-preview-head { padding-top: 12px; }
+
+/* Itération 5 : photos de produits et photothèque, messages, paiements */
+.image-admin-list { list-style: none; padding: 0; margin: 0 0 18px; display: grid; gap: 12px; }
+.image-admin-row { display: grid; gap: 14px; align-items: start; margin: 0; }
+@media (min-width: 700px) { .image-admin-row { grid-template-columns: 160px 1fr; } }
+.image-admin-row > img { width: 100%; max-width: 160px; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--r-sm); background: var(--bg-2); }
+.image-admin-row .inline-form input { min-width: 0; flex: 1 1 180px; }
+.mini-thumb-empty { display: inline-block; width: 40px; height: 40px; border-radius: var(--r-sm); background: var(--bg-2); }
+tr.row-new td { font-weight: 600; }
+.reply-card { border-left: 3px solid var(--tint); }
+.message-body { overflow-wrap: anywhere; }

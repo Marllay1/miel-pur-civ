@@ -37,6 +37,7 @@ $wa = wa_link(t('wa.product', ['product' => $product['name']]));
   <div class="product-info">
     <?php if ($product['category_name']): ?><p class="product-card-cat"><?= e($product['category_name']) ?></p><?php endif; ?>
     <h1><?= e($product['name']) ?></h1>
+    <?php if ($product['reference'] !== null): ?><p class="product-ref small muted"><?= e(t('product.reference')) ?> <span data-product-ref><?= e($product['reference']) ?></span></p><?php endif; ?>
     <?php if ($product['short_description']): ?><p class="lead"><?= rich_inline($product['short_description']) ?></p><?php endif; ?>
 
     <?php if ($selected): ?>
@@ -94,7 +95,7 @@ $wa = wa_link(t('wa.product', ['product' => $product['name']]));
 
 <div class="wrap narrow product-details">
   <div class="disclosure">
-    <?php foreach (['description' => 'product.description', 'origin' => 'product.origin', 'usage_tips' => 'product.usage', 'storage_tips' => 'product.storage'] as $field => $label): if (!$product[$field]) { continue; } ?>
+    <?php foreach (['description' => 'product.description', 'origin' => 'product.origin', 'usage_tips' => 'product.usage', 'storage_tips' => 'product.storage', 'extra_info' => 'product.extra'] as $field => $label): if (!$product[$field]) { continue; } ?>
     <details<?= $field === 'description' ? ' open' : '' ?>>
       <summary><?= e(t($label)) ?><?= icon('chevron') ?></summary>
       <div class="prose"><?= rich($product[$field]) ?></div>

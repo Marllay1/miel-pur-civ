@@ -47,16 +47,20 @@ Logos officiels de Facebook et WhatsApp (ainsi qu'Instagram et TikTok si ces com
 
 ## 2. Photographies
 
-Toutes les photos du site sont décrites dans `app/config/photos.php` (fichier, dimensions, texte alternatif FR/EN, origine, crédit). Deux origines, toujours indiquées sous l'image :
+**Depuis le 14/10/2026, le site n'utilise que des photographies de l'entreprise** (page Facebook officielle, ou photos fournies par l'entreprise). Les photos d'illustration libres de droits utilisées auparavant ont été retirées du site, des produits, du carrousel et des fichiers. Aucune photo de banque d'images, de concurrent ou générée artificiellement n'est utilisée ; un produit sans photo vérifiable affiche un visuel neutre et est marqué « Photo à fournir » dans l'administration.
 
-| Origine | Usage | Mention affichée |
-|---|---|---|
-| **Photos de l'entreprise** : publiées sur la page Facebook officielle (consultée le 14/10/2026) | Accueil (galerie « Nos produits en images »), catégorie Miels, Coffrets, fiche Miel liquide, Notre histoire, Professionnels | « Photo : Miel Pur de Côte d'Ivoire » |
-| **Photos d'illustration** : Wikimedia Commons, licences libres | Apiculture (Notre démarche), cadre de rayons, miel crémeux, cire, vrac | « Photo d'illustration — auteur, Wikimedia Commons, licence » + badge « Illustration » sur les vignettes |
+Où se gèrent les photos :
 
-La page **/credits-photos** (lien dans le pied de page) liste l'ensemble avec auteurs, licences et liens vers les sources.
+| Emplacement | Écran d'administration |
+|---|---|
+| Fiches produits (plusieurs photos, photo principale, ordre) | Produits → fiche → Photos |
+| Carrousel de l'accueil | Carrousel de l'accueil |
+| Galeries de l'accueil et de la page À propos, photo de l'histoire | Photos de l'entreprise |
+| Image d'ouverture (sans carrousel), logos, image de partage | Paramètres du site → Logos et images |
 
-### Photos d'illustration utilisées
+Chaque ajout exige la confirmation que la photo provient des ressources de l'entreprise et l'indication de sa source. La récupération automatique depuis Facebook n'est pas possible (page partiellement consultable sans compte, extraction automatisée interdite par Facebook) : l'administrateur télécharge la photo depuis la page puis la téléverse.
+
+### Photos d'illustration (retirées le 14/10/2026, pour mémoire)
 
 | Fichier | Sujet | Auteur | Licence | Source |
 |---|---|---|---|---|
@@ -67,13 +71,14 @@ La page **/credits-photos** (lien dans le pied de page) liste l'ensemble avec au
 | `wm-miel-cremeux.webp` | Miel crémeux et miel liquide en pots | Zaereth | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Creamed_honey_Maillard_reaction_after_aging.jpg |
 | `wm-filet-miel.webp` | Filet de miel | Brandy Frisky | CC BY-SA 3.0 | https://commons.wikimedia.org/wiki/File:Honey_Fall.jpg |
 
-Conditions : ces licences autorisent l'usage commercial à condition de **citer l'auteur et la licence** (fait sous chaque image et sur /credits-photos) et de diffuser les **versions modifiées** (ici redimensionnées et converties en WebP) sous la même licence (indiqué sur /credits-photos). Elles ne représentent ni les ruchers ni les produits de l'entreprise et ne sont jamais présentées comme telles.
+Ces fichiers ne sont plus livrés avec le site.
 
 ### Photos de l'entreprise
 
-`fb-miel-en-rayon-vente.webp` (miel en rayon « Miel de l'apiculteur — En vente ici »), `fb-bouteilles-trio.webp`, `fb-bouteille-fond-jaune.webp`, `fb-bouteilles-duo.webp`, `fb-stand-coffrets.webp`. Elles proviennent des images publiquement visibles de la page Facebook ; les versions accessibles sans connexion sont de taille modeste (266 à 960 px). **À fournir par l'entreprise** : les fichiers originaux en haute définition (et la confirmation qu'elle en détient les droits, notamment pour les photos de studio), ainsi que des photos des ruchers de Katiola, de la récolte, du miel crémeux, de la cire et des seaux de vrac, pour remplacer les photos d'illustration.
+`fb-miel-en-rayon-vente.webp` (miel en rayon « Miel de l'apiculteur — En vente ici »), `fb-bouteilles-trio.webp`, `fb-bouteille-fond-jaune.webp`, `fb-bouteilles-duo.webp`, `fb-stand-coffrets.webp`. Elles proviennent des images publiquement visibles de la page Facebook ; les versions accessibles sans connexion sont de taille modeste (266 à 960 px). **À fournir par l'entreprise** : les fichiers originaux en haute définition (et la confirmation qu'elle en détient les droits, notamment pour les photos de studio), ainsi que des photos des ruchers de Katiola, de la récolte, du miel crémeux, de la cire, des seaux de vrac et du coffret. La photo du stand (paniers cadeaux) n'est plus associée au « Coffret découverte », faute de correspondance vérifiable.
 
 ### Remplacer une photo
 
-- **Photos de produits** : Administration → Produits → fiche → *Images* (JPEG, PNG ou WebP, ré-encodées automatiquement) ; cocher *Image principale* puis supprimer l'ancienne.
-- **Photos des pages** (accueil, Notre histoire, Professionnels) : déposer le fichier WebP dans `public/assets/img/photos/` et mettre à jour son entrée dans `app/config/photos.php` (dimensions, texte alternatif, origine ; pour une photo de l'entreprise : `'origin' => 'company'`).
+- **Photos de produits** : Administration → Produits → fiche → *Photos* → *Remplacer le fichier* (la position et la photo principale sont conservées).
+- **Galeries, photo de l'histoire** : Administration → Photos de l'entreprise.
+- **Bannière de la page Professionnels** : photo du stand (`app/config/photos.php`), seule image de page encore fixée dans le code.

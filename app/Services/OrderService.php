@@ -13,11 +13,12 @@ use App\Core\Log;
  */
 final class OrderService
 {
-    public const STATUSES = ['pending_confirmation', 'pending_payment', 'paid', 'preparing', 'shipped', 'delivered', 'cancelled', 'refunded'];
+    public const STATUSES = ['pending_confirmation', 'pending_payment', 'deposit_paid', 'paid', 'preparing', 'shipped', 'delivered', 'cancelled', 'refunded'];
 
     public const TRANSITIONS = [
         'pending_confirmation' => ['preparing', 'cancelled'],
-        'pending_payment' => ['paid', 'cancelled'],
+        'pending_payment' => ['paid', 'deposit_paid', 'cancelled'],
+        'deposit_paid' => ['preparing', 'paid', 'cancelled'],
         'paid' => ['preparing', 'cancelled', 'refunded'],
         'preparing' => ['shipped', 'delivered', 'cancelled'],
         'shipped' => ['delivered'],
@@ -116,24 +117,42 @@ final class OrderService
                 }
                 $isPickup = (int) $zone['is_pickup'] === 1;
                 $method = (string) $data['payment_method'];
-                $allowed = array_column(PaymentService::availableMethods($zone), 'code');
-                if (!in_array($method, $allowed, true)) {
-                    throw new OrderException([t('order.method_unavailable')]);
-                }
                 $min = Settings::int('min_order_amount');
                 if ($min > 0 && $summary['subtotal'] < $min) {
                     throw new OrderException([t('order.min_amount', ['amount' => money($min)])]);
                 }
                 $quote = self::quote($summary, $zone);
+                $wholesale = PaymentPolicy::isWholesale($quote['subtotal'] - $quote['discount']);
+                // Moyens compatibles avec cette commande : zone, montant (minimum / maximum par moyen), commande en gros, professionnel autorisé.
+                $allowed = array_column(PaymentService::availableMethods($zone, $quote['total'], $userId, $wholesale), 'code');
+                if (!in_array($method, $allowed, true)) {
+                    throw new OrderException([t('order.method_unavailable')]);
+                }
                 if ($expectedTotal === null || $expectedTotal !== $quote['total']) {
                     throw new OrderException([t('order.total_changed', ['total' => money($quote['total'])])], $quote['total']);
                 }
 
                 $now = gmdate('Y-m-d H:i:s');
-                // cod : confirmation par téléphone ; manual : paiement hors site, réception confirmée par l'équipe (aucune annulation automatique) ;
+                // cod : confirmation par téléphone, encaissement confirmé à la livraison ; invoice : professionnel autorisé, paiement à échéance ;
+                // manual : paiement hors site, réception confirmée par l'équipe (aucune annulation automatique) ;
                 // gateway : paiement en ligne chez le prestataire, délai limité.
                 $kind = PaymentMethods::find($method)['kind'] ?? ($method === 'demo' ? 'gateway' : 'cod');
-                $online = $kind !== 'cod';
+                $online = !in_array($kind, ['cod', 'invoice'], true);
+                $terms = match ($kind) { 'cod' => 'cod', 'invoice' => 'invoice', default => 'full' };
+                $deposit = null;
+                if (($data['pay_mode'] ?? 'full') === 'deposit') {
+                    $deposit = PaymentPolicy::depositAmount($quote['total']);
+                    if ($deposit === null || !PaymentPolicy::depositKind($kind)) {
+                        throw new OrderException([t('order.deposit_unavailable')]);
+                    }
+                    $terms = 'deposit';
+                }
+                $balanceDue = null;
+                if ($terms === 'invoice') {
+                    $balanceDue = gmdate('Y-m-d H:i:s', time() + 86400 * max(0, PaymentPolicy::invoice($userId, $quote['total'])['days']));
+                } elseif ($terms === 'deposit' && Settings::int('deposit_balance_days') > 0) {
+                    $balanceDue = gmdate('Y-m-d H:i:s', time() + 86400 * Settings::int('deposit_balance_days'));
+                }
                 $number = 'MPCI-' . gmdate('Ymd') . '-' . strtoupper(bin2hex(random_bytes(4)));
                 $orderId = DB::insert('orders', [
                     'number' => $number,
@@ -142,7 +161,12 @@ final class OrderService
                     'user_id' => $userId,
                     'status' => $online ? 'pending_payment' : 'pending_confirmation',
                     'payment_method' => $method,
-                    'payment_status' => $online ? 'pending' : 'unpaid',
+                    'payment_status' => match ($terms) { 'cod' => 'cod', 'invoice' => 'deferred', default => 'pending' },
+                    'payment_terms' => $terms,
+                    'customer_type' => PaymentPolicy::customerType($userId),
+                    'is_wholesale' => $wholesale ? 1 : 0,
+                    'deposit_amount' => $deposit,
+                    'balance_due_at' => $balanceDue,
                     'locale' => \App\Core\Lang::get(),
                     'customer_first_name' => $data['first_name'],
                     'customer_last_name' => $data['last_name'],
@@ -198,7 +222,8 @@ final class OrderService
                 DB::insert('order_status_history', [
                     'order_id' => $orderId, 'from_status' => null,
                     'to_status' => $online ? 'pending_payment' : 'pending_confirmation',
-                    'note' => 'Commande créée (' . payment_method_label($method) . ').', 'user_id' => null, 'created_at' => $now,
+                    'note' => 'Commande créée (' . payment_method_label($method) . ($terms === 'deposit' ? ', acompte de ' . money((int) $deposit) : '')
+                        . ($terms === 'invoice' ? ', paiement sur facture' : '') . ($wholesale ? ', commande en gros' : '') . ').', 'user_id' => null, 'created_at' => $now,
                 ]);
                 CartService::clear((int) $cart['id']);
                 return DB::one('SELECT * FROM orders WHERE id = ?', [$orderId]);
@@ -226,66 +251,103 @@ final class OrderService
         return ['status' => 'created', 'order' => $order, 'token' => $token];
     }
 
-    /** Transitions autorisées pour une commande donnée. */
-    public static function allowedTransitions(array $order): array
+    /**
+     * Transitions autorisées pour une commande donnée, règles de paiement comprises.
+     * « Acompte reçu » n'est jamais choisi à la main : il découle d'un encaissement enregistré.
+     */
+    public static function allowedTransitions(array $order, bool $fromLedger = false): array
     {
         $next = self::TRANSITIONS[$order['status']] ?? [];
-        return array_values(array_filter($next, static function (string $to) use ($order): bool {
-            if ($to === 'refunded') {
-                return $order['payment_status'] === 'paid';
+        return array_values(array_filter($next, static function (string $to) use ($order, $fromLedger): bool {
+            if ($to === 'deposit_paid') {
+                return $fromLedger;
             }
-            if ($order['status'] === 'preparing' && $to === 'delivered') {
-                return (int) $order['is_pickup'] === 1;
+            if ($to === 'refunded') {
+                return $fromLedger || (int) $order['amount_paid'] - (int) $order['amount_refunded'] > 0;
+            }
+            if ($order['status'] === 'deposit_paid' && $to === 'preparing') {
+                return Settings::bool('deposit_allows_preparation');
+            }
+            if ($order['status'] === 'preparing' && in_array($to, ['shipped', 'delivered'], true)) {
+                return self::canShip($order) && ($to === 'shipped' || (int) $order['is_pickup'] === 1);
             }
             return true;
         }));
     }
 
     /**
+     * Expédition : un paiement intégral anticipé doit être encaissé ; avec un acompte, le solde aussi, sauf si
+     * l'entreprise encaisse le solde à la livraison. Paiement à la livraison et facture autorisée : expédition possible.
+     */
+    public static function canShip(array $order): bool
+    {
+        return match ($order['payment_terms']) {
+            'full' => (int) $order['amount_paid'] >= (int) $order['total'],
+            'deposit' => (int) $order['amount_paid'] >= (int) $order['total'] || !Settings::bool('deposit_balance_before_shipping'),
+            default => true,
+        };
+    }
+
+    /**
      * Change le statut (contrôle des transitions + verrou optimiste). Restitue stock et code promo à l'annulation.
      * @throws \DomainException
      */
-    public static function transition(int $orderId, string $to, ?int $userId, string $note = ''): array
+    /**
+     * @param array{from_ledger?:bool, collected?:bool, reference?:string} $opts
+     *   collected : à la livraison, l'équipe confirme l'encaissement du reste dû (sinon la commande reste « à encaisser »).
+     */
+    public static function transition(int $orderId, string $to, ?int $userId, string $note = '', array $opts = []): array
     {
-        return DB::transaction(static function () use ($orderId, $to, $userId, $note): array {
+        return DB::transaction(static function () use ($orderId, $to, $userId, $note, $opts): array {
             $order = self::find($orderId);
             if ($order === null) {
                 throw new \DomainException('Commande introuvable.');
             }
             $from = $order['status'];
-            if (!in_array($to, self::allowedTransitions($order), true)) {
+            $fromLedger = (bool) ($opts['from_ledger'] ?? false);
+            if (!in_array($to, self::allowedTransitions($order, $fromLedger), true)) {
                 throw new \DomainException(sprintf('Transition impossible : « %s » → « %s ».', status_label($from), status_label($to)));
+            }
+            // « Payée » saisi par l'équipe = encaissement du reste dû, inscrit au journal (qui fait avancer la commande).
+            if ($to === 'paid' && !$fromLedger && PaymentLedger::balance($order) > 0) {
+                return PaymentLedger::record($orderId, PaymentLedger::balance($order), (string) $order['payment_method'], $opts['reference'] ?? null, $userId,
+                    $note !== '' ? $note : 'Paiement reçu, confirmé par l\'équipe.');
+            }
+            // « Remboursée » saisi par l'équipe = remboursement du montant encore remboursable, avec motif.
+            if ($to === 'refunded' && !$fromLedger && PaymentLedger::refundable($order) > 0) {
+                return PaymentLedger::refund($orderId, PaymentLedger::refundable($order), $note !== '' ? $note : 'Remboursement intégral',
+                    (string) $order['payment_method'], $opts['reference'] ?? null, $userId);
             }
             $now = gmdate('Y-m-d H:i:s');
             $changes = ['status' => $to, 'updated_at' => $now];
             $extraNote = '';
             if ($to === 'paid') {
-                $changes['payment_status'] = 'paid';
                 $changes['paid_at'] = $now;
                 $changes['expires_at'] = null;
+            } elseif ($to === 'deposit_paid') {
+                $changes['expires_at'] = null;
             } elseif ($to === 'delivered') {
-                if ($order['payment_method'] === 'cod' && $order['payment_status'] !== 'paid') {
-                    $changes['payment_status'] = 'paid';
-                    $changes['paid_at'] = $now;
-                    $extraNote = ' Paiement à la livraison encaissé.';
-                }
                 DB::run('UPDATE shipments SET delivered_at = ?, updated_at = ? WHERE order_id = ?', [$now, $now, $orderId]);
             } elseif ($to === 'shipped') {
                 self::upsertShipment($orderId, ['shipped_at' => $now]);
             } elseif ($to === 'cancelled') {
                 $changes['cancelled_at'] = $now;
                 $changes['expires_at'] = null;
-                if ($order['payment_status'] === 'pending') {
-                    $changes['payment_status'] = 'unpaid';
+                if ((int) $order['amount_paid'] - (int) $order['amount_refunded'] > 0) {
+                    // Aucun acompte n'est conservé automatiquement : l'équipe traite le remboursement selon les conditions de vente.
+                    $extraNote = ' Montant encaissé : ' . money((int) $order['amount_paid'] - (int) $order['amount_refunded']) . ' — remboursement à traiter selon les conditions de vente.';
                 }
-            } elseif ($to === 'refunded') {
-                $changes['payment_status'] = 'refunded';
             }
             $n = DB::update('orders', $changes, 'id = ? AND status = ?', [$orderId, $from]);
             if ($n !== 1) {
                 throw new \DomainException('La commande a été modifiée entre-temps. Rechargez la page.');
             }
+            if ($to === 'delivered' && ($opts['collected'] ?? false) && PaymentLedger::balance($order) > 0) {
+                PaymentLedger::record($orderId, PaymentLedger::balance($order), $order['payment_terms'] === 'invoice' ? 'transfer' : (string) $order['payment_method'],
+                    $opts['reference'] ?? null, $userId, 'Encaissement confirmé à la livraison.');
+            }
             if ($to === 'cancelled') {
+                PaymentLedger::refreshStatus($orderId);
                 self::restoreStock($order, $userId);
                 if ($order['promo_code_id'] !== null && (int) $order['promo_released'] === 0) {
                     PromoService::release((int) $order['promo_code_id']);

@@ -44,7 +44,7 @@ return static function (): void {
             [['250 g', '250 g', 'pot-verre', 250, 'MPCI-LIQ-250', 2500, 40], ['500 g', '500 g', 'pot-verre', 500, 'MPCI-LIQ-500', 4500, 30], ['1 kg', '1 kg', 'pot-plastique', 1000, 'MPCI-LIQ-1000', 8000, 15]],
         ],
         [
-            'miels', 'miel-cremeux', 1, ['wm-miel-cremeux'],
+            'miels', 'miel-cremeux', 1, [],
             ['Miel crémeux', 'Un miel à la texture fine et onctueuse, qui se tartine sans couler.',
              "Notre miel de Katiola, travaillé pour obtenir une cristallisation fine et régulière : une texture crémeuse, idéale à tartiner.\n\n**100 % bio et 100 % miel**, sans aucun ajout. Certifié conforme aux normes internationales par un laboratoire habilité par l'INAO.",
              "Ruchers de la région de Katiola, centre-nord de la Côte d'Ivoire.",
@@ -58,7 +58,7 @@ return static function (): void {
             [['250 g', '250 g', 'pot-verre', 250, 'MPCI-CRE-250', 3000, 20], ['500 g', '500 g', 'pot-verre', 500, 'MPCI-CRE-500', 5500, 3]],
         ],
         [
-            'miels', 'miel-vrac-professionnels', 0, ['wm-filet-miel'],
+            'miels', 'miel-vrac-professionnels', 0, [],
             ['Miel en vrac pour professionnels', 'Notre miel en seau, pour la restauration, la pâtisserie et la transformation.',
              "Le même miel 100 % bio de Katiola, conditionné en grands formats pour les hôtels, restaurants, pâtisseries, boulangeries et artisans.\n\nPour des volumes réguliers, [demandez un devis](/commandes-professionnelles).",
              "Ruchers de la région de Katiola, centre-nord de la Côte d'Ivoire.",
@@ -72,7 +72,7 @@ return static function (): void {
             [['5 kg', '5 kg', 'bidon', 5000, 'MPCI-VRAC-5', 37500, 6], ['25 kg', '25 kg', 'bidon', 25000, 'MPCI-VRAC-25', 175000, 0]],
         ],
         [
-            'cire-d-abeille', 'pain-de-cire-d-abeille', 0, ['wm-pains-cire'],
+            'cire-d-abeille', 'pain-de-cire-d-abeille', 0, [],
             ['Pain de cire d\'abeille', 'Cire d\'abeille de nos ruchers, fondue et filtrée.',
              "La cire produite par nos abeilles, récupérée lors de la récolte puis fondue et filtrée pour être moulée en pains.\n\nUne matière première naturelle pour vos créations.",
              "Ruchers de la région de Katiola, centre-nord de la Côte d'Ivoire.",
@@ -86,7 +86,7 @@ return static function (): void {
             [['250 g', '250 g', 'pain-cire', 250, 'MPCI-CIRE-250', 3500, 25], ['1 kg', '1 kg', 'pain-cire', 1000, 'MPCI-CIRE-1000', 12000, 8]],
         ],
         [
-            'coffrets', 'coffret-decouverte', 1, ['fb-stand-coffrets'],
+            'coffrets', 'coffret-decouverte', 1, [],
             ['Coffret découverte', 'Un miel liquide, un miel crémeux et un pain de cire, réunis dans un coffret.',
              "Le meilleur de nos ruchers dans un coffret à offrir : notre miel liquide toutes fleurs, notre miel crémeux et un pain de cire d'abeille.",
              "Ruchers de la région de Katiola, centre-nord de la Côte d'Ivoire.",
@@ -106,15 +106,18 @@ return static function (): void {
         $pid = DB::insert('products', [
             'category_id' => $catIds[$cat], 'name' => $name, 'slug' => $slug, 'short_description' => $short,
             'description' => $desc, 'origin' => $origin, 'usage_tips' => $usage, 'storage_tips' => $storage,
-            'is_active' => 1, 'is_featured' => $featured, 'is_demo' => 0, 'meta_title' => null, 'meta_description' => null,
+            'is_active' => 1, 'status' => 'published', 'is_featured' => $featured, 'is_demo' => 0, 'meta_title' => null, 'meta_description' => null,
+            // Points à vérifier signalés dans l'administration (aucune photo ni référence n'est inventée).
+            'review_note' => $image === [] ? 'Photo à fournir : aucune photo de ce produit n\'a été trouvée sur la page Facebook de l\'entreprise.'
+                : ($slug === 'miel-liquide-toutes-fleurs' ? 'Conditionnement à vérifier : les photos Facebook montrent des bouteilles, les formats indiquent « pot en verre » et « pot plastique ».' : null),
             'created_at' => $now, 'updated_at' => $now, 'deleted_at' => null,
         ]);
         I18n::save('product', $pid, ['name' => $nameEn, 'short_description' => $shortEn, 'description' => $descEn, 'origin' => $originEn, 'usage_tips' => $usageEn, 'storage_tips' => $storageEn]);
-        // Photos du registre app/config/photos.php (photos de l'entreprise ou photos d'illustration créditées).
+        // Photos de l'entreprise (page Facebook officielle, registre app/config/photos.php), seulement quand elles montrent ce produit.
         foreach ($image as $order => $photoKey) {
             $photo = photos()[$photoKey];
             DB::insert('product_images', ['product_id' => $pid, 'path' => '/assets/img/photos/' . $photo['file'],
-                'alt' => ($photo['origin'] === 'illustration' ? "Photo d'illustration : " : '') . $photo['alt']['fr'], 'sort_order' => $order, 'is_demo' => 0, 'created_at' => $now]);
+                'alt' => $photo['alt']['fr'], 'sort_order' => $order, 'is_demo' => 0, 'source_note' => 'Page Facebook de l\'entreprise', 'created_at' => $now]);
         }
         foreach ($variants as $i => [$label, $labelEn, $format, $grams, $sku, $price, $stock]) {
             $vid = DB::insert('product_variants', [

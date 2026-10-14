@@ -64,7 +64,9 @@ final class Catalog
             array_push($params, $like, $like, $like, $like);
         }
         if (!empty($f['categorie'])) {
-            $where[] = 't.category_slug = ?';
+            // Une catégorie principale inclut les produits de ses sous-catégories.
+            $where[] = '(t.category_slug = ? OR t.category_id IN (SELECT sc.id FROM categories sc JOIN categories pc ON pc.id = sc.parent_id WHERE pc.slug = ?))';
+            $params[] = (string) $f['categorie'];
             $params[] = (string) $f['categorie'];
         }
         if (!empty($f['format'])) {
@@ -131,7 +133,10 @@ final class Catalog
     public static function categories(): array
     {
         return I18n::localize('category', DB::all(
-            'SELECT c.*, (SELECT COUNT(*) FROM (' . self::BASE_SELECT . ') t WHERE t.category_id = c.id AND ' . self::publicWhere() . ') AS product_count
+            'SELECT c.*, (SELECT COUNT(*) FROM (' . self::BASE_SELECT . ') t WHERE (t.category_id = c.id OR t.category_id IN (SELECT sc.id FROM categories sc WHERE sc.parent_id = c.id)) AND ' . self::publicWhere() . ') AS product_count,
+               (SELECT i.path FROM product_images i JOIN products p2 ON p2.id = i.product_id
+                 WHERE (p2.category_id = c.id OR p2.category_id IN (SELECT sc2.id FROM categories sc2 WHERE sc2.parent_id = c.id)) AND p2.is_active = 1 AND p2.deleted_at IS NULL
+                 ORDER BY p2.is_featured DESC, p2.id, i.sort_order, i.id LIMIT 1) AS image_path
              FROM categories c WHERE c.is_active = 1 ORDER BY c.sort_order, c.name'
         ));
     }

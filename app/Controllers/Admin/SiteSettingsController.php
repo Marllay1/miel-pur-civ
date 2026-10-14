@@ -94,7 +94,18 @@ final class SiteSettingsController extends Base
         if ($slug === 'langues' && $values['lang_default'] === 'en' && $values['lang_en_enabled'] !== '1') {
             $errors['lang_default'] = 'L\'anglais ne peut être la langue par défaut que si la version anglaise est proposée.';
         }
-        if ($slug === 'commerce' && isset($values['payment_timeout_minutes']) && (int) $values['payment_timeout_minutes'] < 5) {
+        if ($slug === 'paiement') {
+            $dv = (int) ($values['deposit_value'] ?? 0);
+            if (($values['deposit_mode'] ?? '') === 'percent' && ($dv < 1 || $dv > 99)) {
+                $errors['deposit_value'] = 'Acompte en pourcentage : entre 1 et 99.';
+            } elseif (($values['deposit_mode'] ?? '') === 'fixed' && $dv < 1) {
+                $errors['deposit_value'] = 'Acompte fixe : montant supérieur à 0.';
+            }
+            if ((int) ($values['invoice_default_days'] ?? 0) > 365 || (int) ($values['deposit_balance_days'] ?? 0) > 365) {
+                $errors['invoice_default_days'] = 'Délai de paiement : 365 jours au maximum.';
+            }
+        }
+        if ($slug === 'paiement' && isset($values['payment_timeout_minutes']) && (int) $values['payment_timeout_minutes'] < 5) {
             $errors['payment_timeout_minutes'] = 'Délai de paiement : 5 minutes minimum.';
         }
         if ($slug === 'reseaux' && $values['social_other'] !== '' && trim($values['social_other_label']) === '') {

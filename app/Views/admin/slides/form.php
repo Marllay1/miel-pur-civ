@@ -24,6 +24,8 @@ $action = $slide ? '/admin/carrousel/' . (int) $slide['id'] : '/admin/carrousel'
     <img id="pv-mobile" class="image-preview" alt="Aperçu de l'image mobile (non enregistrée)" hidden>
     <?= field_error($errors, 'image_mobile') ?>
   </div>
+  <div class="field"><label for="f-source">Provenance de la photo <span class="hint">ex. Page Facebook, publication du 12/03/2025</span></label><input id="f-source" name="source_note" maxlength="255" value="<?= $val('source_note') ?>"<?= isset($errors['source_note']) ? ' aria-invalid="true"' : '' ?>><?= field_error($errors, 'source_note') ?></div>
+  <div class="field"><label class="check"><input type="checkbox" name="source_confirm" value="1"<?= !empty($old['source_confirm']) ? ' checked' : '' ?>> Photo issue des ressources de l'entreprise (page Facebook officielle ou photo fournie) — obligatoire pour toute nouvelle image</label><?= field_error($errors, 'source_confirm') ?></div>
   <div class="field"><label for="f-alt">Description de l'image (texte alternatif)</label><input id="f-alt" name="image_alt" maxlength="200" value="<?= $val('image_alt') ?>"></div>
   <div class="field"><label for="f-alt_en">Description de l'image (anglais)</label><input id="f-alt_en" name="image_alt_en" maxlength="200" value="<?= $val('image_alt_en') ?>"></div>
   <div class="field"><label for="f-title">Titre <span class="hint">court (120 caractères maximum)</span></label><input id="f-title" name="title" required maxlength="120" value="<?= $val('title') ?>"<?= isset($errors['title']) ? ' aria-invalid="true"' : '' ?>><?= field_error($errors, 'title') ?></div>

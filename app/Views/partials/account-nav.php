@@ -5,6 +5,7 @@ $u = Auth::user();
 $items = [
     ['/compte', 'home', t('account.title')],
     ['/compte/commandes', 'receipt', t('account.orders')],
+    ['/compte/messages', 'chat', t('account.messages')],
     ['/compte/adresses', 'pin', t('account.addresses')],
     ['/compte/profil', 'person', t('account.profile')],
     ['/compte/mot-de-passe', 'lock', t('account.password')],

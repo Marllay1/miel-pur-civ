@@ -1,9 +1,14 @@
 <?php
 use App\Core\View;
-/** @var array $summary @var array $zones @var ?array $zone @var array $quote @var array $methods @var array $methodsByZone @var array $addresses @var array $errors @var array $old @var string $idempotencyKey */
+/** @var array $summary @var array $zones @var ?array $zone @var array $quote @var array $methods @var array $methodsByZone @var array $depositByZone @var bool $wholesale @var ?array $pro @var ?array $invoice @var array $addresses @var array $errors @var array $old @var string $idempotencyKey */
 $val = static fn (string $k, string $d = '') => e($old[$k] ?? $d);
 $selectedZone = (int) ($old['zone_id'] ?? 0);
 $selectedMethod = (string) ($old['payment_method'] ?? '');
+$payMode = ($old['pay_mode'] ?? 'full') === 'deposit' ? 'deposit' : 'full';
+$depositTerms = \App\Services\PaymentPolicy::terms('deposit_terms');
+$invoiceTerms = \App\Services\PaymentPolicy::terms('invoice_terms');
+$cancellation = \App\Services\PaymentPolicy::terms('cancellation_policy');
+$currentDeposit = $depositByZone[$selectedZone] ?? null;
 ?>
 <div class="wrap page-head">
   <h1><?= e(t('checkout.title')) ?></h1>
@@ -17,7 +22,7 @@ $selectedMethod = (string) ($old['payment_method'] ?? '');
 
 <div class="wrap checkout-layout">
   <form class="checkout-form" action="/commande" method="post" novalidate data-checkout
-        data-estimate-url="/commande/estimation" data-methods-by-zone="<?= e(json_encode($methodsByZone)) ?>">
+        data-estimate-url="/commande/estimation" data-methods-by-zone="<?= e(json_encode($methodsByZone)) ?>" data-deposit-by-zone="<?= e(json_encode($depositByZone ?: new stdClass())) ?>">
     <?= csrf_field() ?>
     <input type="hidden" name="idempotency_key" value="<?= e($idempotencyKey) ?>">
     <input type="hidden" name="expected_total" value="<?= e($expectedTotal) ?>" data-expected-total>
@@ -114,11 +119,16 @@ $selectedMethod = (string) ($old['payment_method'] ?? '');
 
     <fieldset class="checkout-step" data-step="3">
       <legend><?= e(t('checkout.payment')) ?></legend>
+      <?php if ($pro !== null): ?>
+      <p class="notice notice-green"><?= icon('info') ?> <span><?= e(t('checkout.pro_account', ['company' => $pro['company']])) ?>
+        <?php if ((int) $pro['invoice_allowed'] === 1 && $invoice !== null && $invoice['remaining'] !== null): ?><?= e(t('checkout.invoice_limit', ['amount' => money((int) $invoice['remaining'])])) ?><?php endif; ?></span></p>
+      <?php endif; ?>
+      <?php if ($wholesale): ?><p class="notice"><?= icon('info') ?> <?= e(t('checkout.wholesale')) ?></p><?php endif; ?>
       <div class="group" id="f-payment_method">
         <?php if (!$methods): ?><p class="cell"><?= e(t('checkout.no_method')) ?></p><?php endif; ?>
         <?php foreach ($methods as $code => $m): ?>
         <label class="choice" data-method="<?= e($code) ?>">
-          <input type="radio" name="payment_method" value="<?= e($code) ?>" required<?= $selectedMethod === $code ? ' checked' : '' ?><?= $m['needs_phone'] ? ' data-needs-phone="1"' : '' ?>>
+          <input type="radio" name="payment_method" value="<?= e($code) ?>" required<?= $selectedMethod === $code ? ' checked' : '' ?><?= $m['needs_phone'] ? ' data-needs-phone="1"' : '' ?><?= !empty($m['deposit']) ? ' data-deposit-ok="1"' : '' ?>>
           <?= !empty($m['logos']) ? '<span class="choice-logos">' . payment_logos($m['logos'], $m['label']) . '</span>' : pay_logo($code) ?>
           <span class="choice-body">
             <span class="choice-title"><?= e($m['label']) ?></span>
@@ -139,6 +149,23 @@ $selectedMethod = (string) ($old['payment_method'] ?? '');
         <?php endforeach; ?>
       </div>
       <?= field_error($errors, 'payment_method') ?>
+      <?php if ($depositByZone): ?>
+      <div class="pay-mode" data-pay-mode<?= $currentDeposit === null ? ' hidden' : '' ?>>
+        <p class="group-title" id="pay-mode-legend"><?= e(t('checkout.pay_mode')) ?></p>
+        <div class="group" role="radiogroup" aria-labelledby="pay-mode-legend">
+          <label class="choice"><input type="radio" name="pay_mode" value="full"<?= $payMode === 'full' ? ' checked' : '' ?>>
+            <span class="choice-body"><span class="choice-title"><?= e(t('checkout.pay_full')) ?></span></span><span class="choice-check"><?= icon('check') ?></span></label>
+          <label class="choice"><input type="radio" name="pay_mode" value="deposit"<?= $payMode === 'deposit' ? ' checked' : '' ?>>
+            <span class="choice-body"><span class="choice-title"><?= e(t('checkout.pay_deposit')) ?></span>
+              <span class="choice-desc"><?= e(t('checkout.deposit_now')) ?> <strong data-deposit-amount><?= e($currentDeposit['deposit'] ?? '') ?></strong> · <?= e(t('checkout.deposit_balance')) ?> <strong data-deposit-balance><?= e($currentDeposit['balance'] ?? '') ?></strong></span>
+              <?php if ($depositTerms !== ''): ?><span class="choice-desc"><?= e($depositTerms) ?></span><?php endif; ?></span>
+            <span class="choice-check"><?= icon('check') ?></span></label>
+        </div>
+        <p class="small muted"><?= e(t('checkout.deposit_methods')) ?></p>
+        <?= field_error($errors, 'pay_mode') ?>
+      </div>
+      <?php endif; ?>
+      <?php if ($invoiceTerms !== '' && isset($methods['invoice'])): ?><div class="notice small" data-invoice-terms><?= icon('info') ?> <div><strong><?= e(t('checkout.invoice_terms')) ?></strong><br><?= nl2br(e($invoiceTerms)) ?></div></div><?php endif; ?>
       <p class="group-footer"><?= icon('lock', 'icon icon-sm') ?> <?= e(t('checkout.secure_providers')) ?></p>
       <div class="step-actions">
         <button class="btn btn-gray" type="button" data-step-prev><?= e(t('checkout.back')) ?></button>
@@ -153,6 +180,9 @@ $selectedMethod = (string) ($old['payment_method'] ?? '');
           <label for="f-note"><?= e(t('checkout.note')) ?> <span class="hint"><?= e(t('form.optional')) ?></span></label>
           <textarea id="f-note" name="note" rows="3" maxlength="1000"><?= $val('note') ?></textarea>
         </div>
+        <?php if ($cancellation !== ''): ?>
+        <div class="notice small"><?= icon('info') ?> <div><strong><?= e(t('checkout.cancellation')) ?></strong><br><?= nl2br(e($cancellation)) ?></div></div>
+        <?php endif; ?>
         <label class="check" id="f-cgv">
           <input type="checkbox" name="cgv" value="1" required<?= !empty($old['cgv']) ? ' checked' : '' ?><?= aria_invalid($errors, 'cgv') ?>>
           <span><?= e(t('checkout.accept_before')) ?> <a href="/conditions-generales-de-vente" target="_blank"><?= e(t('footer.terms')) ?></a>.</span>

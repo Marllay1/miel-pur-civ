@@ -41,10 +41,17 @@ final class Notifier
             $manual = PaymentMethods::find($order['payment_method']);
             if ($manual !== null && $manual['kind'] === 'manual') {
                 // Paiement manuel : instructions saisies en administration ; la commande n'est confirmée qu'après vérification par l'équipe.
-                $payment = t('mail.placed.manual', ['method' => payment_method_label($order['payment_method']), 'total' => money((int) $order['total']), 'number' => $order['number']])
+                $payment = t('mail.placed.manual', ['method' => payment_method_label($order['payment_method']), 'total' => money(PaymentLedger::dueNow($order)), 'number' => $order['number']])
                     . ((string) $manual['receiver_number'] !== '' ? "\n" . t('order.manual_receiver') . ' : ' . $manual['receiver_number'] : '')
                     . ((string) $manual['beneficiary'] !== '' ? "\n" . t('order.manual_beneficiary') . ' : ' . $manual['beneficiary'] : '')
                     . (PaymentMethods::instructions($manual) !== '' ? "\n" . PaymentMethods::instructions($manual) : '');
+            }
+            if ($order['payment_terms'] === 'invoice') {
+                $payment = t('mail.placed.invoice', ['date' => $order['balance_due_at'] ? date_fr($order['balance_due_at'], false) : '—']);
+            }
+            if ($order['payment_terms'] === 'deposit') {
+                $payment .= "\n" . t('mail.placed.deposit', ['deposit' => money((int) $order['deposit_amount']), 'balance' => money((int) $order['total'] - (int) $order['deposit_amount'])])
+                    . (PaymentPolicy::terms('deposit_terms') !== '' ? "\n" . PaymentPolicy::terms('deposit_terms') : '');
             }
             $body = t('mail.hello', ['name' => $order['customer_first_name']]) . "\n\n"
                 . t('mail.placed.intro', ['number' => $order['number']]) . "\n\n"
@@ -63,7 +70,11 @@ final class Notifier
             self::in('fr', static function () use ($order, $admin): void {
                 Mailer::send($admin, 'Nouvelle commande ' . $order['number'] . ' – ' . money((int) $order['total']),
                     "Nouvelle commande {$order['number']} ({$order['customer_first_name']} {$order['customer_last_name']}, {$order['customer_phone']}).\n"
-                    . 'Paiement : ' . payment_method_label($order['payment_method']) . "\nStatut : " . status_label($order['status']) . "\n" . base_url() . '/admin/commandes/' . $order['id']);
+                    . 'Paiement : ' . payment_method_label($order['payment_method'])
+                    . ($order['payment_terms'] === 'deposit' ? ' (acompte ' . money((int) $order['deposit_amount']) . ')' : '')
+                    . ($order['payment_terms'] === 'invoice' ? ' (paiement sur facture, échéance ' . ($order['balance_due_at'] ? date_fr($order['balance_due_at'], false) : '—') . ')' : '')
+                    . ((int) $order['is_wholesale'] === 1 ? "\nCommande en gros." : '')
+                    . "\nStatut : " . status_label($order['status']) . "\n" . base_url() . '/admin/commandes/' . $order['id']);
             });
         }
     }

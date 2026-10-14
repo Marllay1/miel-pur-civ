@@ -167,6 +167,20 @@ final class AccountController
         ]);
     }
 
+    /** Messages envoyés depuis le formulaire de contact en étant connecté, avec les réponses envoyées par l'équipe. */
+    public function messages(Request $r): Response
+    {
+        $messages = DB::all('SELECT id, reason, subject, message, status, created_at FROM contact_messages WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 100', [(int) Auth::id()]);
+        $replies = [];
+        if ($messages) {
+            $ids = array_map('intval', array_column($messages, 'id'));
+            foreach (DB::all('SELECT message_id, body, created_at FROM message_replies WHERE message_id IN (' . implode(',', $ids) . ') ORDER BY id') as $x) {
+                $replies[(int) $x['message_id']][] = $x;
+            }
+        }
+        return view('account/messages', ['messages' => $messages, 'replies' => $replies, 'pageTitle' => t('account.messages'), 'noindex' => true]);
+    }
+
     public function profile(Request $r, array $errors = [], ?array $old = null, int $status = 200): Response
     {
         return view('account/profile', ['user' => Auth::user(), 'errors' => $errors, 'old' => $old ?? Auth::user(), 'pageTitle' => t('account.profile'), 'noindex' => true], $status);

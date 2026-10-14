@@ -13,12 +13,13 @@ use App\Core\Lang;
  * Un moyen n'est présenté aux clients que s'il est OPÉRATIONNEL :
  *  - cod (à la livraison)   : activé ;
  *  - gateway (prestataire)  : activé ET clés du prestataire présentes dans .env (intégration technique réelle) ;
- *  - manual (paiement hors site, confirmé par l'équipe) : activé ET numéro de réception ou instructions renseignés.
+ *  - manual (paiement hors site, confirmé par l'équipe) : activé ET numéro de réception ou instructions renseignés ;
+ *  - invoice (sur facture) : activé, et proposé uniquement aux clients professionnels autorisés par un administrateur.
  * La présence d'un logo ne vaut jamais intégration : seuls les moyens opérationnels affichent leur logo.
  */
 final class PaymentMethods
 {
-    public const KINDS = ['cod' => 'Paiement à la livraison', 'gateway' => 'Prestataire intégré', 'manual' => 'Paiement manuel (confirmé par l\'équipe)'];
+    public const KINDS = ['cod' => 'Paiement à la livraison', 'gateway' => 'Prestataire intégré', 'manual' => 'Paiement manuel (confirmé par l\'équipe)', 'invoice' => 'Paiement sur facture (professionnels autorisés)'];
 
     private static ?array $cache = null;
 
@@ -88,6 +89,7 @@ final class PaymentMethods
             'cod' => true,
             'gateway' => self::isConfigured($m),
             'manual' => trim((string) $m['receiver_number']) !== '' || trim((string) $m['instructions']) !== '',
+            'invoice' => true,
             default => false,
         };
     }
@@ -104,7 +106,11 @@ final class PaymentMethods
         if ($m['kind'] === 'manual' && !self::isOperational($m)) {
             return ['missing', 'Activé, mais numéro ou instructions manquants — non proposé'];
         }
-        return ['ok', $m['kind'] === 'manual' ? 'Proposé — paiement manuel, à confirmer par l\'équipe' : 'Proposé aux clients'];
+        return ['ok', match ($m['kind']) {
+            'manual' => 'Proposé — paiement manuel, à confirmer par l\'équipe',
+            'invoice' => 'Proposé aux seuls professionnels autorisés (Clients professionnels)',
+            default => 'Proposé aux clients',
+        }];
     }
 
     /** @return array<string, array> moyens opérationnels, dans l'ordre */
@@ -113,11 +119,20 @@ final class PaymentMethods
         return array_filter(self::all(), [self::class, 'isOperational']);
     }
 
+    /** Montant de commande dans les limites du moyen (minimum / maximum, vides = sans limite). */
+    public static function allowsAmount(array $m, int $total): bool
+    {
+        return ($m['min_amount'] === null || $total >= (int) $m['min_amount']) && ($m['max_amount'] === null || $total <= (int) $m['max_amount']);
+    }
+
     /** Logos des moyens réellement proposés (pied de page, panier, accueil) : [[nom, [logos]], …]. */
     public static function acceptedLogos(): array
     {
         $out = [];
         foreach (self::operational() as $m) {
+            if ($m['kind'] === 'invoice') {
+                continue;
+            }
             $out[] = ['code' => $m['code'], 'name' => self::name($m), 'logos' => self::logos($m)];
         }
         return $out;

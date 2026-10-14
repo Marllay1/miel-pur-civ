@@ -376,6 +376,19 @@
           if (expected) { expected.value = d.total; }
         }).catch(function () {});
     }
+    var depositByZone = {};
+    try { depositByZone = JSON.parse(form.getAttribute('data-deposit-by-zone') || '{}'); } catch (err) { depositByZone = {}; }
+    var payMode = $('[data-pay-mode]', form);
+    // Acompte : proposé si la zone le permet (montant calculé par le serveur) et si le moyen choisi est encaissé avant livraison.
+    function applyDeposit() {
+      if (!payMode) { return; }
+      var z = selectedZone(), checked = $('input[name="payment_method"]:checked', form);
+      var d = z ? depositByZone[z.value] : null;
+      var on = !!d && (!checked || checked.getAttribute('data-deposit-ok') === '1');
+      payMode.hidden = !on;
+      if (d) { setText('[data-deposit-amount]', d.deposit); setText('[data-deposit-balance]', d.balance); }
+      if (!on) { var full = $('input[name="pay_mode"][value="full"]', form); if (full) { full.checked = true; } }
+    }
     function applyMethod() {
       var checked = $('input[name="payment_method"]:checked', form);
       $all('[data-phone-for]', form).forEach(function (box) {
@@ -384,6 +397,7 @@
         var input = $('input', box);
         if (input) { input.required = on; }
       });
+      applyDeposit();
     }
     function applyZone() {
       var z = selectedZone();

@@ -13,17 +13,35 @@ Un seul rôle d'équipe : **Administrateur**, avec accès à toute l'administrat
 1. *Commandes* → onglet **En attente de confirmation** (paiement à la livraison).
 2. Ouvrir la commande, **appeler le client** au numéro affiché pour confirmer adresse et créneau.
 3. *Changer le statut* → **Confirmer / mettre en préparation**. Le client reçoit un e-mail.
-4. Renseigner *Livreur / N° de suivi* si utile, puis **Marquer comme expédiée**, enfin **Marquer comme livrée** (pour un paiement à la livraison, la commande passe automatiquement en « payée »).
-5. Annulation : **Annuler la commande** restitue automatiquement le stock et l'utilisation du code promo. Remboursement : possible uniquement si la commande a été payée.
+4. Renseigner *Livreur / N° de suivi* si utile, puis **Marquer comme expédiée**, enfin **Marquer comme livrée**. Pour un paiement à la livraison, cocher **« encaissement confirmé »** en marquant la commande livrée (ou enregistrer l'encaissement ensuite) : sans cette confirmation, la commande reste « à encaisser » et n'est jamais considérée comme payée. Le récapitulatif imprimable indique au livreur le montant à encaisser.
+5. Annulation : **Annuler la commande** restitue automatiquement le stock et l'utilisation du code promo. Un montant déjà encaissé (acompte…) n'est jamais conservé automatiquement : la commande signale « remboursement à traiter ».
+
+### Paiement d'une commande (encadré *Paiement*)
+
+- Conditions : paiement intégral, **acompte + solde**, à la livraison ou **sur facture** (professionnel autorisé) ; type de client (particulier / professionnel) ; commande en gros.
+- Montants calculés par le serveur : total dû, livraison, acompte demandé, **encaissé**, remboursé, **reste à payer**, échéance.
+- **Enregistrer un encaissement constaté** : montant (jamais plus que le reste dû), moyen (Mobile Money, espèces, virement…), référence de la transaction. À faire uniquement après avoir vu le paiement sur le relevé : une déclaration ou une capture d'écran du client n'est pas une preuve. Quand le client signale un paiement manuel (« J'ai effectué le paiement »), la commande passe en « paiement en cours de vérification » et l'équipe est prévenue.
+- L'enregistrement fait avancer la commande : en attente de paiement → **acompte reçu** → payée. Les paiements en ligne vérifiés chez le prestataire s'inscrivent seuls.
+- **Rembourser** : montant (au plus l'encaissé non remboursé), **motif obligatoire**, moyen, référence ; « déjà effectué » ou « à effectuer » (puis *Marquer effectué*). Remboursement total : la commande passe en « remboursée » ; partiel : « partiellement remboursée ».
+- Expédition : refusée tant que le paiement intégral anticipé n'est pas encaissé ; avec un acompte, selon les Paramètres de paiement (solde avant expédition, ou solde à la livraison).
+
+### Journal des paiements (`/admin/paiements/journal`)
+
+Tous les encaissements et remboursements (date, commande, moyen, montant, référence, motif, auteur), filtrables par type et par période, avec export CSV pour le rapprochement avec les relevés Mobile Money, bancaires et de caisse.
+
+### Clients professionnels (`/admin/professionnels`)
+
+Un compte professionnel se crée à partir d'un compte client existant. Le paiement sur facture n'est proposé que si un administrateur l'a **autorisé** pour ce client, avec son **plafond de crédit** (encours maximum des factures non réglées) et son **délai de paiement** ; l'autorisation est datée et tracée. Le moyen « Paiement sur facture » doit aussi être activé dans *Moyens de paiement*.
 
 Les transitions impossibles (par exemple « livrée » sans passer par « expédiée ») sont refusées. Les **notes internes** ne sont jamais visibles du client ; le *commentaire* de changement de statut l'est. L'export CSV reprend les filtres affichés.
 
 ## Catalogue
 
-- **Produit** : nom, résumé, description (mise en forme simple : ligne vide = paragraphe, `## ` titre, `- ` liste, `**gras**`), origine, utilisations, conservation, SEO. Case *Produit de démonstration* = badge « Démo ».
-- **Variantes** : chaque format (250 g, 500 g, 1 kg, seau…) a sa référence (SKU), son prix en FCFA entiers et son stock. Un produit sans variante active n'apparaît pas sur le site.
+- **Produit** : nom, **référence commerciale** (unique, distincte de l'identifiant technique ; vide = « à compléter »), **statut** (brouillon, publié, désactivé — seul « publié » est visible), catégorie ou sous-catégorie, résumé, description (mise en forme simple : ligne vide = paragraphe, `## ` titre, `- ` liste, `**gras**`), origine, utilisations, conservation, informations complémentaires, SEO, et un **point à vérifier** interne. La liste signale les produits « à vérifier » (photo à fournir, référence à compléter, point ouvert) et l'état du stock (rupture, stock faible).
+- **Catégories** : une catégorie peut avoir une **catégorie parente** (un niveau de sous-catégorie) ; la catégorie principale affiche aussi les produits de ses sous-catégories.
+- **Variantes** : chaque format (250 g, 500 g, 1 kg, seau…) a sa référence (SKU), son poids, son volume, son prix en FCFA entiers, son ancien prix (prix barré, promotion) et son stock. Un produit sans variante active n'apparaît pas sur le site.
 - **Version anglaise** : les fiches produit, catégories, pages, questions de FAQ et zones de livraison ont un encadré *Traduction anglaise* ; chaque format a un champ *Libellé (EN)*. Un champ vide affiche le texte français sur la version anglaise du site (`/en/…`). Les textes de l'accueil se traduisent dans *Contenus → Accueil*. L'administration elle-même reste en français.
-- **Images** : JPEG, PNG ou WebP, 5 Mo maximum, ré-encodées en WebP ; le *texte alternatif* (description de l'image) est obligatoire.
+- **Photos** : uniquement des photos de l'entreprise (page Facebook officielle ou photos fournies par l'entreprise), associées au produit seulement si elles le montrent vraiment. À chaque ajout ou remplacement : confirmation de la provenance et source (ex. « Page Facebook, publication du … »). Plusieurs photos par produit ; la première est la **photo principale** (*Définir comme principale*, flèches ↑ ↓), *Remplacer le fichier*, *Supprimer*. JPEG, PNG ou WebP, 5 Mo maximum, ré-encodées en WebP ; fichiers sur le serveur, chemin en base. Sans photo, le site affiche un visuel neutre (initiale du produit).
 - **Suppression** : le produit est archivé ; les commandes passées conservent nom et prix d'origine.
 - **Stock** : page *Stock* → nouvelle quantité + motif (inventaire, réception, casse). Toutes les variations sont historisées. Si une vente a lieu pendant la saisie, l'ajustement est refusé pour éviter d'écraser la vente.
 - **Codes promo** : pourcentage, montant fixe ou livraison offerte ; panier minimum, dates, nombre maximal d'utilisations.
@@ -32,6 +50,8 @@ Les transitions impossibles (par exemple « livrée » sans passer par « expéd
 
 - **Pages et légal** : modifier le texte des pages. Cocher *Texte validé juridiquement* uniquement après relecture par un juriste ; jusque-là, un avertissement « document provisoire » est affiché.
 - **Avis** : publier ou refuser. Ne jamais publier d'avis inventé ni modifier le texte d'un client.
+- **Photos de l'entreprise** (`/admin/photos`) : photothèque des galeries de l'accueil et de la page À propos et de la photo de l'histoire ; provenance obligatoire ; procédure de récupération manuelle depuis Facebook rappelée sur la page.
+- **Messages** (`/admin/messages`) : messages du formulaire « Contactez-nous » (nom, e-mail, téléphone facultatif, motif, objet, message), enregistrés en base. Filtres par statut (nouveau, lu, en cours de traitement, résolu, archivé) et par motif, recherche. À l'ouverture, un message nouveau passe en « lu ». **Répondre** : par e-mail depuis l'administration si l'envoi d'e-mails est configuré sur le serveur, sinon bouton *Répondre avec ma messagerie* (lien mailto vers l'adresse du visiteur). Les réponses envoyées apparaissent dans l'espace client (*Mes messages*) quand le message a été envoyé par un client connecté. Suppression définitive possible pour un message résolu ou archivé. La notification e-mail des nouveaux messages (adresse de notification des commandes) n'est annoncée active que si l'envoi d'e-mails fonctionne.
 - **Accueil** : titres et textes ; conserver les marqueurs `[À COMPLÉTER]` tant que l'information n'est pas vérifiée (ils sont surlignés sur le site).
 
 ## Paramètres du site (`/admin/parametres`)
@@ -46,7 +66,8 @@ Toutes les informations courantes se modifient ici, sans toucher au code ; chaqu
 | Réseaux sociaux | Facebook, Instagram, TikTok, YouTube, LinkedIn, autre lien (avec son nom) : adresse **https** vérifiée, case d'affichage, aperçu de l'icône ; option d'affichage dans l'en-tête |
 | Apparence | couleurs principale, secondaire, d'accent et de fond (sélecteur), polices parmi une liste fermée ; éléments affichés dans l'en-tête et le pied de page. Les **contrastes sont vérifiés** (WCAG AA, 4,5:1) avant l'enregistrement ; bouton **Aperçu** (nouvel onglet, rien n'est publié). Aucun CSS libre |
 | Langues | anglais activé ou non, langue par défaut, détection de la langue du navigateur |
-| Livraison, paiements et commandes | e-mail de notification des commandes, minimum de commande, délai de paiement, seuil de stock faible, consignes de livraison ; liens vers *Moyens de paiement*, *Zones de livraison*, *Devises*, *Intégrations* |
+| Livraison et commandes | quantité maximale par article, seuil de stock faible, consignes de livraison ; liens vers *Moyens de paiement*, *Zones de livraison*, *Devises*, *Intégrations* |
+| **Paramètres de paiement** | minimum de commande, délai de paiement en ligne, **acompte** (activé, pourcentage ou montant fixe, à partir de quel total, préparation après acompte, solde avant expédition ou à la livraison, délai du solde, modalités affichées), **seuil des commandes en gros** et paiement à la livraison autorisé ou non pour elles, délai par défaut et conditions du **paiement sur facture**, **conditions d'annulation et de remboursement** (affichées avant la confirmation de commande). Valeurs initiales signalées comme telles tant que l'entreprise ne les a pas validées. Montants minimum et maximum **par moyen de paiement** : dans la fiche du moyen ; frais et paiement à la livraison **par zone** : *Zones de livraison* |
 | Référencement et partage | titre et description du site (FR/EN), mesure d'audience |
 | Politiques et mentions légales | raison sociale, RCCM, NCC, directeur de la publication, hébergeur ; liens vers *Pages et légal* et *FAQ* |
 

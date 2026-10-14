@@ -44,10 +44,19 @@ return [
         'keys' => ['lang_en_enabled', 'lang_default', 'lang_detect_browser'],
     ],
     'commerce' => [
-        'title' => 'Livraison, paiements et commandes',
-        'intro' => 'Règles de commande. Les moyens de paiement, zones de livraison et devises ont chacun leur écran.',
-        'keys' => ['min_order_amount', 'payment_timeout_minutes', 'max_qty_per_line', 'low_stock_threshold', 'delivery_instructions', 'delivery_instructions_en', 'demo_mode', 'demo_payment_enabled'],
+        'title' => 'Livraison et commandes',
+        'intro' => 'Règles de commande. Les moyens et paramètres de paiement, zones de livraison et devises ont chacun leur écran.',
+        'keys' => ['max_qty_per_line', 'low_stock_threshold', 'delivery_instructions', 'delivery_instructions_en', 'demo_mode', 'demo_payment_enabled'],
         'links' => [['/admin/paiements', 'Moyens de paiement'], ['/admin/livraison', 'Zones de livraison (frais, gratuité, délais)'], ['/admin/devises', 'Devises d\'affichage'], ['/admin/integrations', 'Intégrations et liste de contrôle avant ouverture']],
+    ],
+    'paiement' => [
+        'title' => 'Paramètres de paiement',
+        'intro' => 'Acompte, commandes en gros, paiement sur facture, montants minimums, conditions d\'annulation et de remboursement. Les frais de livraison et le paiement à la livraison se règlent par zone ; les montants minimum et maximum de chaque moyen de paiement, dans sa fiche.',
+        'keys' => ['payment_settings_reviewed', 'min_order_amount', 'payment_timeout_minutes', 'deposit_enabled', 'deposit_mode', 'deposit_value', 'deposit_min_order', 'deposit_allows_preparation',
+            'deposit_balance_before_shipping', 'deposit_balance_days', 'deposit_terms', 'deposit_terms_en', 'wholesale_threshold', 'wholesale_cod_allowed',
+            'invoice_default_days', 'invoice_terms', 'invoice_terms_en', 'cancellation_policy', 'cancellation_policy_en'],
+        'links' => [['/admin/paiements', 'Moyens de paiement (activation, coordonnées marchandes, instructions, montants minimum et maximum)'], ['/admin/livraison', 'Zones de livraison (frais, paiement à la livraison autorisé)'],
+            ['/admin/professionnels', 'Clients professionnels (paiement sur facture, plafonds, délais)'], ['/admin/paiements/journal', 'Journal des encaissements et remboursements']],
     ],
     'referencement' => [
         'title' => 'Référencement et partage',

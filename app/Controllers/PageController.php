@@ -57,6 +57,14 @@ final class PageController
 
     public function contact(Request $r, array $errors = [], array $old = [], int $status = 200): Response
     {
+        if ($old === []) {
+            $user = \App\Core\Auth::user();
+            $old = ['reason' => in_array($r->str('motif'), ['product', 'order', 'delivery', 'payment', 'other'], true) ? $r->str('motif') : 'other',
+                'subject' => mb_substr($r->str('objet'), 0, 160)];
+            if ($user !== null) {
+                $old += ['name' => trim($user['first_name'] . ' ' . $user['last_name']), 'email' => $user['email'], 'phone' => (string) ($user['phone'] ?? '')];
+            }
+        }
         return view('pages/contact', ['errors' => $errors, 'old' => $old, 'pageTitle' => t('nav.contact'), 'canonical' => '/contact',
             'metaDescription' => t('contact.meta')], $status);
     }
@@ -64,9 +72,9 @@ final class PageController
     public function contactSubmit(Request $r): Response
     {
         $v = Validator::make($r->post, [
-            'name' => 'required|max:150', 'email' => 'required|email', 'phone' => 'phone',
+            'name' => 'required|max:150', 'email' => 'required|email', 'phone' => 'phone', 'reason' => 'required|in:' . implode(',', array_keys(\App\Controllers\Admin\MessageController::REASONS)),
             'subject' => 'required|max:160', 'message' => 'required|min:10|max:5000', 'consent' => 'accepted',
-        ], ['name' => t('field.your_name'), 'email' => t('field.email_label'), 'phone' => t('field.phone'), 'subject' => t('field.subject'), 'message' => t('field.message')]);
+        ], ['name' => t('field.your_name'), 'email' => t('field.email_label'), 'phone' => t('field.phone'), 'reason' => t('field.reason'), 'subject' => t('field.subject'), 'message' => t('field.message')]);
         $errors = $v->errors;
         if ($spam = spam_check($r)) {
             $errors['_'] = $spam;
@@ -77,11 +85,14 @@ final class PageController
         if ($errors) {
             return $this->contact($r, $errors, $r->post, 422);
         }
-        DB::insert('contact_messages', [
-            'name' => $v->data['name'], 'email' => mb_strtolower($v->data['email']), 'phone' => $v->data['phone'] ?: null,
-            'subject' => $v->data['subject'], 'message' => $v->data['message'], 'status' => 'new', 'ip' => $r->ip(), 'created_at' => gmdate('Y-m-d H:i:s'),
+        $now = gmdate('Y-m-d H:i:s');
+        $id = DB::insert('contact_messages', [
+            'name' => $v->data['name'], 'email' => mb_strtolower($v->data['email']), 'phone' => $v->data['phone'] ?: null, 'reason' => $v->data['reason'],
+            'subject' => $v->data['subject'], 'message' => $v->data['message'], 'status' => 'new', 'ip' => $r->ip(), 'user_id' => \App\Core\Auth::id(),
+            'created_at' => $now, 'updated_at' => $now,
         ]);
-        Notifier::staffNotice('Nouveau message : ' . $v->data['subject'], 'Message de ' . $v->data['name'] . ' (' . $v->data['email'] . ")\n\n" . $v->data['message']);
+        Notifier::staffNotice('Nouveau message : ' . $v->data['subject'], 'Message de ' . $v->data['name'] . ' (' . $v->data['email'] . ")\nMotif : "
+            . (\App\Controllers\Admin\MessageController::REASONS[$v->data['reason']] ?? '') . "\n\n" . $v->data['message'] . "\n\n" . base_url() . '/admin/messages/' . $id);
         Session::flash('success', t('contact.thanks'));
         return redirect('/contact');
     }

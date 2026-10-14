@@ -1,8 +1,12 @@
 <?php
-/** @var array $order @var string $token @var array $items @var array $history @var ?array $shipment @var bool $canPay @var bool $needsPhone @var ?array $lastPayment @var ?array $manual */
-$flow = $order['payment_method'] === 'cod'
-    ? ['pending_confirmation', 'preparing', 'shipped', 'delivered']
-    : ['pending_payment', 'paid', 'preparing', 'shipped', 'delivered'];
+/** @var array $order @var string $token @var array $items @var array $history @var ?array $shipment @var bool $canPay @var bool $needsPhone @var ?array $lastPayment @var ?array $manual @var int $dueNow @var int $balance */
+$flow = match ($order['payment_terms']) {
+    'cod', 'invoice' => ['pending_confirmation', 'preparing', 'shipped', 'delivered'],
+    'deposit' => ['pending_payment', 'deposit_paid', 'preparing', 'shipped', 'delivered'],
+    default => ['pending_payment', 'paid', 'preparing', 'shipped', 'delivered'],
+};
+$isDepositStep = $order['payment_terms'] === 'deposit' && (int) $order['amount_paid'] < (int) $order['deposit_amount'];
+$payLabel = $order['payment_terms'] === 'deposit' ? t($isDepositStep ? 'order.pay_deposit' : 'order.pay_balance') : t('order.manual_amount');
 if ((int) $order['is_pickup'] === 1) {
     $flow = array_values(array_diff($flow, ['shipped']));
 }
@@ -17,14 +21,16 @@ $currentIndex = array_search($order['status'], $flow, true);
 </div>
 <div class="wrap order-layout">
   <div>
-    <?php if ($order['status'] === 'pending_confirmation'): ?>
+    <?php if ($order['status'] === 'pending_confirmation' && $order['payment_terms'] === 'invoice'): ?>
+    <div class="notice notice-green"><?= icon('info') ?><p><?= e(t('order.invoice_notice', ['total' => money((int) $order['total']), 'date' => $order['balance_due_at'] ? date_fr($order['balance_due_at'], false) : '—'])) ?></p></div>
+    <?php elseif ($order['status'] === 'pending_confirmation'): ?>
     <div class="notice notice-green"><?= icon('phone') ?><p><?= e(t('order.cod_notice', ['phone' => $order['customer_phone'], 'total' => money((int) $order['total'])])) ?></p></div>
-    <?php elseif ($order['status'] === 'pending_payment' && $manual !== null): ?>
+    <?php elseif (!$closed && $manual !== null && $dueNow > 0): ?>
     <div class="group order-status-card manual-pay">
       <h2><?= e(t('order.manual_title', ['method' => payment_method_label($order['payment_method'])])) ?></h2>
       <?= payment_logos(\App\Services\PaymentMethods::logos($manual), payment_method_label($order['payment_method'])) ?>
       <dl class="manual-details">
-        <div><dt><?= e(t('order.manual_amount')) ?></dt><dd><strong><?= money((int) $order['total']) ?></strong></dd></div>
+        <div><dt><?= e($payLabel) ?></dt><dd><strong><?= money($dueNow) ?></strong></dd></div>
         <?php if ((string) $manual['receiver_number'] !== ''): ?><div><dt><?= e(t('order.manual_receiver')) ?></dt><dd><strong><?= e($manual['receiver_number']) ?></strong></dd></div><?php endif; ?>
         <?php if ((string) $manual['merchant_number'] !== ''): ?><div><dt><?= e(t('order.manual_merchant')) ?></dt><dd><?= e($manual['merchant_number']) ?></dd></div><?php endif; ?>
         <?php if ((string) $manual['beneficiary'] !== ''): ?><div><dt><?= e(t('order.manual_beneficiary')) ?></dt><dd><?= e($manual['beneficiary']) ?></dd></div><?php endif; ?>
@@ -32,12 +38,23 @@ $currentIndex = array_search($order['status'], $flow, true);
       </dl>
       <?php if (\App\Services\PaymentMethods::instructions($manual) !== ''): ?><div class="prose"><?= rich(\App\Services\PaymentMethods::instructions($manual)) ?></div><?php endif; ?>
       <p class="notice"><?= icon('info') ?> <?= e(t('order.manual_notice')) ?></p>
+      <?php if ($order['payment_declared_at'] !== null): ?>
+      <p class="notice notice-green"><?= icon('check') ?> <?= e(t('order.declared_on', ['date' => date_fr($order['payment_declared_at']), 'reference' => (string) $order['payment_declaration']])) ?></p>
+      <?php else: ?>
+      <form action="/commande/<?= e($order['number']) ?>/paiement-effectue" method="post" class="declare-form">
+        <?= csrf_field() ?><input type="hidden" name="t" value="<?= e($token) ?>">
+        <div class="field"><label for="f-declare-ref"><?= e(t('order.declare_ref')) ?></label>
+          <input id="f-declare-ref" name="reference" maxlength="120" required autocomplete="off"></div>
+        <button class="btn btn-gray" type="submit"><?= e(t('order.declare_button')) ?></button>
+        <p class="small muted"><?= e(t('order.declare_hint')) ?></p>
+      </form>
+      <?php endif; ?>
     </div>
-    <?php elseif ($order['status'] === 'pending_payment'): ?>
+    <?php elseif ($order['status'] === 'pending_payment' || $canPay): ?>
     <div class="group order-status-card">
       <?php if ($canPay): ?>
-      <h2><?= e(t('order.pay_title')) ?></h2>
-      <p class="muted"><?= e(t('order.pay_deadline', ['date' => date_fr($order['expires_at'])])) ?></p>
+      <h2><?= e($order['payment_terms'] === 'deposit' ? $payLabel : t('order.pay_title')) ?></h2>
+      <?php if ($order['status'] === 'pending_payment' && $order['expires_at']): ?><p class="muted"><?= e(t('order.pay_deadline', ['date' => date_fr($order['expires_at'])])) ?></p><?php endif; ?>
       <?php if ($order['payment_status'] === 'failed'): ?><p class="notice notice-amber"><?= icon('info') ?> <?= e(t('order.pay_failed')) ?></p><?php endif; ?>
       <form action="/commande/<?= e($order['number']) ?>/payer" method="post">
         <?= csrf_field() ?><input type="hidden" name="t" value="<?= e($token) ?>">
@@ -47,7 +64,7 @@ $currentIndex = array_search($order['status'], $flow, true);
           <input id="f-payer_phone" name="payer_phone" type="tel" inputmode="tel" maxlength="20" required value="<?= e($lastPayment['payer_phone'] ?? $order['customer_phone']) ?>">
         </div>
         <?php endif; ?>
-        <button class="btn btn-large btn-block" type="submit"><?= pay_logo($order['payment_method']) ?> <?= e(t('order.pay_with', ['method' => payment_method_label($order['payment_method']), 'total' => money((int) $order['total'])])) ?></button>
+        <button class="btn btn-large btn-block" type="submit"><?= pay_logo($order['payment_method']) ?> <?= e(t('order.pay_with', ['method' => payment_method_label($order['payment_method']), 'total' => money($dueNow)])) ?></button>
       </form>
       <?php else: ?>
       <p><?= e(t('order.pay_unavailable')) ?></p>
@@ -109,6 +126,14 @@ $currentIndex = array_search($order['status'], $flow, true);
     <h2 class="group-title"><?= e(t('order.payment')) ?></h2>
     <div class="group">
       <div class="cell"><?= pay_logo($order['payment_method']) ?><span class="cell-body"><span class="cell-title"><?= e(payment_method_label($order['payment_method'])) ?></span><br><span class="cell-sub"><?= e(payment_status_label($order['payment_status'])) ?></span></span></div>
+      <dl class="totals pay-amounts">
+        <div><dt><?= e(t('totals.total')) ?></dt><dd><?= money((int) $order['total']) ?></dd></div>
+        <?php if ($order['deposit_amount'] !== null): ?><div><dt><?= e(t('order.deposit')) ?></dt><dd><?= money((int) $order['deposit_amount']) ?></dd></div><?php endif; ?>
+        <div><dt><?= e(t('order.amount_paid')) ?></dt><dd data-amount-paid><?= money((int) $order['amount_paid']) ?></dd></div>
+        <?php if ((int) $order['amount_refunded'] > 0): ?><div><dt><?= e(t('order.amount_refunded')) ?></dt><dd><?= money((int) $order['amount_refunded']) ?></dd></div><?php endif; ?>
+        <?php if (!$closed): ?><div class="grand-total"><dt><?= e(t('order.amount_due')) ?></dt><dd data-amount-due><?= money($balance) ?></dd></div><?php endif; ?>
+        <?php if (!$closed && $balance > 0 && $order['balance_due_at']): ?><div><dt><?= e(t('order.due_date')) ?></dt><dd><?= e(date_fr($order['balance_due_at'], false)) ?></dd></div><?php endif; ?>
+      </dl>
     </div>
     <div class="btn-row mt">
       <a class="btn btn-gray btn-block" href="<?= e(url('/commande/' . $order['number'] . '/recu', ['t' => $token])) ?>"><?= icon('receipt') ?><?= e(t('order.receipt')) ?></a>

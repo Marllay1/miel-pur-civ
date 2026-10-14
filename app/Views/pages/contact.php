@@ -31,6 +31,15 @@ $socials = \App\Services\SiteConfig::socialLinks();
       <?= field_error($errors, 'phone') ?>
     </div>
     <div class="field">
+      <label for="f-reason"><?= e(t('field.reason')) ?></label>
+      <select id="f-reason" name="reason" required<?= aria_invalid($errors, 'reason') ?>>
+        <?php foreach (['product', 'order', 'delivery', 'payment', 'other'] as $reason): ?>
+        <option value="<?= $reason ?>"<?= ($old['reason'] ?? 'other') === $reason ? ' selected' : '' ?>><?= e(t('contact.reason.' . $reason)) ?></option>
+        <?php endforeach; ?>
+      </select>
+      <?= field_error($errors, 'reason') ?>
+    </div>
+    <div class="field">
       <label for="f-subject"><?= e(t('field.subject_short')) ?></label>
       <input id="f-subject" name="subject" maxlength="160" required value="<?= $val('subject') ?>"<?= aria_invalid($errors, 'subject') ?>>
       <?= field_error($errors, 'subject') ?>

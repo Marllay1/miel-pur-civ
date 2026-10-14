@@ -1,7 +1,8 @@
 <?php
 use App\Services\Settings;
 $facebook = Settings::get('social_facebook');
-$company = array_filter(photos(), static fn (array $p) => $p['origin'] === 'company');
+// Photos de l'entreprise : photothèque administrable ; aucune photo d'illustration n'est plus utilisée.
+$company = \App\Services\Media::all();
 $illustrations = array_filter(photos(), static fn (array $p) => $p['origin'] === 'illustration');
 ?>
 <div class="wrap narrow page-head">
@@ -13,10 +14,11 @@ $illustrations = array_filter(photos(), static fn (array $p) => $p['origin'] ===
   <div class="content-card">
     <p><?= e(t('credits.company_text')) ?><?php if ($facebook !== ''): ?> <a href="<?= e($facebook) ?>" rel="noopener" target="_blank"><?= e(t('credits.facebook')) ?></a><?php endif; ?></p>
     <div class="credits-grid">
-      <?php foreach ($company as $key => $p): ?><figure class="credit-thumb"><?= photo($key, '', '160px') ?></figure><?php endforeach; ?>
+      <?php foreach ($company as $m): ?><figure class="credit-thumb"><img src="<?= e($m['path']) ?>" alt="<?= e(\App\Core\Lang::get() === 'en' && $m['alt_en'] ? $m['alt_en'] : $m['alt']) ?>" loading="lazy" decoding="async"></figure><?php endforeach; ?>
     </div>
   </div>
 
+  <?php if ($illustrations): ?>
   <h2 class="group-title"><?= e(t('credits.illustration_title')) ?></h2>
   <div class="content-card">
     <p><?= e(t('credits.illustration_text')) ?></p>
@@ -32,5 +34,6 @@ $illustrations = array_filter(photos(), static fn (array $p) => $p['origin'] ===
       <?php endforeach; ?>
     </ul>
   </div>
+  <?php endif; ?>
 </div>
 <div class="section"></div>

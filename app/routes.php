@@ -34,6 +34,7 @@ $router->get('/commande/estimation', [CheckoutController::class, 'estimate']);
 $router->post('/commande', [CheckoutController::class, 'store']);
 $router->get('/commande/' . $order, [CheckoutController::class, 'show']);
 $router->post('/commande/' . $order . '/payer', [CheckoutController::class, 'pay']);
+$router->post('/commande/' . $order . '/paiement-effectue', [CheckoutController::class, 'declarePayment']);
 $router->get('/commande/' . $order . '/recu', [CheckoutController::class, 'receipt']);
 $router->get('/commande/' . $order . '/paiement', [CheckoutController::class, 'waiting']);
 $router->get('/commande/' . $order . '/paiement/statut', [CheckoutController::class, 'paymentStatus']);
@@ -76,6 +77,7 @@ $router->get('/compte/reinitialiser/{token:[a-f0-9]+}', [AccountController::clas
 $router->post('/compte/reinitialiser/{token:[a-f0-9]+}', [AccountController::class, 'reset']);
 $router->get('/compte', [AccountController::class, 'dashboard'], ['auth']);
 $router->get('/compte/commandes', [AccountController::class, 'orders'], ['auth']);
+$router->get('/compte/messages', [AccountController::class, 'messages'], ['auth']);
 $router->get('/compte/profil', [AccountController::class, 'profile'], ['auth']);
 $router->post('/compte/profil', [AccountController::class, 'profileUpdate'], ['auth']);
 $router->get('/compte/mot-de-passe', [AccountController::class, 'passwordForm'], ['auth']);
@@ -101,6 +103,10 @@ $router->post('/admin/variantes/{id:[0-9]+}', [Admin\ProductController::class, '
 $router->post('/admin/variantes/{id:[0-9]+}/supprimer', [Admin\ProductController::class, 'variantDelete'], ['perm:catalog.manage']);
 $router->post('/admin/produits/{id:[0-9]+}/images', [Admin\ProductController::class, 'imageStore'], ['perm:catalog.manage']);
 $router->post('/admin/images/{id:[0-9]+}/supprimer', [Admin\ProductController::class, 'imageDelete'], ['perm:catalog.manage']);
+$router->post('/admin/images/{id:[0-9]+}', [Admin\ProductController::class, 'imageUpdate'], ['perm:catalog.manage']);
+$router->post('/admin/images/{id:[0-9]+}/principale', [Admin\ProductController::class, 'imageMain'], ['perm:catalog.manage']);
+$router->post('/admin/images/{id:[0-9]+}/deplacer/{dir:haut|bas}', [Admin\ProductController::class, 'imageMove'], ['perm:catalog.manage']);
+$router->post('/admin/images/{id:[0-9]+}/remplacer', [Admin\ProductController::class, 'imageReplace'], ['perm:catalog.manage']);
 $router->get('/admin/categories', [Admin\CategoryController::class, 'index'], ['perm:catalog.manage']);
 $router->post('/admin/categories', [Admin\CategoryController::class, 'save'], ['perm:catalog.manage']);
 $router->get('/admin/stock', [Admin\StockController::class, 'index'], ['perm:catalog.manage']);
@@ -114,13 +120,24 @@ $router->get('/admin/commandes/{id:[0-9]+}', [Admin\OrderController::class, 'sho
 $router->post('/admin/commandes/{id:[0-9]+}/statut', [Admin\OrderController::class, 'transition'], ['perm:orders.manage']);
 $router->post('/admin/commandes/{id:[0-9]+}/note', [Admin\OrderController::class, 'note'], ['perm:orders.manage']);
 $router->post('/admin/commandes/{id:[0-9]+}/livraison', [Admin\OrderController::class, 'shipment'], ['perm:orders.manage']);
+$router->post('/admin/commandes/{id:[0-9]+}/encaissement', [Admin\OrderController::class, 'recordPayment'], ['perm:orders.manage']);
+$router->post('/admin/commandes/{id:[0-9]+}/remboursement', [Admin\OrderController::class, 'refund'], ['perm:orders.manage']);
+$router->post('/admin/remboursements/{id:[0-9]+}/effectue', [Admin\OrderController::class, 'refundComplete'], ['perm:orders.manage']);
 $router->get('/admin/devis', [Admin\QuoteController::class, 'index'], ['perm:orders.manage']);
 $router->post('/admin/devis/{id:[0-9]+}', [Admin\QuoteController::class, 'update'], ['perm:orders.manage']);
 $router->get('/admin/clients', [Admin\CustomerController::class, 'index'], ['perm:customers.view']);
 $router->get('/admin/clients/{id:[0-9]+}', [Admin\CustomerController::class, 'show'], ['perm:customers.view']);
 
-$router->get('/admin/messages', [Admin\ContentController::class, 'messages'], ['perm:content.manage']);
-$router->post('/admin/messages/{id:[0-9]+}', [Admin\ContentController::class, 'messageUpdate'], ['perm:content.manage']);
+$router->get('/admin/messages', [Admin\MessageController::class, 'index'], ['perm:content.manage']);
+$router->get('/admin/messages/{id:[0-9]+}', [Admin\MessageController::class, 'show'], ['perm:content.manage']);
+$router->post('/admin/messages/{id:[0-9]+}', [Admin\MessageController::class, 'status'], ['perm:content.manage']);
+$router->post('/admin/messages/{id:[0-9]+}/reponse', [Admin\MessageController::class, 'reply'], ['perm:content.manage']);
+$router->post('/admin/messages/{id:[0-9]+}/supprimer', [Admin\MessageController::class, 'delete'], ['perm:content.manage']);
+$router->get('/admin/photos', [Admin\MediaController::class, 'index'], ['perm:content.manage']);
+$router->post('/admin/photos', [Admin\MediaController::class, 'store'], ['perm:content.manage']);
+$router->post('/admin/photos/{id:[0-9]+}', [Admin\MediaController::class, 'update'], ['perm:content.manage']);
+$router->post('/admin/photos/{id:[0-9]+}/deplacer/{dir:haut|bas}', [Admin\MediaController::class, 'move'], ['perm:content.manage']);
+$router->post('/admin/photos/{id:[0-9]+}/supprimer', [Admin\MediaController::class, 'delete'], ['perm:content.manage']);
 $router->get('/admin/newsletter', [Admin\ContentController::class, 'newsletter'], ['perm:content.manage']);
 $router->get('/admin/newsletter/export', [Admin\ContentController::class, 'newsletterExport'], ['perm:content.manage']);
 $router->get('/admin/contenu', [Admin\ContentController::class, 'home'], ['perm:content.manage']);
@@ -144,6 +161,12 @@ $router->post('/admin/parametres/images/{key:[a-z_]+}/supprimer', [Admin\SiteSet
 $router->get('/admin/parametres/{section:[a-z]+}', [Admin\SiteSettingsController::class, 'edit'], ['perm:settings.manage']);
 $router->post('/admin/parametres/{section:[a-z]+}', [Admin\SiteSettingsController::class, 'save'], ['perm:settings.manage']);
 // Moyens de paiement
+$router->get('/admin/paiements/journal', [Admin\OrderController::class, 'journal'], ['perm:orders.manage']);
+$router->get('/admin/paiements/journal/export', [Admin\OrderController::class, 'journalExport'], ['perm:orders.manage']);
+$router->get('/admin/professionnels', [Admin\ProAccountController::class, 'index'], ['perm:orders.manage']);
+$router->post('/admin/professionnels', [Admin\ProAccountController::class, 'store'], ['perm:orders.manage']);
+$router->get('/admin/professionnels/{id:[0-9]+}', [Admin\ProAccountController::class, 'edit'], ['perm:orders.manage']);
+$router->post('/admin/professionnels/{id:[0-9]+}', [Admin\ProAccountController::class, 'update'], ['perm:orders.manage']);
 $router->get('/admin/paiements', [Admin\PaymentMethodsController::class, 'index'], ['perm:settings.manage']);
 $router->post('/admin/paiements', [Admin\PaymentMethodsController::class, 'store'], ['perm:settings.manage']);
 $router->get('/admin/paiements/{code:[a-z0-9_]+}', [Admin\PaymentMethodsController::class, 'edit'], ['perm:settings.manage']);

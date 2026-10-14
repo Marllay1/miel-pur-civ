@@ -17,7 +17,10 @@ $legal = array_filter([Settings::get('legal_company'), Settings::get('legal_rccm
   <div class="receipt-parties">
     <div><p class="small muted"><?= e(t('receipt.customer')) ?></p><p><?= e($order['customer_first_name'] . ' ' . $order['customer_last_name']) ?><br><?= e($order['customer_phone']) ?><br><?= e($order['customer_email']) ?></p></div>
     <div><p class="small muted"><?= e(t('order.delivery')) ?></p><p><?= e($order['shipping_zone_name']) ?><?php if (!(int) $order['is_pickup']): ?><br><?= e($order['shipping_address']) ?><br><?= e(trim(($order['shipping_district'] ? $order['shipping_district'] . ', ' : '') . $order['shipping_city'])) ?><?php endif; ?></p></div>
-    <div><p class="small muted"><?= e(t('order.payment')) ?></p><p><?= e(payment_method_label($order['payment_method'])) ?><br><?= e(payment_status_label($order['payment_status'])) ?><br><?= e(status_label($order['status'])) ?></p></div>
+    <div><p class="small muted"><?= e(t('order.payment')) ?></p><p><?= e(payment_method_label($order['payment_method'])) ?><br><?= e(payment_status_label($order['payment_status'])) ?><br><?= e(status_label($order['status'])) ?></p>
+      <?php $due = max(0, (int) $order['total'] - (int) $order['amount_paid']); if ($due > 0 && !in_array($order['status'], ['cancelled', 'refunded'], true)): ?>
+      <p><?= e(t('order.amount_paid')) ?> : <?= money((int) $order['amount_paid']) ?><br><strong><?= e(in_array($order['payment_terms'], ['cod', 'deposit'], true) && !(int) $order['is_pickup'] ? t('receipt.to_collect') : t('order.amount_due')) ?> : <?= money($due) ?></strong></p>
+      <?php endif; ?></div>
   </div>
   <table class="table">
     <thead><tr><th scope="col"><?= e(t('order.product')) ?></th><th scope="col"><?= e(t('receipt.ref')) ?></th><th scope="col" class="num"><?= e(t('receipt.unit')) ?></th><th scope="col" class="num"><?= e(t('order.qty')) ?></th><th scope="col" class="num"><?= e(t('totals.total')) ?></th></tr></thead>

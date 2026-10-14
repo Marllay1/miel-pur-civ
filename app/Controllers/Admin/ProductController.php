@@ -16,42 +16,53 @@ use App\Services\ImageService;
 
 final class ProductController extends Base
 {
-    private const FIELDS = ['category_id', 'name', 'slug', 'short_description', 'description', 'origin', 'usage_tips', 'storage_tips', 'meta_title', 'meta_description'];
+    private const FIELDS = ['category_id', 'name', 'slug', 'reference', 'short_description', 'description', 'origin', 'usage_tips', 'storage_tips', 'extra_info', 'meta_title', 'meta_description', 'review_note'];
+    public const STATUSES = ['draft' => 'Brouillon', 'published' => 'Publié', 'disabled' => 'Désactivé'];
 
     public function index(Request $r): Response
     {
         $where = ['p.deleted_at IS NULL'];
         $params = [];
         if (($q = $r->str('q')) !== '') {
-            $where[] = '(p.name LIKE ? OR EXISTS (SELECT 1 FROM product_variants s WHERE s.product_id = p.id AND s.sku LIKE ?))';
+            $where[] = '(p.name LIKE ? OR p.reference LIKE ? OR EXISTS (SELECT 1 FROM product_variants s WHERE s.product_id = p.id AND s.sku LIKE ?))';
+            $params[] = '%' . $q . '%';
             $params[] = '%' . $q . '%';
             $params[] = '%' . $q . '%';
         }
-        if ($r->str('statut') === 'actif') {
-            $where[] = 'p.is_active = 1';
-        } elseif ($r->str('statut') === 'inactif') {
-            $where[] = 'p.is_active = 0';
+        if (array_key_exists($r->str('statut'), self::STATUSES)) {
+            $where[] = 'p.status = ?';
+            $params[] = $r->str('statut');
+        } elseif ($r->str('statut') === 'a-verifier') {
+            $where[] = "(p.review_note IS NOT NULL OR p.reference IS NULL OR NOT EXISTS (SELECT 1 FROM product_images i WHERE i.product_id = p.id))";
         }
         $products = DB::all(
             'SELECT p.*, c.name AS category_name,
                (SELECT COUNT(*) FROM product_variants v WHERE v.product_id = p.id AND v.deleted_at IS NULL) AS variant_count,
                (SELECT COALESCE(SUM(v.stock), 0) FROM product_variants v WHERE v.product_id = p.id AND v.deleted_at IS NULL) AS stock,
-               (SELECT MIN(v.price) FROM product_variants v WHERE v.product_id = p.id AND v.deleted_at IS NULL) AS price_from
+               (SELECT MIN(v.price) FROM product_variants v WHERE v.product_id = p.id AND v.deleted_at IS NULL) AS price_from,
+               (SELECT COUNT(*) FROM product_images i WHERE i.product_id = p.id) AS image_count,
+               (SELECT i.path FROM product_images i WHERE i.product_id = p.id ORDER BY i.sort_order, i.id LIMIT 1) AS image_path
              FROM products p LEFT JOIN categories c ON c.id = p.category_id WHERE ' . implode(' AND ', $where) . ' ORDER BY p.name',
             $params
         );
         return admin_view('products/index', ['products' => $products, 'q' => $q, 'statut' => $r->str('statut'), 'pageTitle' => 'Produits']);
     }
 
+    /** Catégories et sous-catégories (« Parent › Enfant »). */
     private function categories(): array
     {
-        return DB::all('SELECT id, name FROM categories ORDER BY sort_order, name');
+        $rows = DB::all('SELECT c.id, c.name, c.parent_id, p.name AS parent_name FROM categories c LEFT JOIN categories p ON p.id = c.parent_id ORDER BY COALESCE(p.sort_order, c.sort_order), COALESCE(p.name, c.name), c.parent_id IS NOT NULL, c.sort_order, c.name');
+        foreach ($rows as &$c) {
+            $c['name'] = $c['parent_name'] !== null ? $c['parent_name'] . ' › ' . $c['name'] : $c['name'];
+        }
+        unset($c);
+        return $rows;
     }
 
     public function create(Request $r, array $errors = [], array $old = [], int $status = 200): Response
     {
         return admin_view('products/form', [
-            'product' => null, 'old' => $old + ['is_active' => '1'], 'errors' => $errors, 'categories' => $this->categories(),
+            'product' => null, 'old' => $old + ['status' => 'draft'], 'errors' => $errors, 'categories' => $this->categories(),
             'variants' => [], 'images' => [], 'translation' => is_array($old['en'] ?? null) ? $old['en'] : [], 'variantTranslations' => [],
             'pageTitle' => 'Nouveau produit',
         ], $status);
@@ -62,8 +73,9 @@ final class ProductController extends Base
         $v = Validator::make($r->post, [
             'name' => 'required|max:160', 'slug' => 'slug|max:180', 'category_id' => 'int', 'short_description' => 'max:300',
             'description' => 'max:20000', 'origin' => 'max:5000', 'usage_tips' => 'max:5000', 'storage_tips' => 'max:5000',
-            'meta_title' => 'max:160', 'meta_description' => 'max:300',
-        ], ['name' => 'Le nom', 'slug' => 'L\'adresse (slug)', 'short_description' => 'Le résumé', 'meta_title' => 'Le titre SEO', 'meta_description' => 'La description SEO']);
+            'meta_title' => 'max:160', 'meta_description' => 'max:300', 'reference' => 'max:64', 'extra_info' => 'max:5000', 'review_note' => 'max:500',
+        ], ['name' => 'Le nom', 'slug' => 'L\'adresse (slug)', 'short_description' => 'Le résumé', 'meta_title' => 'Le titre SEO', 'meta_description' => 'La description SEO',
+            'reference' => 'La référence commerciale', 'extra_info' => 'Les informations complémentaires']);
         $data = [];
         foreach (self::FIELDS as $f) {
             $data[$f] = $v->data[$f] ?? null;
@@ -78,7 +90,22 @@ final class ProductController extends Base
         if (DB::value('SELECT id FROM products WHERE slug = ? AND id <> ?', [$data['slug'], $id ?? 0]) !== null) {
             $v->errors['slug'] = 'Cette adresse est déjà utilisée par un autre produit.';
         }
-        $data['is_active'] = $r->str('is_active') === '1' ? 1 : 0;
+        // Référence commerciale (distincte de l'identifiant technique), unique.
+        if ($data['reference'] !== null) {
+            $data['reference'] = strtoupper(trim((string) $data['reference']));
+            if (!preg_match('/^[A-Z0-9][A-Z0-9._\/-]{0,63}$/', $data['reference'])) {
+                $v->errors['reference'] = 'Référence invalide (lettres, chiffres, . _ / -).';
+            } elseif (DB::value('SELECT id FROM products WHERE reference = ? AND id <> ?', [$data['reference'], $id ?? 0]) !== null) {
+                $v->errors['reference'] = 'Cette référence est déjà utilisée par un autre produit.';
+            }
+        }
+        $status = $r->str('status');
+        if (!array_key_exists($status, self::STATUSES)) {
+            // Formulaires antérieurs : case « En ligne ».
+            $status = $r->str('is_active') === '1' ? 'published' : 'disabled';
+        }
+        $data['status'] = $status;
+        $data['is_active'] = $status === 'published' ? 1 : 0;
         $data['is_featured'] = $r->str('is_featured') === '1' ? 1 : 0;
         $data['is_demo'] = $r->str('is_demo') === '1' ? 1 : 0;
         return [$data, $v->errors];
@@ -155,7 +182,7 @@ final class ProductController extends Base
     {
         $rules = [
             'label' => 'required|max:100', 'format' => 'required|in:' . implode(',', array_keys(Catalog::FORMATS)),
-            'weight_grams' => 'int|min:0|max:1000000', 'sku' => 'required|max:64', 'price' => 'required|int|min:0|max:100000000',
+            'weight_grams' => 'int|min:0|max:1000000', 'volume_ml' => 'int|min:0|max:1000000', 'sku' => 'required|max:64', 'price' => 'required|int|min:0|max:100000000',
             'compare_at_price' => 'int|min:0|max:100000000', 'sort_order' => 'int|min:0|max:1000',
         ];
         if ($withStock) {
@@ -173,7 +200,7 @@ final class ProductController extends Base
             $v->errors['compare_at_price'] = 'L\'ancien prix doit être supérieur au prix.';
         }
         $data = [
-            'label' => $v->data['label'] ?? '', 'format' => $v->data['format'] ?? '', 'weight_grams' => $v->data['weight_grams'] ?? null,
+            'label' => $v->data['label'] ?? '', 'format' => $v->data['format'] ?? '', 'weight_grams' => $v->data['weight_grams'] ?? null, 'volume_ml' => $v->data['volume_ml'] ?? null,
             'sku' => $sku, 'price' => $v->data['price'] ?? 0, 'compare_at_price' => $v->data['compare_at_price'] ?? null,
             'sort_order' => $v->data['sort_order'] ?? 0, 'is_active' => $r->str('is_active') === '1' ? 1 : 0,
         ];
@@ -240,34 +267,149 @@ final class ProductController extends Base
         return redirect('/admin/produits/' . $variant['product_id'] . '#variantes');
     }
 
+    /**
+     * Provenance d'une photo : seules les photographies de l'entreprise (page Facebook officielle, photos fournies par l'entreprise)
+     * sont acceptées ; l'administrateur le confirme et indique la source.
+     * @return array{0:?string, 1:?string} [source, erreur]
+     */
+    private function photoSource(Request $r): array
+    {
+        $source = mb_substr(trim($r->str('source_note')), 0, 255);
+        if ($r->str('source_confirm') !== '1') {
+            return [null, 'Confirmez que la photo provient des ressources de l\'entreprise (page Facebook officielle ou photo fournie par l\'entreprise).'];
+        }
+        if ($source === '') {
+            return [null, 'Indiquez la provenance de la photo (ex. « Page Facebook, publication du 12/03/2025 »).'];
+        }
+        return [$source, null];
+    }
+
     public function imageStore(Request $r): Response
     {
         $p = $this->find((int) $r->params['id']);
-        $alt = mb_substr($r->str('alt'), 0, 200);
+        $back = redirect('/admin/produits/' . $p['id'] . '#images');
+        $alt = mb_substr(trim($r->str('alt')), 0, 200);
         if ($alt === '') {
             Session::flash('error', 'Le texte alternatif est obligatoire (accessibilité et référencement).');
-            return redirect('/admin/produits/' . $p['id'] . '#images');
+            return $back;
+        }
+        [$source, $error] = $this->photoSource($r);
+        if ($error !== null) {
+            Session::flash('error', $error);
+            return $back;
         }
         $result = ImageService::store($r->files['image'] ?? []);
         if (!$result['ok']) {
             Session::flash('error', 'Image refusée : ' . $result['error']);
-            return redirect('/admin/produits/' . $p['id'] . '#images');
+            return $back;
         }
         $order = (int) DB::value('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM product_images WHERE product_id = ?', [(int) $p['id']]);
-        $id = DB::insert('product_images', ['product_id' => (int) $p['id'], 'path' => $result['path'], 'alt' => $alt, 'sort_order' => $r->str('first') === '1' ? -1 : $order, 'is_demo' => 0, 'created_at' => gmdate('Y-m-d H:i:s')]);
-        Audit::log('image.create', 'product', (int) $p['id'], ['image' => $id]);
+        $id = DB::insert('product_images', ['product_id' => (int) $p['id'], 'path' => $result['path'], 'alt' => $alt, 'sort_order' => $order, 'is_demo' => 0,
+            'source_note' => $source, 'created_at' => gmdate('Y-m-d H:i:s')]);
+        if ($r->str('first') === '1') {
+            $this->makeMain($id);
+        }
+        Audit::log('image.create', 'product', (int) $p['id'], ['image' => $id, 'source' => $source]);
         Session::flash('success', 'Image ajoutée.');
-        return redirect('/admin/produits/' . $p['id'] . '#images');
+        return $back;
     }
 
-    public function imageDelete(Request $r): Response
+    private function findImage(Request $r): array
     {
         $img = DB::one('SELECT * FROM product_images WHERE id = ?', [(int) $r->params['id']]);
         if ($img === null) {
             throw new HttpException(404);
         }
+        return $img;
+    }
+
+    /** Renumérote les photos d'un produit (0, 1, 2…) dans l'ordre donné ; la première est la photo principale. */
+    private function renumber(int $productId, array $orderedIds): void
+    {
+        foreach (array_values($orderedIds) as $i => $imgId) {
+            DB::update('product_images', ['sort_order' => $i], 'id = ? AND product_id = ?', [(int) $imgId, $productId]);
+        }
+    }
+
+    private function orderedIds(int $productId): array
+    {
+        return array_map('intval', array_column(DB::all('SELECT id FROM product_images WHERE product_id = ? ORDER BY sort_order, id', [$productId]), 'id'));
+    }
+
+    private function makeMain(int $imageId): void
+    {
+        $productId = (int) DB::value('SELECT product_id FROM product_images WHERE id = ?', [$imageId]);
+        $ids = array_values(array_diff($this->orderedIds($productId), [$imageId]));
+        array_unshift($ids, $imageId);
+        $this->renumber($productId, $ids);
+    }
+
+    public function imageMain(Request $r): Response
+    {
+        $img = $this->findImage($r);
+        $this->makeMain((int) $img['id']);
+        Audit::log('image.main', 'product', (int) $img['product_id'], ['image' => (int) $img['id']]);
+        Session::flash('success', 'Photo principale modifiée.');
+        return redirect('/admin/produits/' . $img['product_id'] . '#images');
+    }
+
+    public function imageMove(Request $r): Response
+    {
+        $img = $this->findImage($r);
+        $ids = $this->orderedIds((int) $img['product_id']);
+        $pos = array_search((int) $img['id'], $ids, true);
+        $to = $r->params['dir'] === 'haut' ? $pos - 1 : $pos + 1;
+        if ($pos !== false && $to >= 0 && $to < count($ids)) {
+            [$ids[$pos], $ids[$to]] = [$ids[$to], $ids[$pos]];
+            $this->renumber((int) $img['product_id'], $ids);
+            Audit::log('image.move', 'product', (int) $img['product_id'], ['image' => (int) $img['id'], 'position' => $to]);
+        }
+        return redirect('/admin/produits/' . $img['product_id'] . '#images');
+    }
+
+    public function imageUpdate(Request $r): Response
+    {
+        $img = $this->findImage($r);
+        $alt = mb_substr(trim($r->str('alt')), 0, 200);
+        $source = mb_substr(trim($r->str('source_note')), 0, 255);
+        if ($alt === '' || $source === '') {
+            Session::flash('error', 'Le texte alternatif et la provenance sont obligatoires.');
+        } else {
+            DB::update('product_images', ['alt' => $alt, 'source_note' => $source], 'id = ?', [(int) $img['id']]);
+            Audit::log('image.update', 'product', (int) $img['product_id'], ['image' => (int) $img['id']]);
+            Session::flash('success', 'Photo enregistrée.');
+        }
+        return redirect('/admin/produits/' . $img['product_id'] . '#images');
+    }
+
+    /** Remplace le fichier d'une photo en conservant sa position (l'ancien fichier téléversé est supprimé). */
+    public function imageReplace(Request $r): Response
+    {
+        $img = $this->findImage($r);
+        $back = redirect('/admin/produits/' . $img['product_id'] . '#images');
+        [$source, $error] = $this->photoSource($r);
+        if ($error !== null) {
+            Session::flash('error', $error);
+            return $back;
+        }
+        $result = ImageService::store($r->files['image'] ?? []);
+        if (!$result['ok']) {
+            Session::flash('error', 'Image refusée : ' . $result['error']);
+            return $back;
+        }
+        DB::update('product_images', ['path' => $result['path'], 'source_note' => $source, 'is_demo' => 0], 'id = ?', [(int) $img['id']]);
+        ImageService::delete($img['path']);
+        Audit::log('image.replace', 'product', (int) $img['product_id'], ['image' => (int) $img['id'], 'source' => $source]);
+        Session::flash('success', 'Photo remplacée.');
+        return $back;
+    }
+
+    public function imageDelete(Request $r): Response
+    {
+        $img = $this->findImage($r);
         DB::run('DELETE FROM product_images WHERE id = ?', [(int) $img['id']]);
         ImageService::delete($img['path']);
+        $this->renumber((int) $img['product_id'], $this->orderedIds((int) $img['product_id']));
         Audit::log('image.delete', 'product', (int) $img['product_id'], ['path' => $img['path']]);
         Session::flash('success', 'Image supprimée.');
         return redirect('/admin/produits/' . $img['product_id'] . '#images');

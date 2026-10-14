@@ -76,7 +76,24 @@ final class SlidesController extends Base
             $errors['ends_at'] = 'La fin de publication doit suivre le début.';
         }
         $data['is_active'] = $r->str('is_active') === '1' ? 1 : 0;
+        $data['source_note'] = mb_substr(trim($r->str('source_note')), 0, 255) ?: null;
         return [$data, $errors];
+    }
+
+    /** Photo du carrousel : uniquement une photo de l'entreprise, déclarée comme telle avec sa provenance. */
+    private function sourceErrors(Request $r, array $data, bool $newImage): array
+    {
+        if (!$newImage) {
+            return [];
+        }
+        $errors = [];
+        if ($r->str('source_confirm') !== '1') {
+            $errors['source_confirm'] = 'Confirmez que la photo provient des ressources de l\'entreprise (page Facebook officielle ou photo fournie par l\'entreprise).';
+        }
+        if ($data['source_note'] === null) {
+            $errors['source_note'] = 'Indiquez la provenance de la photo.';
+        }
+        return $errors;
     }
 
     /** Image principale (≥ 1200 × 500) ou image mobile (≥ 600 × 700), contrôlées et ré-encodées en WebP. */
@@ -99,6 +116,7 @@ final class SlidesController extends Base
         } elseif ($image['path'] === null) {
             $errors['image'] = 'Une image est obligatoire (1200 × 500 px minimum).';
         }
+        $errors += $this->sourceErrors($r, $data, true);
         if (!$mobile['ok']) {
             $errors['image_mobile'] = $mobile['error'];
         }
@@ -129,6 +147,10 @@ final class SlidesController extends Base
         }
         if (!$mobile['ok']) {
             $errors['image_mobile'] = $mobile['error'];
+        }
+        $errors += $this->sourceErrors($r, $data, !empty($image['path']) || !empty($mobile['path']));
+        if ($data['source_note'] === null) {
+            $data['source_note'] = $slide['source_note'];
         }
         if ($errors) {
             foreach ([$image, $mobile] as $img) {

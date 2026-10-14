@@ -14,6 +14,8 @@ use App\Core\Validator;
 use App\Services\CartService;
 use App\Services\OrderService;
 use App\Services\Payment\PaymentException;
+use App\Services\PaymentLedger;
+use App\Services\PaymentPolicy;
 use App\Services\PaymentService;
 use App\Services\ShippingService;
 
@@ -42,8 +44,10 @@ final class CheckoutController
         }
         // Une zone sans moyen de paiement utilisable (ex. expédition payable en ligne alors qu'aucun prestataire n'est configuré)
         // n'est pas proposée : le client ne pourrait pas terminer sa commande.
-        $zones = array_values(array_filter(ShippingService::zones(), static fn (array $z) => PaymentService::availableMethods($z) !== []));
         $user = Auth::user();
+        $uid = $user !== null ? (int) $user['id'] : null;
+        $wholesale = PaymentPolicy::isWholesale((int) $summary['subtotal'] - (int) $summary['discount']);
+        $zones = array_values(array_filter(ShippingService::zones(), static fn (array $z) => PaymentService::availableMethods($z, OrderService::quote($summary, $z)['total'], $uid, $wholesale) !== []));
         $addresses = $user ? DB::all('SELECT * FROM addresses WHERE user_id = ? ORDER BY is_default DESC, id', [(int) $user['id']]) : [];
         if ($old === [] && $user) {
             $default = $addresses[0] ?? null;
@@ -59,11 +63,17 @@ final class CheckoutController
             }
         }
         $methodsByZone = [];
+        $depositByZone = [];
         $methods = [];
         foreach ($zones as $z) {
-            foreach (PaymentService::availableMethods($z) as $m) {
+            $zoneTotal = OrderService::quote($summary, $z)['total'];
+            foreach (PaymentService::availableMethods($z, $zoneTotal, $uid, $wholesale) as $m) {
                 $methodsByZone[(int) $z['id']][] = $m['code'];
                 $methods[$m['code']] = $m;
+            }
+            $deposit = PaymentPolicy::depositAmount($zoneTotal);
+            if ($deposit !== null) {
+                $depositByZone[(int) $z['id']] = ['deposit' => money($deposit), 'balance' => money($zoneTotal - $deposit)];
             }
         }
         $quote = OrderService::quote($summary, $zone);
@@ -74,6 +84,10 @@ final class CheckoutController
             'quote' => $quote,
             'methods' => $methods,
             'methodsByZone' => $methodsByZone,
+            'depositByZone' => $depositByZone,
+            'wholesale' => $wholesale,
+            'pro' => PaymentPolicy::proAccount($uid),
+            'invoice' => $uid !== null ? PaymentPolicy::invoice($uid, $quote['total']) : null,
             'addresses' => $addresses,
             'errors' => $errors,
             'old' => $old,
@@ -89,6 +103,7 @@ final class CheckoutController
         $summary = CartService::summary(CartService::current($r));
         $zone = ShippingService::find((int) $r->int('zone_id', 0));
         $quote = OrderService::quote($summary, $zone);
+        $deposit = $zone !== null ? PaymentPolicy::depositAmount($quote['total']) : null;
         return Response::json([
             'ok' => $zone !== null && $summary['items'] !== [],
             'subtotal' => $quote['subtotal'],
@@ -102,7 +117,9 @@ final class CheckoutController
                 'total' => money($quote['total']),
             ],
             'is_pickup' => $zone !== null && (int) $zone['is_pickup'] === 1,
-            'methods' => array_column(PaymentService::availableMethods($zone), 'code'),
+            'methods' => array_column(PaymentService::availableMethods($zone, $zone !== null ? $quote['total'] : null, Auth::id(),
+                PaymentPolicy::isWholesale($quote['subtotal'] - $quote['discount'])), 'code'),
+            'deposit' => $deposit !== null ? ['amount' => $deposit, 'deposit' => money($deposit), 'balance' => money($quote['total'] - $deposit)] : null,
         ]);
     }
 
@@ -122,6 +139,7 @@ final class CheckoutController
             'phone' => 'required|phone',
             'zone_id' => 'required|int',
             'payment_method' => 'required|max:30',
+            'pay_mode' => 'in:full,deposit',
             'note' => 'max:1000',
             'cgv' => 'accepted',
         ];
@@ -150,6 +168,7 @@ final class CheckoutController
             return $this->form($r, $errors, $r->post, 422);
         }
         $data = $v->data + ['city' => '', 'district' => '', 'address' => '', 'landmark' => ''];
+        $data['pay_mode'] = ($data['pay_mode'] ?? '') === 'deposit' ? 'deposit' : 'full';
         $result = OrderService::create($data, $cart, Auth::id(), $key, $r->int('expected_total'));
         switch ($result['status']) {
             case 'created':
@@ -215,8 +234,7 @@ final class CheckoutController
     {
         [$order, $token] = self::authorize($r);
         $gateway = PaymentService::gateway($order['payment_method']);
-        $canPay = $order['status'] === 'pending_payment' && $gateway !== null && $gateway->isEnabled()
-            && ($order['expires_at'] === null || $order['expires_at'] > gmdate('Y-m-d H:i:s'));
+        $canPay = PaymentService::canPayOnline($order);
         $history = array_values(array_filter(OrderService::history((int) $order['id']), static fn ($h) => !str_starts_with((string) $h['note'], 'Note interne')));
         return view('checkout/order', [
             'order' => $order,
@@ -227,6 +245,8 @@ final class CheckoutController
             'canPay' => $canPay,
             'needsPhone' => $gateway !== null && $gateway->needsPhone(),
             'lastPayment' => PaymentService::latestForOrder((int) $order['id']),
+            'dueNow' => PaymentLedger::dueNow($order),
+            'balance' => PaymentLedger::balance($order),
             'manual' => (\App\Services\PaymentMethods::find($order['payment_method'])['kind'] ?? '') === 'manual' ? \App\Services\PaymentMethods::find($order['payment_method']) : null,
             'pageTitle' => t('order.title', ['number' => $order['number']]),
             'noindex' => true,
@@ -274,6 +294,39 @@ final class CheckoutController
             'done' => $order['status'] !== 'pending_payment' || in_array($payment['status'] ?? '', ['failed', 'cancelled'], true),
             'redirect' => \App\Core\Lang::path(url('/commande/' . $order['number'], ['t' => $token])),
         ]);
+    }
+
+    /**
+     * Le client signale avoir effectué un paiement manuel (Mobile Money, virement…). Simple déclaration :
+     * l'état passe à « en cours de vérification » et l'équipe est prévenue ; rien n'est encaissé tant qu'elle n'a pas constaté la réception.
+     */
+    public function declarePayment(Request $r): Response
+    {
+        [$order, $token] = self::authorize($r);
+        $back = redirect(url('/commande/' . $order['number'], ['t' => $token]));
+        $method = \App\Services\PaymentMethods::find((string) $order['payment_method']);
+        if (($method['kind'] ?? '') !== 'manual' || PaymentLedger::dueNow($order) <= 0 || in_array($order['status'], ['cancelled', 'refunded'], true)) {
+            throw new HttpException(422, t('order.declare_unavailable'));
+        }
+        if (!RateLimiter::hit('declare:' . $order['number'], 5, 3600)) {
+            Session::flash('error', t('pay.throttled'));
+            return $back;
+        }
+        $reference = mb_substr(trim($r->str('reference')), 0, 120);
+        if ($reference === '') {
+            Session::flash('error', t('order.declare_ref_required'));
+            return $back;
+        }
+        $now = gmdate('Y-m-d H:i:s');
+        DB::update('orders', ['payment_declared_at' => $now, 'payment_declaration' => $reference, 'updated_at' => $now], 'id = ?', [(int) $order['id']]);
+        PaymentLedger::refreshStatus((int) $order['id']);
+        DB::insert('order_status_history', ['order_id' => (int) $order['id'], 'from_status' => $order['status'], 'to_status' => $order['status'],
+            'note' => 'Le client indique avoir payé ' . money(PaymentLedger::dueNow($order)) . ' (réf. ' . $reference . ') : réception à vérifier.', 'user_id' => null, 'created_at' => $now]);
+        \App\Services\Notifier::staffNotice('Paiement déclaré à vérifier : ' . $order['number'],
+            'Le client indique avoir payé ' . money(PaymentLedger::dueNow($order)) . ' par ' . payment_method_label((string) $order['payment_method']) . ' (référence indiquée : ' . $reference . ").\n"
+            . "Vérifiez la réception avant d'enregistrer l'encaissement :\n" . base_url() . '/admin/commandes/' . $order['id']);
+        Session::flash('success', t('order.declared'));
+        return $back;
     }
 
     public function receipt(Request $r): Response
