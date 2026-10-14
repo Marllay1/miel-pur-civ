@@ -6,8 +6,8 @@ Dernière campagne de tests : 2026-10-14 (itération 2 : paiements intégrés, S
 
 | Suite | Commande | Résultat |
 |---|---|---|
-| Fonctionnelle + sécurité (SQLite ; PHP 8.3 et PHP 8.2) | `php tests/run.php` | 31 scénarios, 1 026 assertions, 0 échec |
-| Fonctionnelle + sécurité (MariaDB 11.4 et MariaDB 10.4 de XAMPP) | `php tests/run.php --mysql` | 31 scénarios, 1 026 assertions, 0 échec |
+| Fonctionnelle + sécurité (SQLite ; PHP 8.3 et PHP 8.2) | `php tests/run.php` | 31 scénarios, 1 023 assertions, 0 échec |
+| Fonctionnelle + sécurité (MariaDB 11.4 et MariaDB 10.4 de XAMPP) | `php tests/run.php --mysql` | 31 scénarios, 1 023 assertions, 0 échec |
 | Boîte noire HTTP — Apache 2.4 (XAMPP) | `php tests/security-http.php http://miel.localhost` | 66 contrôles, 0 échec |
 | Boîte noire HTTP — Nginx 1.30 | `php tests/security-http.php http://miel-nginx.localhost:8088` | 66 contrôles, 0 échec |
 | Boîte noire HTTP — serveur intégré PHP | `php tests/security-http.php` | 66 contrôles, 0 échec |
@@ -22,7 +22,7 @@ Dernière campagne de tests : 2026-10-14 (itération 2 : paiements intégrés, S
 | CSRF | 11, 22, HTTP | jeton absent, erroné, issu d'une autre session ; déconnexion forcée impossible ; jeton renouvelé à la connexion |
 | Sessions | 22, HTTP | fixation refusée (mode strict, régénération à la connexion), ancien identifiant inutilisable, cookies HttpOnly/SameSite/Secure, HSTS, invalidation des autres sessions après changement ou réinitialisation du mot de passe, compte désactivé coupé, session forgée rejetée, inactivité personnel 2 h |
 | Authentification | 10, 25, HTTP | hachage, verrouillage 5 échecs/15 min par compte+IP, 20 par IP (pulvérisation), messages identiques compte existant/inexistant, réinitialisation à usage unique et neutre |
-| Contrôle d'accès | 11, 12, 18, 23 | matrice des rôles (GET et POST), auto-promotion et dernier admin protégés, commande d'autrui (404), adresses d'autrui, mass assignment (rôle, e-mail, statut, état de paiement, user_id) |
+| Contrôle d'accès | 11, 12, 18, 23 | rôle d'équipe unique (administrateur, toutes les permissions), client sans aucun accès à l'administration (GET et POST), auto-promotion impossible, auto-désactivation et dernier admin protégés, administrateur désactivé coupé, commande d'autrui (404), adresses d'autrui, mass assignment (rôle, e-mail, statut, état de paiement, user_id) |
 | Téléversements | 13, 24 | SVG, GIF polyglotte, HTML déguisé, taille, erreurs, PHP caché dans un JPEG supprimé par ré-encodage WebP, nom aléatoire, suppression hors `/uploads` refusée, `.htaccess` |
 | Logique métier | 04, 06, 07, 17, 26 | prix/total falsifiés, quantités invalides, clé d'idempotence forgée, double commande, changement de prix en cours, zone désactivée, promo plafonnée, paiement en ligne d'une commande à la livraison, stock jamais négatif (application + contrainte CHECK) |
 | Paiement / webhooks | 08, 09, 26, 28 | signature HMAC (Wave, paiement simulé), horodatage, corps modifié, rejeu, montant, contenu > 64 Ko, secret trop court, paiement tardif ; notifications non signées (MTN, Orange) ou non concordantes (CinetPay) jamais crues : état vérifié auprès du prestataire ; vérification avant toute expiration ; aucun secret affiché en administration |

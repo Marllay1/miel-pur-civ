@@ -2,15 +2,11 @@
 
 Accès : `/admin/connexion`. Session fermée après **2 heures d'inactivité**. Chaque action sensible est inscrite au **journal d'audit**.
 
-## Rôles
+## Rôle
 
-| Rôle | Accès |
-|---|---|
-| Administrateur | Tout |
-| Gestionnaire catalogue | Produits, catégories, stock, codes promo, tableau de bord |
-| Gestionnaire commandes | Commandes, devis, clients, tableau de bord |
+Un seul rôle d'équipe : **Administrateur**, avec accès à toute l'administration (catalogue, stock, promotions, commandes, devis, clients, contenus, réglages, intégrations, équipe, journal). Les clients n'ont aucun accès à l'administration.
 
-Les contenus (accueil, pages, FAQ, avis, messages, newsletter), les réglages et l'équipe sont réservés à l'administrateur. Les droits sont vérifiés par le serveur sur chaque page et chaque action, pas seulement dans le menu.
+*Équipe* : ajouter un administrateur (mot de passe provisoire à lui transmettre de façon sûre) ou désactiver le compte d'une personne qui quitte l'équipe. On ne peut pas désactiver son propre compte, et il reste toujours au moins un administrateur actif. Les droits sont vérifiés par le serveur sur chaque page et chaque action, pas seulement dans le menu.
 
 ## Traiter une commande
 

@@ -82,7 +82,7 @@ php tests/smtp-check.php --to=votre@adresse.ci
 php bin/create-admin.php --email=direction@exemple.ci --first=Prénom --last=Nom
 ```
 
-Le mot de passe généré s'affiche **une seule fois** : le noter, se connecter sur `/admin/connexion`, puis le transmettre de façon sûre. Créer ensuite les comptes de l'équipe depuis *Équipe et rôles* (gestionnaire catalogue, gestionnaire commandes). Mot de passe perdu : `php bin/create-admin.php --email=... --reset-password`.
+Le mot de passe généré s'affiche **une seule fois** : le noter, se connecter sur `/admin/connexion`, puis le transmettre de façon sûre. Créer ensuite les comptes des autres administrateurs depuis *Équipe* (un seul rôle d'équipe : Administrateur). Mot de passe perdu : `php bin/create-admin.php --email=... --reset-password`.
 
 ## 5. Tâches planifiées (cron)
 

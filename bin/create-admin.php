@@ -3,7 +3,7 @@ declare(strict_types=1);
 
 /**
  * Crée un compte du personnel (par défaut : administrateur).
- *   php bin/create-admin.php --email=admin@exemple.ci --first=Awa --last=Koné [--role=admin|catalog_manager|order_manager] [--password=...]
+ *   php bin/create-admin.php --email=admin@exemple.ci --first=Awa --last=Koné [--password=...]
  * Sans --password, un mot de passe aléatoire est généré et affiché UNE seule fois.
  * Avec --reset-password, réinitialise le mot de passe d'un compte existant.
  */
@@ -22,9 +22,10 @@ if ($email === '') {
 if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
     fail('E-mail invalide.');
 }
-$role = (string) ($opts['role'] ?? 'admin');
-if (!in_array($role, ['admin', 'catalog_manager', 'order_manager'], true)) {
-    fail('Rôle invalide (admin, catalog_manager, order_manager).');
+// Rôle d'équipe unique : Administrateur.
+$role = 'admin';
+if (isset($opts['role']) && $opts['role'] !== 'admin') {
+    fail('Un seul rôle d\x27équipe existe : admin (Administrateur).');
 }
 $password = is_string($opts['password'] ?? null) ? $opts['password'] : null;
 $generated = false;

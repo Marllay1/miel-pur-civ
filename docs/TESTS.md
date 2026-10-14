@@ -14,10 +14,10 @@ Option `--filter=09` pour un seul scénario. Les tests passent par le vrai noyau
 
 | Environnement | Suite | Résultat |
 |---|---|---|
-| PHP 8.3.33, SQLite en mémoire | `php tests/run.php` | **31 scénarios, 1 026 assertions, 0 échec** |
-| PHP 8.3.33, MariaDB 11.4.8 | `php tests/run.php --mysql` | **31 scénarios, 1 026 assertions, 0 échec** |
-| XAMPP 8.2.12 : PHP 8.2.12, SQLite | `php tests/run.php` | **31 scénarios, 1 026 assertions, 0 échec** |
-| XAMPP 8.2.12 : PHP 8.2.12, MariaDB 10.4.32 | `php tests/run.php --mysql` | **31 scénarios, 1 026 assertions, 0 échec** |
+| PHP 8.3.33, SQLite en mémoire | `php tests/run.php` | **31 scénarios, 1 023 assertions, 0 échec** |
+| PHP 8.3.33, MariaDB 11.4.8 | `php tests/run.php --mysql` | **31 scénarios, 1 023 assertions, 0 échec** |
+| XAMPP 8.2.12 : PHP 8.2.12, SQLite | `php tests/run.php` | **31 scénarios, 1 023 assertions, 0 échec** |
+| XAMPP 8.2.12 : PHP 8.2.12, MariaDB 10.4.32 | `php tests/run.php --mysql` | **31 scénarios, 1 023 assertions, 0 échec** |
 | Apache 2.4.58 (XAMPP, hôte virtuel `miel.localhost`) | `php tests/security-http.php http://miel.localhost` | **66 contrôles, 0 échec** |
 | Nginx 1.30.5 + PHP 8.2 FastCGI (bloc server de DEPLOIEMENT.md, servi en HTTP local ; hôte inconnu → 444) | `php tests/security-http.php http://miel-nginx.localhost:8088` | **66 contrôles, 0 échec** |
 | Serveur intégré PHP 8.3 | `php tests/security-http.php` | **66 contrôles, 0 échec** |
@@ -41,7 +41,7 @@ Les scénarios 20 à 27 et la suite HTTP sont des tests de sécurité dédiés :
 | 09 | Webhook | signature invalide/absente, horodatage expiré, corps modifié, montant incohérent (audit), rejeu, déjà traité, prestataire non intégré, paiement inconnu, paiement tardif sur commande annulée |
 | 10 | Compte | inscription, doublon, connexion, verrouillage après 5 échecs, réinitialisation (réponse neutre, jeton haché, usage unique) |
 | 11 | Protection admin | anonyme, client, CSRF absent/erroné (403 « formulaire expiré »), inactivité 2 h, connexion journalisée |
-| 12 | Permissions | matrice par rôle (GET et POST), menu filtré, auto-rétrogradation impossible |
+| 12 | Rôle unique | deux rôles en base (administrateur, client), administrateur avec toutes les permissions et toutes les sections, rôle inexistant refusé, création d'un administrateur, auto-désactivation impossible, désactivation journalisée |
 | 13 | CRUD produit | création, slug, variante, SKU unique, prix, suppression logique avec commandes intactes, audit, image piégée refusée, ré-encodage WebP |
 | 14 | Statuts | transitions interdites, chaîne complète, encaissement COD, remboursement, annulation (stock + promo, sans double restitution), note interne invisible |
 | 15 | Rendu | viewport, lang, lien d'évitement, aucun script/style/gestionnaire inline, un h1, alt, CSP, nosniff, DENY, sitemap, robots |
@@ -52,7 +52,7 @@ Les scénarios 20 à 27 et la suite HTTP sont des tests de sécurité dédiés :
 | 20–27 | Sécurité | injection SQL, XSS, sessions/CSRF, contrôle d'accès, téléversements, force brute, logique métier, divulgation — détail dans SECURITE.md |
 | 28 | Paiements intégrés | Wave, Orange Money, MTN MoMo, carte (CinetPay) contre simulateurs : redirection, notification signée ou vérifiée, rejeu, montant, échec, prestataire injoignable, vérification avant expiration (pas d'annulation à l'aveugle), page Intégrations sans secret |
 | 29 | Bilinguisme et thème | /en (contenus, e-mails, validation, sitemap hreflang), administration en français, thème clair/sombre sans JavaScript, valeurs de cookie invalides ignorées |
-| 31 | Séparation des espaces, logo, photos | anonyme, client, administrateur, gestionnaire catalogue : liens « Administration » visibles uniquement pour l'équipe, 403 pour un client (URL directe, JSON, POST, /en/admin), redirections après connexion/déconnexion selon le rôle, absence de boucle, retour d'administration limité à /admin, cache privé ; favicons présents, aucun logo inventé ; chaque image affichée existe, illustrations signalées, crédits complets |
+| 31 | Séparation des espaces, logo, photos | anonyme, client, administrateur : liens « Administration » visibles uniquement pour l'équipe, 403 pour un client (URL directe, JSON, POST, /en/admin), redirections après connexion/déconnexion selon le rôle, absence de boucle, retour d'administration limité à /admin, cache privé ; favicons présents, aucun logo inventé ; chaque image affichée existe, illustrations signalées, crédits complets |
 | 30 | Traductions en administration | saisie EN produit, format, FAQ, zone, page, accueil ; champ non prévu ignoré, texte échappé, champ vide = français, audit, suppression en cascade |
 
 ## Limites

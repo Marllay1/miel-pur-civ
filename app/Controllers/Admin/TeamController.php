@@ -28,7 +28,7 @@ final class TeamController extends Base
         }
         return admin_view('team', [
             'staff' => DB::all("SELECT u.*, r.name AS role, r.label AS role_label FROM users u JOIN roles r ON r.id = u.role_id WHERE r.name <> 'customer' ORDER BY u.is_active DESC, u.last_name"),
-            'roles' => $roles, 'perms' => $perms, 'errors' => $errors, 'old' => $old, 'pageTitle' => 'Équipe et rôles',
+            'roles' => $roles, 'perms' => $perms, 'errors' => $errors, 'old' => $old, 'pageTitle' => 'Équipe',
         ], $status);
     }
 
@@ -64,7 +64,7 @@ final class TeamController extends Base
         if ($user === null) {
             throw new HttpException(404);
         }
-        $role = $r->str('role');
+        $role = $r->str('role') ?: 'admin'; // rôle d'équipe unique
         $active = $r->str('is_active') === '1' ? 1 : 0;
         $roleId = DB::value("SELECT id FROM roles WHERE name = ? AND name <> 'customer'", [$role]);
         if ($roleId === null) {

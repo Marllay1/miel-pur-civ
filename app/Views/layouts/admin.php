@@ -13,7 +13,7 @@ $sections = [
     'Ventes' => [['/admin/commandes', 'Commandes', 'orders.manage'], ['/admin/devis', 'Devis professionnels', 'orders.manage'], ['/admin/clients', 'Clients', 'customers.view']],
     'Catalogue' => [['/admin/produits', 'Produits', 'catalog.manage'], ['/admin/categories', 'Catégories', 'catalog.manage'], ['/admin/stock', 'Stock', 'catalog.manage'], ['/admin/promotions', 'Codes promo', 'catalog.manage']],
     'Contenus' => [['/admin/contenu', 'Accueil', 'content.manage'], ['/admin/pages', 'Pages et légal', 'content.manage'], ['/admin/faq', 'FAQ', 'content.manage'], ['/admin/avis', 'Avis', 'content.manage'], ['/admin/messages', 'Messages', 'content.manage'], ['/admin/newsletter', 'Newsletter', 'content.manage']],
-    'Configuration' => [['/admin/reglages', 'Réglages', 'settings.manage'], ['/admin/livraison', 'Zones de livraison', 'settings.manage'], ['/admin/integrations', 'Intégrations', 'settings.manage'], ['/admin/equipe', 'Équipe et rôles', 'users.manage'], ['/admin/journal', 'Journal d\'audit', 'audit.view']],
+    'Configuration' => [['/admin/reglages', 'Réglages', 'settings.manage'], ['/admin/livraison', 'Zones de livraison', 'settings.manage'], ['/admin/integrations', 'Intégrations', 'settings.manage'], ['/admin/equipe', 'Équipe', 'users.manage'], ['/admin/journal', 'Journal d\'audit', 'audit.view']],
 ];
 $isCurrent = static fn (string $href) => $href === '/admin' ? $path === '/admin' : ($path === $href || str_starts_with($path, $href . '/'));
 ?><!doctype html>

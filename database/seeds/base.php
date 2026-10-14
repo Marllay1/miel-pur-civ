@@ -22,10 +22,10 @@ return static function (): void {
         'users.manage' => 'Gérer l\'équipe et les rôles',
         'audit.view' => 'Consulter le journal d\'audit',
     ];
+    // Un seul rôle d'équipe : Administrateur (toutes les permissions). Les permissions restent vérifiées
+    // route par route, ce qui permettra de recréer des rôles restreints si la boutique en a besoin un jour.
     $roles = [
         'admin' => ['Administrateur', array_keys($permissions)],
-        'catalog_manager' => ['Gestionnaire catalogue', ['catalog.manage', 'reports.view']],
-        'order_manager' => ['Gestionnaire commandes', ['orders.manage', 'customers.view', 'reports.view']],
         'customer' => ['Client', []],
     ];
     foreach ($permissions as $name => $label) {

@@ -354,41 +354,46 @@ return [
         T::contains('noindex', $r->headers['X-Robots-Tag'] ?? '', 'Admin non indexée');
     },
 
-    '12 Permissions par rôle (contrôle serveur)' => function (): void {
-        $matrix = [
-            'catalog_manager' => ['/admin' => 200, '/admin/produits' => 200, '/admin/stock' => 200, '/admin/promotions' => 200, '/admin/commandes' => 403, '/admin/clients' => 403, '/admin/reglages' => 403, '/admin/equipe' => 403, '/admin/journal' => 403, '/admin/pages' => 403],
-            'order_manager' => ['/admin' => 200, '/admin/commandes' => 200, '/admin/devis' => 200, '/admin/clients' => 200, '/admin/produits' => 403, '/admin/stock' => 403, '/admin/reglages' => 403, '/admin/equipe' => 403, '/admin/avis' => 403],
-            'admin' => ['/admin/produits' => 200, '/admin/commandes' => 200, '/admin/reglages' => 200, '/admin/equipe' => 200, '/admin/journal' => 200, '/admin/integrations' => 200, '/admin/avis' => 200],
-        ];
-        foreach ($matrix as $role => $routes) {
-            $c = new Client();
-            $c->loginAs(T::user($role, "$role@example.test"));
-            foreach ($routes as $path => $code) {
-                T::status($code, $c->get($path), "$role GET $path");
-            }
-        }
-        $cm = new Client();
-        $cm->loginAs(DB::one("SELECT * FROM users WHERE email = 'catalog_manager@example.test'"));
-        T::status(403, $cm->post('/admin/commandes/1/statut', ['status' => 'cancelled']), 'Action POST interdite au gestionnaire catalogue');
-        T::status(403, $cm->post('/admin/reglages', ['cod_enabled' => '0']), 'Réglages interdits');
-        T::eq('1', \App\Services\Settings::get('cod_enabled'), 'Réglage inchangé');
-        $om = new Client();
-        $om->loginAs(DB::one("SELECT * FROM users WHERE email = 'order_manager@example.test'"));
-        T::notContains('/admin/produits', $om->get('/admin')->body, 'Menu filtré selon le rôle');
-        // L'administrateur ne peut pas se retirer ses droits ni supprimer le dernier admin.
-        $admin = DB::one("SELECT * FROM users WHERE email = 'admin@example.test'");
+    '12 Rôle d\'équipe unique : Administrateur (contrôle serveur)' => function (): void {
+        T::eq(['admin', 'customer'], array_column(DB::all('SELECT name FROM roles ORDER BY name'), 'name'), 'Deux rôles seulement : administrateur et client');
+        $adminRole = (int) DB::value("SELECT id FROM roles WHERE name = 'admin'");
+        T::eq((int) DB::value('SELECT COUNT(*) FROM permissions'), (int) DB::value('SELECT COUNT(*) FROM role_permissions WHERE role_id = ?', [$adminRole]), 'L\'administrateur a toutes les permissions');
+        $admin = T::user('admin', 'admin@example.test');
         $a = new Client();
         $a->loginAs($admin);
-        $a->post('/admin/equipe/' . $admin['id'], ['role' => 'order_manager', 'is_active' => '1']);
-        T::eq('admin', DB::value('SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = ?', [(int) $admin['id']]), 'Auto-rétrogradation refusée');
-        $a->post('/admin/equipe/' . DB::value("SELECT id FROM users WHERE email = 'order_manager@example.test'"), ['role' => 'catalog_manager', 'is_active' => '1']);
-        T::eq('catalog_manager', DB::value("SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.email = 'order_manager@example.test'"), 'Changement de rôle par l\'admin');
-        T::eq(1, (int) DB::value("SELECT COUNT(*) FROM audit_log WHERE action = 'user.update'"), 'Changement de rôle journalisé');
+        foreach (['/admin', '/admin/produits', '/admin/stock', '/admin/promotions', '/admin/commandes', '/admin/devis', '/admin/clients', '/admin/messages',
+            '/admin/contenu', '/admin/pages', '/admin/faq', '/admin/avis', '/admin/reglages', '/admin/livraison', '/admin/integrations', '/admin/equipe', '/admin/journal'] as $path) {
+            T::status(200, $a->get($path), "Administrateur GET $path");
+        }
+        $menu = $a->get('/admin')->body;
+        foreach (['/admin/produits', '/admin/commandes', '/admin/reglages', '/admin/equipe', '/admin/journal'] as $link) {
+            T::contains('href="' . $link . '"', $menu, "Menu complet : $link");
+        }
+        $team = $a->get('/admin/equipe')->body;
+        T::notContains('Gestionnaire', $team, 'Plus de rôles restreints dans l\'écran Équipe');
+        T::notContains('name="role"><option', $team, 'Plus de choix de rôle');
+        // Création d'un administrateur ; un rôle inexistant est refusé.
+        T::status(422, $a->post('/admin/equipe', ['first_name' => 'R', 'last_name' => 'R', 'email' => 'role@example.test', 'role' => 'catalog_manager', 'password' => 'Equipe2026abc']), 'Rôle restreint inexistant refusé');
+        $a->post('/admin/equipe', ['first_name' => 'Awa', 'last_name' => 'Kone', 'email' => 'awa@example.test', 'role' => 'admin', 'password' => 'Equipe2026abc']);
+        T::eq('admin', DB::value("SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.email = 'awa@example.test'"), 'Nouveau membre créé administrateur');
+        $awa = (int) DB::value("SELECT id FROM users WHERE email = 'awa@example.test'");
+        // Un administrateur ne peut pas se désactiver lui-même ; le dernier administrateur actif est protégé.
+        $a->post('/admin/equipe/' . $admin['id'], ['role' => 'admin']);
+        T::eq(1, (int) DB::value('SELECT is_active FROM users WHERE id = ?', [(int) $admin['id']]), 'Auto-désactivation refusée');
+        $a->post('/admin/equipe/' . $awa, ['role' => 'admin']);
+        T::eq(0, (int) DB::value('SELECT is_active FROM users WHERE id = ?', [$awa]), 'Désactivation d\'un autre administrateur');
+        T::eq(1, (int) DB::value("SELECT COUNT(*) FROM audit_log WHERE action = 'user.update'"), 'Désactivation journalisée');
+        DB::run("UPDATE users SET is_active = 0 WHERE role_id = ? AND id <> ?", [$adminRole, $awa]);
+        DB::run('UPDATE users SET is_active = 1 WHERE id = ?', [$awa]);
+        $b = new Client('10.12.0.2');
+        $b->loginAs(DB::one('SELECT * FROM users WHERE id = ?', [$awa]));
+        $b->post('/admin/equipe/' . $admin['id'], ['role' => 'admin', 'is_active' => '1']);
+        T::eq(1, (int) DB::value('SELECT is_active FROM users WHERE id = ?', [(int) $admin['id']]), 'Réactivation par un autre administrateur');
     },
 
     '13 CRUD produit (administration)' => function (): void {
         $c = new Client();
-        $c->loginAs(T::user('catalog_manager', 'cat@example.test'));
+        $c->loginAs(T::user('admin', 'cat@example.test'));
         $r = $c->post('/admin/produits', ['name' => 'Miel de néré', 'slug' => '', 'category_id' => '1', 'short_description' => 'Test', 'description' => "Para 1\n\nPara 2", 'is_active' => '1']);
         T::redirectsTo('/admin/produits/', $r, 'Création');
         $p = DB::one("SELECT * FROM products WHERE slug = 'miel-de-nere'");
@@ -440,7 +445,7 @@ return [
         $o = OrderService::findByNumber($number);
         T::eq(1, (int) DB::value("SELECT used_count FROM promo_codes WHERE code = 'BIENVENUE10'"), 'Promo consommée');
         $a = new Client();
-        $a->loginAs(T::user('order_manager', 'om@example.test'));
+        $a->loginAs(T::user('admin', 'om@example.test'));
         $a->post('/admin/commandes/' . $o['id'] . '/statut', ['status' => 'shipped']);
         T::eq('pending_confirmation', OrderService::find((int) $o['id'])['status'], 'Transition interdite (confirmation → expédiée)');
         $a->post('/admin/commandes/' . $o['id'] . '/statut', ['status' => 'refunded']);
@@ -562,7 +567,7 @@ return [
         T::eq(1, (int) DB::value('SELECT COUNT(*) FROM orders'), 'Aucune commande pour B');
         // Ajustement admin avec verrou optimiste.
         $admin = new Client();
-        $admin->loginAs(T::user('catalog_manager', 'stock@example.test'));
+        $admin->loginAs(T::user('admin', 'stock@example.test'));
         $v = T::variant('MPCI-CRE-500');
         $admin->post('/admin/stock/' . $v['id'], ['stock' => '10', 'current' => '5', 'note' => 'Inventaire']);
         T::eq(0, T::stock('MPCI-CRE-500'), 'Ajustement refusé si la valeur de référence a changé');
@@ -613,9 +618,9 @@ return [
         T::contains('noindex', $page->headers['X-Robots-Tag'] ?? '', 'Pas d\'indexation');
         T::status(403, (function () {
             $c = new Client();
-            $c->loginAs(T::user('catalog_manager', 'cm@example.test'));
+            $c->loginAs(T::user('customer', 'cm@example.test'));
             return $c->get('/admin/clients');
-        })(), 'Clients invisibles sans permission');
+        })(), 'Liste des clients invisible pour un client');
         // Export CSV protégé contre l'injection de formules.
         $evil = new Client('10.0.1.4');
         $evil->addToCart('MPCI-LIQ-250', 1);
@@ -746,7 +751,7 @@ return [
         (new Client('10.8.0.3'))->post('/compte/reinitialiser/' . $m[1], ['password' => 'Reinit2026xyz', 'password_confirmation' => 'Reinit2026xyz']);
         T::redirectsTo('/compte/connexion', $a->get('/compte'), 'Sessions fermées après réinitialisation');
         // Compte du personnel désactivé : déconnecté immédiatement.
-        $staff = T::user('order_manager', 'staff-off@example.test');
+        $staff = T::user('admin', 'staff-off@example.test');
         $s = new Client('10.8.0.4');
         $s->loginAs($staff);
         T::status(200, $s->get('/admin'), 'Personnel connecté');
@@ -782,20 +787,23 @@ return [
             T::status(403, $cu->post($url, $data), "Client → POST $url refusé");
         }
         T::status(403, $cu->get('/admin/commandes/export'), 'Client → export refusé');
-        $om = new Client('10.9.0.2');
-        $omUser = T::user('order_manager', 'om2@example.test');
-        $om->loginAs($omUser);
-        T::status(403, $om->post('/admin/equipe', ['first_name' => 'P', 'last_name' => 'P', 'email' => 'p@example.test', 'role' => 'admin', 'password' => 'Pirate123456']), 'Gestionnaire commandes ne crée pas d\'admin');
-        T::status(403, $om->post('/admin/equipe/' . $omUser['id'], ['role' => 'admin', 'is_active' => '1']), 'Pas d\'auto-promotion');
-        T::status(403, $om->post('/admin/avis/1', ['status' => 'approved']), 'Pas de modération');
-        T::status(403, $om->post('/admin/stock/1', ['stock' => '999', 'current' => '40', 'note' => 'x']), 'Pas d\'ajustement de stock');
-        T::status(403, $om->post('/admin/livraison', ['name' => 'Z', 'fee' => '0']), 'Pas de zones');
-        T::eq('order_manager', DB::value('SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = ?', [(int) $omUser['id']]), 'Rôle inchangé');
+        // Élévation de privilèges par un client : création d'administrateur, auto-promotion, actions d'administration.
+        $customerRow = DB::one('SELECT * FROM users WHERE id = ?', [(int) $customer['id']]);
+        T::status(403, $cu->post('/admin/equipe', ['first_name' => 'P', 'last_name' => 'P', 'email' => 'p@example.test', 'role' => 'admin', 'password' => 'Pirate123456']), 'Un client ne crée pas d\'administrateur');
+        T::status(403, $cu->post('/admin/equipe/' . $customerRow['id'], ['role' => 'admin', 'is_active' => '1']), 'Pas d\'auto-promotion');
+        T::status(403, $cu->post('/admin/avis/1', ['status' => 'approved']), 'Pas de modération');
+        T::status(403, $cu->post('/admin/stock/1', ['stock' => '999', 'current' => '40', 'note' => 'x']), 'Pas d\'ajustement de stock');
+        T::status(403, $cu->post('/admin/livraison', ['name' => 'Z', 'fee' => '0']), 'Pas de zones');
+        T::status(403, $cu->post('/admin/contenu', ['home_hero_title' => 'piraté']), 'Pas d\'édition de contenu');
+        T::status(403, $cu->get('/admin/commandes/1'), 'Pas d\'accès aux commandes d\'autrui');
+        T::eq('customer', DB::value('SELECT r.name FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = ?', [(int) $customerRow['id']]), 'Rôle inchangé');
         T::eq(0, (int) DB::value("SELECT COUNT(*) FROM users WHERE email = 'p@example.test'"), 'Aucun compte créé');
-        $cm = new Client('10.9.0.3');
-        $cm->loginAs(T::user('catalog_manager', 'cm2@example.test'));
-        T::status(403, $cm->get('/admin/commandes/1'), 'Gestionnaire catalogue sans accès aux commandes');
-        T::status(403, $cm->post('/admin/contenu', ['home_hero_title' => 'piraté']), 'Pas d\'édition de contenu');
+        // Un administrateur désactivé n'a plus aucun accès.
+        $off = T::user('admin', 'admin-off@example.test');
+        DB::run('UPDATE users SET is_active = 0 WHERE id = ?', [(int) $off['id']]);
+        $offClient = new Client('10.9.0.3');
+        $offClient->loginAs($off);
+        T::redirectsTo('/admin/connexion', $offClient->get('/admin/commandes'), 'Administrateur désactivé : plus d\'accès');
         // Mass assignment : champs non prévus ignorés.
         $cu->post('/compte/profil', ['first_name' => 'Cust', 'last_name' => 'Test', 'phone' => '', 'role_id' => '1', 'is_active' => '0', 'email' => 'vol@example.test', 'password_hash' => 'x']);
         $after = DB::one('SELECT u.*, r.name AS role FROM users u JOIN roles r ON r.id = u.role_id WHERE u.id = ?', [(int) $customer['id']]);
@@ -1320,13 +1328,8 @@ return [
         T::redirectsTo('/admin/connexion', $a->post('/admin/deconnexion'), 'Équipe : déconnexion → page de connexion');
         T::ok(!$adminLink($a->get('/')->body), 'Après déconnexion : plus de lien vers l\'administration');
 
-        // Rôle restreint : lien vers l'administration, mais permissions vérifiées route par route
-        $cm = new Client('10.32.0.8');
-        $cm->loginAs(T::user('catalog_manager', 'sep-cat@example.test'));
-        T::ok($adminLink($cm->get('/')->body), 'Gestionnaire catalogue : lien Administration');
-        T::status(200, $cm->get('/admin/produits'), 'Gestionnaire catalogue : catalogue accessible');
-        T::status(403, $cm->get('/admin/equipe'), 'Gestionnaire catalogue : équipe refusée');
-        T::status(403, $cm->post('/admin/reglages', ['store_name' => 'X']), 'Gestionnaire catalogue : réglages refusés');
+        // Rôle d'équipe unique : seuls les administrateurs voient le lien et accèdent à l'administration.
+        T::eq(0, (int) DB::value("SELECT COUNT(*) FROM roles WHERE name NOT IN ('admin', 'customer')"), 'Aucun autre rôle d\'équipe');
 
         // Logo et favicon : emplacements prêts, aucun logo inventé
         $html = $anon->get('/')->body;
