@@ -13,7 +13,11 @@ final class ImageService
     public const MAX_SIDE = 1600;
 
     /** @return array{ok:bool, path?:string, error?:string} */
-    public static function store(array $file, string $subdir = 'products'): array
+    /**
+     * @param int $maxSide plus grand côté conservé (images de carrousel : 2400 ; logos et produits : 1600)
+     * @param array{minWidth?:int, minHeight?:int} $constraints dimensions minimales exigées
+     */
+    public static function store(array $file, string $subdir = 'products', int $maxSide = self::MAX_SIDE, array $constraints = []): array
     {
         if (!isset($file['error']) || is_array($file['error'])) {
             return ['ok' => false, 'error' => 'Fichier invalide.'];
@@ -35,6 +39,9 @@ final class ImageService
         if ($info[0] > 8000 || $info[1] > 8000) {
             return ['ok' => false, 'error' => 'Image trop grande (8000 px maximum).'];
         }
+        if ($info[0] < ($constraints['minWidth'] ?? 0) || $info[1] < ($constraints['minHeight'] ?? 0)) {
+            return ['ok' => false, 'error' => sprintf('Image trop petite (%d × %d px) : %d × %d px minimum.', $info[0], $info[1], $constraints['minWidth'] ?? 0, $constraints['minHeight'] ?? 0)];
+        }
         $src = match ($info[2]) {
             IMAGETYPE_JPEG => @imagecreatefromjpeg($tmp),
             IMAGETYPE_PNG => @imagecreatefrompng($tmp),
@@ -44,7 +51,7 @@ final class ImageService
             return ['ok' => false, 'error' => 'Image illisible.'];
         }
         [$w, $h] = [imagesx($src), imagesy($src)];
-        $scale = min(1, self::MAX_SIDE / max($w, $h));
+        $scale = min(1, $maxSide / max($w, $h));
         $nw = max(1, (int) round($w * $scale));
         $nh = max(1, (int) round($h * $scale));
         $dst = imagecreatetruecolor($nw, $nh);
@@ -62,7 +69,7 @@ final class ImageService
         if (!$ok) {
             return ['ok' => false, 'error' => 'Enregistrement impossible.'];
         }
-        return ['ok' => true, 'path' => '/uploads/' . $subdir . '/' . $name];
+        return ['ok' => true, 'path' => '/uploads/' . $subdir . '/' . $name, 'width' => $nw, 'height' => $nh];
     }
 
     public static function delete(string $path): void

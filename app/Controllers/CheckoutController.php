@@ -158,7 +158,7 @@ final class CheckoutController
                 $tokens = (array) Session::get('order_tokens', []);
                 $tokens[$order['number']] = $result['token'];
                 Session::set('order_tokens', array_slice($tokens, -10, null, true));
-                if ($order['status'] === 'pending_payment') {
+                if ($order['status'] === 'pending_payment' && PaymentService::gateway($order['payment_method']) !== null) {
                     // Paiement en ligne : démarrage immédiat chez le prestataire.
                     return $this->startPayment($order, $result['token'], $data['payer_phone'] ?? null);
                 }
@@ -227,6 +227,7 @@ final class CheckoutController
             'canPay' => $canPay,
             'needsPhone' => $gateway !== null && $gateway->needsPhone(),
             'lastPayment' => PaymentService::latestForOrder((int) $order['id']),
+            'manual' => (\App\Services\PaymentMethods::find($order['payment_method'])['kind'] ?? '') === 'manual' ? \App\Services\PaymentMethods::find($order['payment_method']) : null,
             'pageTitle' => t('order.title', ['number' => $order['number']]),
             'noindex' => true,
         ]);

@@ -40,20 +40,28 @@ final class PaymentService
      */
     public static function availableMethods(?array $zone): array
     {
+        // Source unique : Administration → Moyens de paiement (seuls les moyens opérationnels sont proposés).
         $methods = [];
-        if (Settings::bool('cod_enabled') && ($zone === null || (int) $zone['allows_cod'] === 1)) {
-            $methods[] = [
-                'code' => 'cod',
-                'label' => t('pay.cod'),
-                'description' => $zone !== null && (int) $zone['is_pickup'] === 1 ? t('pay.desc.cod_pickup') : t('pay.desc.cod'),
-                'online' => false,
-                'needs_phone' => false,
-            ];
-        }
-        foreach (self::gateways() as $gateway) {
-            if ($gateway->isEnabled()) {
-                $methods[] = ['code' => $gateway->code(), 'label' => $gateway->label(), 'description' => $gateway->description(), 'online' => true, 'needs_phone' => $gateway->needsPhone()];
+        foreach (PaymentMethods::operational() as $code => $m) {
+            $custom = PaymentMethods::description($m);
+            if ($m['kind'] === 'cod') {
+                if ($zone !== null && (int) $zone['allows_cod'] !== 1) {
+                    continue;
+                }
+                $description = $custom !== '' ? $custom : ($zone !== null && (int) $zone['is_pickup'] === 1 ? t('pay.desc.cod_pickup') : t('pay.desc.cod'));
+                $methods[] = ['code' => $code, 'kind' => 'cod', 'label' => PaymentMethods::name($m), 'description' => $description, 'online' => false, 'needs_phone' => false, 'logos' => PaymentMethods::logos($m)];
+            } elseif ($m['kind'] === 'gateway') {
+                $gateway = self::gateway($code);
+                $methods[] = ['code' => $code, 'kind' => 'gateway', 'label' => PaymentMethods::name($m), 'description' => $custom !== '' ? $custom : $gateway->description(),
+                    'online' => true, 'needs_phone' => $gateway->needsPhone(), 'logos' => PaymentMethods::logos($m)];
+            } else {
+                $methods[] = ['code' => $code, 'kind' => 'manual', 'label' => PaymentMethods::name($m), 'description' => $custom !== '' ? $custom : t('pay.desc.manual'),
+                    'online' => false, 'needs_phone' => false, 'logos' => PaymentMethods::logos($m)];
             }
+        }
+        $demo = self::gateway('demo');
+        if ($demo !== null && $demo->isEnabled()) {
+            $methods[] = ['code' => 'demo', 'kind' => 'gateway', 'label' => $demo->label(), 'description' => $demo->description(), 'online' => true, 'needs_phone' => false, 'logos' => []];
         }
         return $methods;
     }

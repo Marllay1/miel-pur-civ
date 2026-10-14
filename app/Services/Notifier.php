@@ -26,7 +26,7 @@ final class Notifier
 
     private static function signature(): string
     {
-        return "\n\n— " . Settings::get('store_name') . "\n" . abs_url('/') . (Settings::get('store_phone') !== '' ? "\n" . Settings::get('store_phone') : '');
+        return "\n\n— " . Settings::get('store_name') . "\n" . abs_url('/') . (Settings::get('store_phone') !== '' ? "\n" . SiteConfig::internationalPhone(Settings::get('store_phone')) : '');
     }
 
     public static function orderPlaced(array $order, string $token): void
@@ -38,6 +38,14 @@ final class Notifier
             $payment = $order['status'] === 'pending_payment'
                 ? t('mail.placed.pay_online', ['method' => payment_method_label($order['payment_method'])])
                 : t('mail.placed.cod');
+            $manual = PaymentMethods::find($order['payment_method']);
+            if ($manual !== null && $manual['kind'] === 'manual') {
+                // Paiement manuel : instructions saisies en administration ; la commande n'est confirmée qu'après vérification par l'équipe.
+                $payment = t('mail.placed.manual', ['method' => payment_method_label($order['payment_method']), 'total' => money((int) $order['total']), 'number' => $order['number']])
+                    . ((string) $manual['receiver_number'] !== '' ? "\n" . t('order.manual_receiver') . ' : ' . $manual['receiver_number'] : '')
+                    . ((string) $manual['beneficiary'] !== '' ? "\n" . t('order.manual_beneficiary') . ' : ' . $manual['beneficiary'] : '')
+                    . (PaymentMethods::instructions($manual) !== '' ? "\n" . PaymentMethods::instructions($manual) : '');
+            }
             $body = t('mail.hello', ['name' => $order['customer_first_name']]) . "\n\n"
                 . t('mail.placed.intro', ['number' => $order['number']]) . "\n\n"
                 . implode("\n", $lines)

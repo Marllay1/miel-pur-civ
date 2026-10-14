@@ -62,14 +62,14 @@ final class Mailer
     public static function html(string $subject, string $text): string
     {
         $body = htmlspecialchars($text, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $body = preg_replace('#(https?://[^\s<]+)#', '<a href="$1" style="color:#9C5D08;font-weight:600">$1</a>', $body) ?? $body;
+        $body = preg_replace('#(https?://[^\s<]+)#', '<a href="$1" style="color:#184626;font-weight:600">$1</a>', $body) ?? $body;
         $body = nl2br($body);
         $title = htmlspecialchars($subject, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         return '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>' . $title . '</title></head>'
             . '<body style="margin:0;background:#F5F2EC;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1D1A16">'
             . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:28px 12px">'
             . '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:20px;overflow:hidden">'
-            . '<tr><td style="background:#E6A93A;padding:18px 24px;font-size:18px;font-weight:700;color:#1A1206">Miel Pur de Côte d\'Ivoire</td></tr>'
+            . '<tr><td style="background:#184626;padding:18px 24px;font-size:18px;font-weight:700;color:#F4EEDB">Miel Pur de Côte d\'Ivoire</td></tr>'
             . '<tr><td style="padding:24px;font-size:15px;line-height:1.6">' . $body . '</td></tr>'
             . '</table></td></tr></table></body></html>';
     }

@@ -78,6 +78,13 @@ $max = Settings::int('max_qty_per_line');
         <?php else: ?>
         <p class="small muted"><?= e(t('cart.fix_first')) ?></p>
         <?php endif; ?>
+        <?php $cartPayments = \App\Services\PaymentMethods::acceptedLogos(); if ($cartPayments): ?>
+        <div class="cart-payments">
+          <p class="small muted"><?= e(t('footer.payments')) ?></p>
+          <?= \App\Core\View::partial('payment-logos', ['methods' => $cartPayments]) ?>
+        </div>
+        <?php endif; ?>
+        <?= \App\Core\View::partial('currency-note', ['amount' => (int) $summary['subtotal']]) ?>
         <p class="small muted"><?= e(t('cart.secure_note')) ?></p>
       </div>
       <?php if ($zones): ?>

@@ -36,6 +36,12 @@ return [
         'alt' => ['fr' => 'Stand de vente : bouteilles de miel alignées et paniers cadeaux emballés',
                   'en' => 'Sales stand: rows of honey bottles and wrapped gift baskets'],
     ],
+    'wm-pot-miel-rayon' => [
+        'file' => 'wm-pot-miel-rayon.webp', 'small' => 'wm-pot-miel-rayon-800.webp', 'w' => 1600, 'h' => 1066, 'origin' => 'illustration',
+        'alt' => ['fr' => 'Pot de miel ambré avec un morceau de rayon et une cuillère', 'en' => 'Jar of amber honey with a piece of honeycomb and a spoon'],
+        'author' => 'Alabama Extension', 'license' => 'CC0 1.0 (domaine public)', 'license_url' => 'https://creativecommons.org/publicdomain/zero/1.0/',
+        'source' => 'https://commons.wikimedia.org/wiki/File:Small_Honey_Jar_with_Honeycomb.jpg',
+    ],
     'wm-apiculteurs-cameroun' => [
         'file' => 'wm-apiculteurs-cameroun.webp', 'small' => 'wm-apiculteurs-cameroun-800.webp', 'w' => 1600, 'h' => 1060, 'origin' => 'illustration',
         'alt' => ['fr' => 'Apiculteurs et apicultrices réunis autour d\'une ruche à barrettes, au Cameroun',

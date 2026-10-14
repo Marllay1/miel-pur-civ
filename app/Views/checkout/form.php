@@ -55,6 +55,7 @@ $selectedMethod = (string) ($old['payment_method'] ?? '');
 
     <fieldset class="checkout-step" data-step="2">
       <legend><?= e(t('checkout.delivery')) ?></legend>
+      <?php if (setting('delivery_instructions') !== ''): ?><div class="notice"><?= icon('truck') ?><div class="prose"><?= rich(setting('delivery_instructions')) ?></div></div><?php endif; ?>
       <p class="group-title" id="zone-legend"><?= e(t('field.zone_short')) ?></p>
       <div class="group" role="radiogroup" aria-labelledby="zone-legend" id="f-zone_id">
         <?php foreach ($zones as $z): ?>
@@ -118,7 +119,7 @@ $selectedMethod = (string) ($old['payment_method'] ?? '');
         <?php foreach ($methods as $code => $m): ?>
         <label class="choice" data-method="<?= e($code) ?>">
           <input type="radio" name="payment_method" value="<?= e($code) ?>" required<?= $selectedMethod === $code ? ' checked' : '' ?><?= $m['needs_phone'] ? ' data-needs-phone="1"' : '' ?>>
-          <?= pay_logo($code) ?>
+          <?= !empty($m['logos']) ? '<span class="choice-logos">' . payment_logos($m['logos'], $m['label']) . '</span>' : pay_logo($code) ?>
           <span class="choice-body">
             <span class="choice-title"><?= e($m['label']) ?></span>
             <span class="choice-desc"><?= e($m['description']) ?></span>
@@ -171,7 +172,7 @@ $selectedMethod = (string) ($old['payment_method'] ?? '');
       <h2 id="h-checkout-summary"><?= e(t('checkout.your_order')) ?></h2>
       <ul class="mini-items">
         <?php foreach ($summary['items'] as $item): ?>
-        <li><span><?= e($item['product_name']) ?> <span class="muted">· <?= e($item['variant_label']) ?> × <?= (int) $item['quantity'] ?></span></span><span><?= money((int) $item['line_total']) ?></span></li>
+        <li><?php if (!empty($item['image_path'])): ?><img class="mini-thumb" src="<?= e($item['image_path']) ?>" alt="" width="44" height="44" loading="lazy" decoding="async"><?php endif; ?><span class="mini-name"><?= e($item['product_name']) ?> <span class="muted">· <?= e($item['variant_label']) ?> × <?= (int) $item['quantity'] ?></span></span><span><?= money((int) $item['line_total']) ?></span></li>
         <?php endforeach; ?>
       </ul>
       <dl class="totals" aria-live="polite">

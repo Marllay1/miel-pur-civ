@@ -7,13 +7,26 @@
 | Orange Money | **Intégré, testé contre simulateur** | API Web Payment. À valider en bac à sable Orange |
 | MTN Mobile Money | **Intégré, testé contre simulateur** | API Collections (demande de paiement validée sur le téléphone du client). À valider en bac à sable MTN |
 | Carte bancaire | **Intégré via CinetPay, testé contre simulateur** | Page de paiement hébergée par CinetPay : aucun numéro de carte ne transite par ce serveur |
+| Paiement manuel (Moov Money, virement…) | **Opérationnel dès que renseigné, testé** | Instructions affichées au client et dans l'e-mail ; confirmation par l'équipe (aucune vérification automatique). Voir ci-dessous |
 | Paiement SIMULÉ | **Désactivé par défaut** | Réservé aux tests (`DEMO_PAYMENT_ENABLED=1` + réglage). Étiqueté « SIMULÉ », aucune somme débitée |
 | E-mails | **Opérationnel (SMTP), testé** | Client SMTP intégré : STARTTLS (587) ou TLS (465), authentification, message texte + HTML. Testé contre un serveur Mailpit local (15 contrôles) ; **envoi réel à valider avec vos identifiants** |
 | WhatsApp | **Lien simple** | Bouton `wa.me` si un numéro est renseigné ; pas d'API WhatsApp Business |
 | Mesure d'audience | **Prête, désactivée** | Plausible ou GA4, chargés uniquement après consentement ; CSP adaptée automatiquement |
 | Newsletter | **Collecte seulement** | Inscriptions avec consentement + export CSV ; pas d'envoi de campagnes |
 
-L'état de chaque moyen de paiement (actif, configuré mais désactivé, clés manquantes) et l'URL de notification à déclarer sont visibles dans **Administration → Intégrations**.
+L'état de chaque moyen de paiement (actif, configuré mais désactivé, clés manquantes) est visible dans **Administration → Moyens de paiement** et l'URL de notification à déclarer dans **Administration → Intégrations**.
+
+## Moyens de paiement en base de données
+
+Les moyens de paiement sont des lignes de la table `payment_methods` (nom FR/EN, description, logos, affichage du logo, ordre, activation, numéros et instructions pour un paiement manuel), modifiables dans **Administration → Moyens de paiement**. Trois types :
+
+| Type | Proposé au client si… | Encaissement |
+|---|---|---|
+| `cod` (paiement à la livraison) | activé et autorisé par la zone | à la livraison |
+| `gateway` (Wave, Orange Money, MTN MoMo, carte) | activé **et** toutes les variables `.env` présentes | en ligne, confirmé par le prestataire |
+| `manual` (Moov Money, virement, autre) | activé **et** numéro de réception ou instructions renseignés | par le client selon les instructions ; **l'équipe vérifie la réception** puis passe la commande à « Payée » |
+
+Seuls les moyens proposés apparaissent sur le site, avec leur logo : un logo ne signifie jamais qu'une intégration existe. Une commande en paiement manuel n'expire pas automatiquement ; le stock reste réservé jusqu'à paiement ou annulation par l'équipe.
 
 ## Ce qui a été testé, et ce qui ne l'a pas été
 
@@ -33,7 +46,7 @@ L'état de chaque moyen de paiement (actif, configuré mais désactivé, clés m
 
 ## Paramétrage par prestataire
 
-Les variables sont décrites dans `.env.example`. Un moyen de paiement n'est proposé que si **toutes** ses variables obligatoires sont renseignées **et** qu'il est coché dans *Administration → Réglages → Paiement*.
+Les variables sont décrites dans `.env.example`. Un moyen de paiement n'est proposé que si **toutes** ses variables obligatoires sont renseignées **et** qu'il est activé dans *Administration → Moyens de paiement*.
 
 | Prestataire | Variables obligatoires | URL de notification à déclarer |
 |---|---|---|
@@ -47,5 +60,5 @@ Les notifications exigent un site en **HTTPS** accessible depuis Internet (pas `
 ## Ajouter un autre prestataire
 
 1. Créer `app/Services/Payment/<Prestataire>Gateway.php` qui étend `AbstractGateway` (interface `Gateway`) : `requiredEnv()`, `start()` (création du paiement, renvoie l'URL de la page hébergée), `fetchStatus()` (état lu chez le prestataire), `parseNotification()` (signature vérifiée, sinon simple demande de vérification).
-2. L'ajouter dans `PaymentService::gateways()`, avec un réglage `<code>_enabled` et les libellés `pay.<code>` / `pay.desc.<code>` en français et en anglais.
+2. L'ajouter dans `PaymentService::gateways()` et insérer sa ligne (`kind = 'gateway'`) dans `payment_methods` par une migration.
 3. Ajouter son comportement au simulateur `tests/mock-providers/server.php` et des cas au scénario 28.

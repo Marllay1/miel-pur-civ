@@ -34,10 +34,12 @@ final class SeoController
         Lang::set($previous);
         $xml = '<?xml version="1.0" encoding="UTF-8"?>' . "\n"
             . '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">' . "\n";
+        // Langues proposées uniquement (Paramètres du site → Langues).
+        $locales = array_keys(\App\Services\SiteConfig::languages());
         foreach ($paths as $path => $lastmod) {
-            foreach (Lang::SUPPORTED as $locale) {
+            foreach ($locales as $locale) {
                 $xml .= '  <url><loc>' . htmlspecialchars(abs_url($path, $locale), ENT_XML1) . '</loc>';
-                foreach (Lang::SUPPORTED as $alt) {
+                foreach ($locales as $alt) {
                     $xml .= '<xhtml:link rel="alternate" hreflang="' . $alt . '" href="' . htmlspecialchars(abs_url($path, $alt), ENT_XML1) . '"/>';
                 }
                 $xml .= ($lastmod ? '<lastmod>' . gmdate('Y-m-d', strtotime($lastmod)) . '</lastmod>' : '') . "</url>\n";

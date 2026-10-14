@@ -1,2 +1,0 @@
-Icônes provisoires (monogramme « M ») générées le 2026-10-14 en attendant le logo officiel.
-Remplacer avec : php bin/brand.php --logo=logo.png --icon=embleme.png

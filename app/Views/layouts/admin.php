@@ -10,12 +10,13 @@ $path = App::$request?->path ?? '/admin';
 $flashes = Session::pullFlashes();
 $sections = [
     'Pilotage' => [['/admin', 'Tableau de bord', null]],
-    'Ventes' => [['/admin/commandes', 'Commandes', 'orders.manage'], ['/admin/devis', 'Devis professionnels', 'orders.manage'], ['/admin/clients', 'Clients', 'customers.view']],
     'Catalogue' => [['/admin/produits', 'Produits', 'catalog.manage'], ['/admin/categories', 'Catégories', 'catalog.manage'], ['/admin/stock', 'Stock', 'catalog.manage'], ['/admin/promotions', 'Codes promo', 'catalog.manage']],
-    'Contenus' => [['/admin/contenu', 'Accueil', 'content.manage'], ['/admin/pages', 'Pages et légal', 'content.manage'], ['/admin/faq', 'FAQ', 'content.manage'], ['/admin/avis', 'Avis', 'content.manage'], ['/admin/messages', 'Messages', 'content.manage'], ['/admin/newsletter', 'Newsletter', 'content.manage']],
-    'Configuration' => [['/admin/reglages', 'Réglages', 'settings.manage'], ['/admin/livraison', 'Zones de livraison', 'settings.manage'], ['/admin/integrations', 'Intégrations', 'settings.manage'], ['/admin/equipe', 'Équipe', 'users.manage'], ['/admin/journal', 'Journal d\'audit', 'audit.view']],
+    'Ventes' => [['/admin/commandes', 'Commandes', 'orders.manage'], ['/admin/devis', 'Devis professionnels', 'orders.manage'], ['/admin/clients', 'Clients', 'customers.view']],
+    'Site public' => [['/admin/carrousel', 'Carrousel de l\'accueil', 'content.manage'], ['/admin/contenu', 'Textes de l\'accueil', 'content.manage'], ['/admin/pages', 'Pages et légal', 'content.manage'], ['/admin/faq', 'FAQ', 'content.manage'], ['/admin/avis', 'Avis', 'content.manage'], ['/admin/messages', 'Messages', 'content.manage'], ['/admin/newsletter', 'Newsletter', 'content.manage']],
+    'Paramètres du site' => [['/admin/parametres', 'Vue d\'ensemble', 'settings.manage'], ['/admin/parametres/identite', 'Identité', 'settings.manage'], ['/admin/parametres/logos', 'Logos et images', 'settings.manage'], ['/admin/parametres/coordonnees', 'Coordonnées', 'settings.manage'], ['/admin/parametres/reseaux', 'Réseaux sociaux', 'settings.manage'], ['/admin/parametres/apparence', 'Apparence', 'settings.manage'], ['/admin/parametres/langues', 'Langues', 'settings.manage'], ['/admin/paiements', 'Moyens de paiement', 'settings.manage'], ['/admin/livraison', 'Zones de livraison', 'settings.manage'], ['/admin/devises', 'Devises', 'settings.manage'], ['/admin/parametres/commerce', 'Règles de commande', 'settings.manage'], ['/admin/parametres/referencement', 'Référencement', 'settings.manage'], ['/admin/parametres/mentions', 'Mentions légales', 'settings.manage'], ['/admin/integrations', 'Intégrations', 'settings.manage']],
+    'Administration' => [['/admin/equipe', 'Équipe', 'users.manage'], ['/admin/journal', 'Journal d\'audit', 'audit.view']],
 ];
-$isCurrent = static fn (string $href) => $href === '/admin' ? $path === '/admin' : ($path === $href || str_starts_with($path, $href . '/'));
+$isCurrent = static fn (string $href) => in_array($href, ['/admin', '/admin/parametres'], true) ? $path === $href : ($path === $href || str_starts_with($path, $href . '/'));
 ?><!doctype html>
 <html lang="fr"<?= !empty($theme) ? ' data-theme="' . e($theme) . '"' : '' ?>>
 <head>
@@ -35,7 +36,6 @@ $isCurrent = static fn (string $href) => $href === '/admin' ? $path === '/admin'
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="admin-nav"><span class="nav-toggle-bars" aria-hidden="true"></span><span class="nav-toggle-label">Menu</span></button>
   <div class="admin-user">
     <?php if ($user): ?>
-    <span><?= e($user['first_name'] . ' ' . $user['last_name']) ?> · <span class="muted"><?= e($user['role']) ?></span></span>
     <a class="btn btn-small btn-gray" href="/">Voir le site</a>
     <form action="/admin/deconnexion" method="post"><?= csrf_field() ?><button class="link-btn" type="submit">Déconnexion</button></form>
     <?php endif; ?>

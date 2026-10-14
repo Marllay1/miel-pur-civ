@@ -195,6 +195,21 @@ final class PageController
         return redirect(safe_return($r->str('retour'), '/'));
     }
 
+    /** Sélecteur de langue : mémorise le choix (cookie, 1 an) et affiche la même page dans la langue choisie. */
+    public function language(Request $r): Response
+    {
+        $code = $r->params['code'] === 'en' && \App\Services\Settings::bool('lang_en_enabled') ? 'en' : 'fr';
+        \App\Core\Cookie::queue('mpci_lang', $code, 365 * 86400, false);
+        $retour = safe_return($r->str('retour'), '/');
+        if ($retour === '/en' || str_starts_with($retour, '/en/') || str_starts_with($retour, '/en?')) {
+            $retour = substr($retour, 3) ?: '/';
+        }
+        if (\App\Core\Lang::isUnlocalized($retour)) {
+            $retour = '/';
+        }
+        return Response::redirect($code === 'en' ? ($retour === '/' ? '/en' : '/en' . $retour) : $retour);
+    }
+
     public function unsubscribe(Request $r): Response
     {
         $token = $r->params['token'];

@@ -14,15 +14,15 @@ Option `--filter=09` pour un seul scénario. Les tests passent par le vrai noyau
 
 | Environnement | Suite | Résultat |
 |---|---|---|
-| PHP 8.3.33, SQLite en mémoire | `php tests/run.php` | **31 scénarios, 1 023 assertions, 0 échec** |
-| PHP 8.3.33, MariaDB 11.4.8 | `php tests/run.php --mysql` | **31 scénarios, 1 023 assertions, 0 échec** |
-| XAMPP 8.2.12 : PHP 8.2.12, SQLite | `php tests/run.php` | **31 scénarios, 1 023 assertions, 0 échec** |
-| XAMPP 8.2.12 : PHP 8.2.12, MariaDB 10.4.32 | `php tests/run.php --mysql` | **31 scénarios, 1 023 assertions, 0 échec** |
+| PHP 8.3.33, SQLite en mémoire | `php tests/run.php` | **33 scénarios, 1 349 assertions, 0 échec** |
+| PHP 8.3.33, MariaDB 11.4.8 | `php tests/run.php --mysql` | 32 scénarios, 1 154 assertions, 0 échec (version précédente ; non relancé pour le scénario 33) |
+| XAMPP 8.2.12 : PHP 8.2.12, SQLite | `php tests/run.php` | **33 scénarios, 1 349 assertions, 0 échec** |
+| XAMPP 8.2.12 : PHP 8.2.12, MariaDB 10.4.32 | `php tests/run.php --mysql` | **33 scénarios, 1 349 assertions, 0 échec** |
 | Apache 2.4.58 (XAMPP, hôte virtuel `miel.localhost`) | `php tests/security-http.php http://miel.localhost` | **66 contrôles, 0 échec** |
-| Nginx 1.30.5 + PHP 8.2 FastCGI (bloc server de DEPLOIEMENT.md, servi en HTTP local ; hôte inconnu → 444) | `php tests/security-http.php http://miel-nginx.localhost:8088` | **66 contrôles, 0 échec** |
-| Serveur intégré PHP 8.3 | `php tests/security-http.php` | **66 contrôles, 0 échec** |
+| Nginx 1.30.5 + PHP 8.2 FastCGI (bloc server de DEPLOIEMENT.md, servi en HTTP local ; hôte inconnu → 444) | `php tests/security-http.php http://miel-nginx.localhost:8088` | 66 contrôles, 0 échec (version précédente) |
+| Serveur intégré PHP 8.3 | `php tests/security-http.php` | 66 contrôles, 0 échec (version précédente) |
 | SMTP contre Mailpit 1.31.5 (clair + STARTTLS/authentification) | `php tests/smtp-check.php --mailpit` | **15 contrôles, 0 échec** |
-| Traductions | `php bin/check-translations.php` | 554 clés présentes en français et en anglais |
+| Traductions | `php bin/check-translations.php` | 598 clés présentes en français et en anglais |
 
 Vérifications manuelles dans un navigateur réel (Chromium) : sous Apache/XAMPP, commande complète (panier → coordonnées → livraison → paiement à la livraison → confirmation) avec e-mail de confirmation reçu en SMTP (Mailpit), zones de livraison sur la version anglaise du tunnel, administration (connexion, Intégrations, fiche produit avec traduction) ; rendu 375 px et bureau, thèmes clair et sombre.
 
@@ -53,7 +53,9 @@ Les scénarios 20 à 27 et la suite HTTP sont des tests de sécurité dédiés :
 | 28 | Paiements intégrés | Wave, Orange Money, MTN MoMo, carte (CinetPay) contre simulateurs : redirection, notification signée ou vérifiée, rejeu, montant, échec, prestataire injoignable, vérification avant expiration (pas d'annulation à l'aveugle), page Intégrations sans secret |
 | 29 | Bilinguisme et thème | /en (contenus, e-mails, validation, sitemap hreflang), administration en français, thème clair/sombre sans JavaScript, valeurs de cookie invalides ignorées |
 | 31 | Séparation des espaces, logo, photos | anonyme, client, administrateur : liens « Administration » visibles uniquement pour l'équipe, 403 pour un client (URL directe, JSON, POST, /en/admin), redirections après connexion/déconnexion selon le rôle, absence de boucle, retour d'administration limité à /admin, cache privé ; favicons présents, aucun logo inventé ; chaque image affichée existe, illustrations signalées, crédits complets |
+| 32 | Identité visuelle et langue | logo officiel dans l'en-tête (lien accueil, une seule version visible) et le pied de page, fonds transparents, favicon.ico valide ; carte de localisation retirée ; sélecteur FR/EN (même page, préférence mémorisée, panier conservé, retours externes et /admin refusés, langue inconnue → 404) ; logos Facebook/WhatsApp liés aux vraies coordonnées, aucun lien inventé ; AOS sur le site public seulement ; nom et rôle retirés de l'en-tête d'administration ; vignettes produits dans le récapitulatif et la commande |
 | 30 | Traductions en administration | saisie EN produit, format, FAQ, zone, page, accueil ; champ non prévu ignoré, texte échappé, champ vide = français, audit, suppression en cascade |
+| 33 | Paramètres du site, paiements, carrousel, devises | nom commercial, coordonnées et lien WhatsApp (pied de page, contact, fiche produit), blocs masqués, valeurs invalides refusées sans enregistrement partiel ; réseaux ajoutés/retirés ; couleurs et polices dans `/theme.css`, contraste insuffisant refusé, aucun CSS libre, aperçu sans publication ; langues (anglais désactivé, langue par défaut) ; titre et description SEO ; téléversement, remplacement et suppression du logo, du favicon et de l'image de partage (dimensions, format carré) ; moyens de paiement (logo affiché seulement si proposé, paiement manuel avec instructions sur la commande et dans l'e-mail, confirmation par l'équipe, moyen ajouté avec logo puis supprimé, moyen intégré non supprimable) ; diapositives ajoutées, réordonnées, désactivées, programmées, supprimées, liens `javascript:` et images trop petites refusés, accueil de remplacement sans diapositive ; devises indicatives et taux obligatoire ; mention « Prix en francs CFA » retirée ; persistance après reconnexion ; client et anonyme refusés (403) |
 
 ## Limites
 

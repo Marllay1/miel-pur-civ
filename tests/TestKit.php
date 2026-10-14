@@ -27,6 +27,10 @@ final class T
     public static string $driver = 'sqlite';
     public static int $assertions = 0;
     private static bool $mysqlMigrated = false;
+    /** Données de référence insérées par les migrations (vidées par TRUNCATE entre scénarios MySQL). */
+    private const REFERENCE_TABLES = ['payment_methods', 'home_slides', 'currencies'];
+    /** @var array<string, array> */
+    private static array $reference = [];
 
     public static function fresh(): void
     {
@@ -53,6 +57,9 @@ final class T
                 }
                 DB::pdo()->exec('SET FOREIGN_KEY_CHECKS = 1');
                 Migrator::migrate();
+                foreach (self::REFERENCE_TABLES as $t) {
+                    self::$reference[$t] = DB::all("SELECT * FROM `$t`");
+                }
                 self::$mysqlMigrated = true;
             } else {
                 DB::pdo()->exec('SET FOREIGN_KEY_CHECKS = 0');
@@ -63,6 +70,11 @@ final class T
                     }
                 }
                 DB::pdo()->exec('SET FOREIGN_KEY_CHECKS = 1');
+                foreach (self::$reference as $t => $rows) {
+                    foreach ($rows as $row) {
+                        DB::run("INSERT INTO `$t` (`" . implode('`, `', array_keys($row)) . '`) VALUES (' . implode(', ', array_fill(0, count($row), '?')) . ')', array_values($row));
+                    }
+                }
             }
         }
         (require BASE_PATH . '/database/seeds/base.php')();
@@ -71,6 +83,8 @@ final class T
         DB::run("INSERT INTO settings (name, value, updated_at) VALUES ('demo_payment_enabled', '1', ?)", [gmdate('Y-m-d H:i:s')]);
         \App\Core\Lang::set('fr');
         Settings::flush();
+        \App\Services\PaymentMethods::flush();
+        \App\Services\Currencies::flush();
         Mailer::$sent = [];
         Cookie::$queued = [];
         Session::fake();
@@ -243,6 +257,26 @@ final class Client
             } else {
                 $this->cookies[$name] = $c['value'];
             }
+        }
+        Cookie::$queued = [];
+        return $response;
+    }
+
+    /** Envoi de formulaire avec fichiers ($files : champ => chemin local), comme un navigateur (CSRF inclus). */
+    public function upload(string $uri, array $post, array $files): Response
+    {
+        $post['_csrf'] = $this->csrf();
+        $f = [];
+        foreach ($files as $field => $path) {
+            $f[$field] = ['name' => basename($path), 'type' => 'application/octet-stream', 'tmp_name' => $path, 'error' => UPLOAD_ERR_OK, 'size' => filesize($path)];
+        }
+        $u = parse_url($uri);
+        Session::fake($this->session);
+        Cookie::$queued = [];
+        $response = App::handle(new Request('POST', $u['path'], [], $post, $this->cookies, $f, ['REMOTE_ADDR' => $this->ip], '', []));
+        $this->session = Session::all();
+        foreach (Cookie::$queued as $name => $c) {
+            $this->cookies[$name] = $c['value'];
         }
         Cookie::$queued = [];
         return $response;

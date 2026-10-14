@@ -34,13 +34,17 @@ Vérification : `php tests/smtp-check.php --to=votre@adresse.ci` (le message doi
 
 ### Paiements en ligne
 
-Clés Wave, Orange Money, MTN MoMo et CinetPay (carte) : voir [INTEGRATIONS.md](INTEGRATIONS.md). Sans clés, le moyen de paiement n'est tout simplement pas proposé ; le paiement à la livraison reste disponible.
+Clés Wave, Orange Money, MTN MoMo et CinetPay (carte) : voir [INTEGRATIONS.md](INTEGRATIONS.md). Sans clés, le moyen de paiement n'est tout simplement pas proposé (ni son logo affiché) ; le paiement à la livraison reste disponible.
 
-## Administration → Réglages
+## Administration → Paramètres du site
 
-- **Identité** : téléphone (renseigné : +225 07 47 09 90 06, numéro « Mobile » de la page Facebook ; l'annuaire Les Pages Vertes indiquait +225 01 71 61 71 52 — à confirmer), WhatsApp (la page Facebook indique « 88 79 40 37 », ancien format à 8 chiffres : numéro actuel à 10 chiffres à confirmer), e-mail public, adresse, horaires, **raison sociale**, **RCCM**, **NCC**, **directeur de la publication**, **hébergeur** (mentions légales obligatoires), numéro WhatsApp, réseaux sociaux.
+Détail des sections : [ADMINISTRATION.md](ADMINISTRATION.md#paramètres-du-site-adminparametres).
+
+- **Coordonnées** : téléphone (renseigné : +225 07 47 09 90 06, numéro « Mobile » de la page Facebook ; l'annuaire Les Pages Vertes indiquait +225 01 71 61 71 52 — à confirmer), WhatsApp (la page Facebook indique « 88 79 40 37 », ancien format à 8 chiffres : numéro actuel à 10 chiffres à confirmer), e-mail public, adresse, horaires, **raison sociale**, **RCCM**, **NCC**, **directeur de la publication**, **hébergeur** (mentions légales obligatoires), numéro WhatsApp, réseaux sociaux.
 - **Commerce** : **e-mail de notification des nouvelles commandes** (sans lui, la boutique n'est pas prévenue des commandes par e-mail), montant minimum de commande, délai de paiement, seuil de stock faible.
-- **Paiement** : cocher les moyens de paiement en ligne une fois leurs clés installées et testées ; *Paiement SIMULÉ* doit rester décoché.
+- **Moyens de paiement** (`/admin/paiements`) : activer les moyens en ligne une fois leurs clés installées et testées ; pour **Moov Money** (installé désactivé, sans logo officiel disponible), renseigner le numéro de réception et le bénéficiaire avant de l'activer ; *Paiement SIMULÉ* doit rester désactivé.
+- **Carrousel** (`/admin/carrousel`) : trois diapositives installées à partir des photos du site (boutique, histoire, professionnels) ; à remplacer par de vraies photos de la boutique en haute définition.
+- **Devises** (`/admin/devises`) : euro (parité fixe) et dollar installés **désactivés** ; le dollar n'a pas de taux : en saisir un avant de l'activer.
 - **Mesure d'audience** : seulement si souhaitée (chargée après consentement du visiteur).
 
 ## Administration → contenus et catalogue

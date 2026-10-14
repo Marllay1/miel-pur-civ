@@ -80,7 +80,7 @@ final class Lang
     /** Chemins jamais préfixés (fichiers, administration, intégrations). */
     public static function isUnlocalized(string $path): bool
     {
-        return (bool) preg_match('#^/(assets|uploads|admin|webhooks|preferences|sitemap\.xml|robots\.txt)(/|$|\?)#', $path)
+        return (bool) preg_match('#^/(assets|uploads|admin|webhooks|preferences|langue|theme\.css|sitemap\.xml|robots\.txt)(/|$|\?)#', $path)
             || preg_match('#^/en(/|$|\?)#', $path);
     }
 

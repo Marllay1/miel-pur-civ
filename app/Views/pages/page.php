@@ -8,7 +8,8 @@ if ($page['slug'] === 'mentions-legales') {
             $identity[t($label)] = Settings::get($key);
         }
     }
-    $identity[t('legal.phone')] = Settings::get('store_phone');
+    $identity[t('legal.phone')] = \App\Services\SiteConfig::internationalPhone(Settings::get('store_phone'));
+    $identity[t('legal.address')] = implode(', ', array_filter([Settings::get('store_address'), Settings::get('store_city'), Settings::get('store_country')]));
     if (Settings::get('store_email') !== '') {
         $identity[t('legal.email')] = Settings::get('store_email');
     }

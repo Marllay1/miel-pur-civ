@@ -362,11 +362,11 @@ return [
         $a = new Client();
         $a->loginAs($admin);
         foreach (['/admin', '/admin/produits', '/admin/stock', '/admin/promotions', '/admin/commandes', '/admin/devis', '/admin/clients', '/admin/messages',
-            '/admin/contenu', '/admin/pages', '/admin/faq', '/admin/avis', '/admin/reglages', '/admin/livraison', '/admin/integrations', '/admin/equipe', '/admin/journal'] as $path) {
+            '/admin/contenu', '/admin/pages', '/admin/faq', '/admin/avis', '/admin/parametres', '/admin/parametres/coordonnees', '/admin/paiements', '/admin/carrousel', '/admin/devises', '/admin/livraison', '/admin/integrations', '/admin/equipe', '/admin/journal'] as $path) {
             T::status(200, $a->get($path), "Administrateur GET $path");
         }
         $menu = $a->get('/admin')->body;
-        foreach (['/admin/produits', '/admin/commandes', '/admin/reglages', '/admin/equipe', '/admin/journal'] as $link) {
+        foreach (['/admin/produits', '/admin/commandes', '/admin/parametres', '/admin/carrousel', '/admin/paiements', '/admin/equipe', '/admin/journal'] as $link) {
             T::contains('href="' . $link . '"', $menu, "Menu complet : $link");
         }
         $team = $a->get('/admin/equipe')->body;
@@ -724,7 +724,7 @@ return [
         T::notContains('href="javascript:', $home, 'Lien javascript: refusé');
         T::notContains('href="//evil.example', $home, 'Lien //domaine refusé');
         T::contains('href="/boutique"', $home, 'Lien interne accepté');
-        T::status(422, $a->post('/admin/reglages', ['social_facebook' => 'javascript:alert(1)']), 'Lien social non https refusé');
+        T::status(422, $a->post('/admin/parametres/reseaux', ['social_facebook' => 'javascript:alert(1)']), 'Lien social non https refusé');
         // Nom de produit malveillant : JSON-LD protégé.
         $a->post('/admin/produits/1', ['name' => '</script><script>alert(3)</script>', 'slug' => 'miel-liquide-toutes-fleurs', 'category_id' => '1', 'is_active' => '1']);
         $page = $c->get('/boutique/miel-liquide-toutes-fleurs')->body;
@@ -783,7 +783,7 @@ return [
         $customer = T::user('customer', 'cust@example.test');
         $cu = new Client('10.9.0.1');
         $cu->loginAs($customer);
-        foreach (['/admin/produits' => ['name' => 'X'], '/admin/equipe' => ['email' => 'pirate@example.test', 'role' => 'admin'], '/admin/reglages' => ['cod_enabled' => '0'], '/admin/commandes/1/statut' => ['status' => 'cancelled']] as $url => $data) {
+        foreach (['/admin/produits' => ['name' => 'X'], '/admin/equipe' => ['email' => 'pirate@example.test', 'role' => 'admin'], '/admin/parametres/commerce' => ['min_order_amount' => '99999'], '/admin/paiements/cod' => ['name' => 'Piraté'], '/admin/commandes/1/statut' => ['status' => 'cancelled']] as $url => $data) {
             T::status(403, $cu->post($url, $data), "Client → POST $url refusé");
         }
         T::status(403, $cu->get('/admin/commandes/export'), 'Client → export refusé');
@@ -1015,9 +1015,9 @@ return [
     '28 Paiements intégrés (Wave, MTN MoMo, Orange Money, carte) contre les simulateurs' => function (): void {
         T::providers();
         T::eq(['cod', 'wave', 'orange_money', 'mtn_momo', 'card', 'demo'], array_column(PaymentService::availableMethods(T::zone('Abidjan')), 'code'), 'Moyens proposés une fois configurés');
-        \App\Services\Settings::set('wave_enabled', '0');
+        DB::run("UPDATE payment_methods SET is_enabled = 0 WHERE code = 'wave'"); \App\Services\PaymentMethods::flush();
         T::ok(!in_array('wave', array_column(PaymentService::availableMethods(null), 'code'), true), 'Moyen désactivable en administration');
-        \App\Services\Settings::set('wave_enabled', '1');
+        DB::run("UPDATE payment_methods SET is_enabled = 1 WHERE code = 'wave'"); \App\Services\PaymentMethods::flush();
         Env::set('CINETPAY_API_KEY', '');
         T::ok(!in_array('card', array_column(PaymentService::availableMethods(null), 'code'), true), 'Moyen non proposé sans ses clés');
         // Page Intégrations : état réel de chaque prestataire, URL de notification, aucun secret affiché.
@@ -1253,6 +1253,8 @@ return [
         $keys = \App\Controllers\Admin\ContentController::HOME_KEYS;
         $a->post('/admin/contenu', array_merge(array_combine($keys, array_map(static fn ($k) => \App\Services\Settings::get($k), $keys)),
             ['home_hero_title_en' => 'Honey straight from Katiola (edited)']));
+        // Textes d'ouverture de l'accueil : affichés lorsqu'aucune diapositive du carrousel n'est publiée.
+        DB::run('UPDATE home_slides SET is_active = 0');
         T::contains('Honey straight from Katiola (edited)', (new Client('10.31.0.9'))->get('/en')->body, 'Accueil anglais modifiable');
     },
 
@@ -1334,7 +1336,7 @@ return [
         // Logo et favicon : emplacements prêts, aucun logo inventé
         $html = $anon->get('/')->body;
         T::notContains('brand-mark', $html, 'Ancien pictogramme inventé retiré');
-        T::ok(brand_logo_url() !== null ? str_contains($html, 'class="brand-logo"') : str_contains($html, 'brand-wordmark'), 'Marque : logo officiel s\'il est installé, sinon nom en toutes lettres');
+        T::ok(brand_logo_url() !== null ? str_contains($html, 'class="brand-logo') : str_contains($html, 'brand-wordmark'), 'Marque : logo officiel s\'il est installé, sinon nom en toutes lettres');
         foreach (['favicon.ico', 'favicon-32.png', 'apple-touch-icon.png', 'site.webmanifest'] as $f) {
             T::contains('/assets/img/brand/' . $f, $html, "Balise d'icône $f");
             T::ok(is_file(BASE_PATH . '/public/assets/img/brand/' . $f), "Fichier $f présent");
@@ -1355,11 +1357,306 @@ return [
         T::contains('fb-miel-en-rayon-vente', $anon->get('/')->body, 'Accueil : vraie photo de l\'entreprise');
         T::contains('Photo d\'illustration', html_entity_decode($anon->get('/boutique/miel-cremeux')->body), 'Photo générique signalée comme illustration');
         $credits = html_entity_decode($anon->get('/credits-photos')->body);
+        T::contains('Alabama Extension', $credits, 'Crédit de la photo d\'ouverture');
         foreach (photos() as $key => $p) {
             T::ok(is_file(BASE_PATH . '/public/assets/img/photos/' . $p['file']), "Photo $key présente");
             if ($p['origin'] === 'illustration') {
                 T::contains($p['author'], $credits, "Crédit de $key (auteur)");
                 T::contains($p['license'], $credits, "Crédit de $key (licence)");
+            }
+        }
+    },
+
+    '32 Identité visuelle, sélecteur de langue, réseaux sociaux, animations' => function (): void {
+        $v = new Client('10.33.0.1');
+        $home = $v->get('/');
+        $html = $home->body;
+        // Logo officiel : en-tête (lien vers l'accueil), déclinaison sombre, pied de page, aucune duplication visible
+        T::ok((bool) preg_match('#<a class="brand" href="/"[^>]*>\s*<img class="brand-logo brand-logo-light" src="/assets/img/brand/logo\.png#', $html), 'Logo dans l\'en-tête, cliquable vers l\'accueil');
+        T::contains('/assets/img/brand/logo-dark.png', $html, 'Déclinaison pour le thème sombre');
+        T::eq(1, substr_count(explode('</header>', $html)[0], 'alt="Miel Pur de Côte d&#039;Ivoire"'), 'Un seul logo annoncé dans l\'en-tête (l\'autre est décoratif)');
+        $footer = explode('<footer', $html)[1] ?? '';
+        T::contains('/assets/img/brand/logo-stacked.png', $footer, 'Logo empilé dans le pied de page');
+        T::ok(!is_file(BASE_PATH . '/public/assets/img/brand/PROVISOIRE.txt'), 'Plus d\'icônes provisoires');
+        foreach (['favicon.ico', 'apple-touch-icon.png', 'icon-512.png', 'emblem.png', 'logo.png', 'logo-stacked.png'] as $f) {
+            T::ok(is_file(BASE_PATH . '/public/assets/img/brand/' . $f), "Fichier de marque $f");
+        }
+        foreach (['logo.png', 'logo-dark.png', 'logo-stacked.png', 'logo-stacked-dark.png', 'emblem.png', 'favicon-32.png'] as $f) {
+            $img = imagecreatefrompng(BASE_PATH . '/public/assets/img/brand/' . $f);
+            T::eq(127, (imagecolorat($img, 0, 0) >> 24) & 127, "$f : fond transparent (pas de fond noir ou ivoire)");
+        }
+        $ico = (string) file_get_contents(BASE_PATH . '/public/favicon.ico');
+        T::eq("\x00\x00\x01\x00\x03\x00", substr($ico, 0, 6), 'favicon.ico valide (3 tailles)');
+        // Carte « Katiola · Côte d'Ivoire » retirée du haut de l'accueil ; coordonnées toujours dans le pied de page
+        T::notContains('<span class="dot">', explode('</section>', $html)[0], 'Plus de carte de localisation en haut de page');
+        T::contains('Katiola', $footer, 'Coordonnées conservées dans le pied de page');
+        T::contains('wm-pot-miel-rayon', $html, 'Photo d\'ouverture de qualité');
+        // Sélecteur de langue
+        T::contains('class="lang-menu"', $html, 'Sélecteur de langue présent');
+        T::contains('href="/langue/en?retour=%2F"', $html, 'Choix « English »');
+        T::ok((bool) preg_match('#href="/langue/fr\?retour=%2F"[^>]*aria-current="true"#', $html), 'Langue active signalée');
+        T::eq(2, substr_count($html, 'href="/langue/'), 'Seulement les langues disponibles (FR, EN)');
+        $v->addToCart('MPCI-LIQ-500', 2);
+        T::redirectsTo('/en/boutique/miel-liquide-toutes-fleurs', $v->get('/langue/en?retour=%2Fboutique%2Fmiel-liquide-toutes-fleurs'), 'Même page dans la langue choisie');
+        T::eq('en', $v->cookies['mpci_lang'] ?? null, 'Préférence mémorisée');
+        T::redirectsTo('/en', $v->get('/'), 'Accueil : langue mémorisée appliquée');
+        T::contains('2', (string) \App\Services\CartService::count(\App\Core\App::$request), 'Panier conservé');
+        $en = $v->get('/en/boutique')->body;
+        T::ok((bool) preg_match('#href="/langue/en\?retour=%2Fboutique"[^>]*aria-current="true"#', $en), 'Langue active en anglais');
+        T::contains('lang="en"', $en, 'Page en anglais');
+        T::redirectsTo('/boutique', $v->get('/langue/fr?retour=%2Fen%2Fboutique'), 'Retour au français');
+        T::status(200, $v->get('/'), 'Accueil français après le choix du français');
+        T::redirectsTo('/', $v->get('/langue/en?retour=https%3A%2F%2Fevil.example'), 'Retour externe ignoré');
+        T::redirectsTo('/en', (new Client('10.33.0.2'))->get('/langue/en?retour=%2Fadmin'), 'Retour vers l\'administration ignoré');
+        T::status(404, $v->get('/langue/de'), 'Langue non prise en charge refusée');
+        // Réseaux sociaux : logos officiels, liens réels, libellés accessibles
+        T::contains('social-facebook', $footer, 'Logo Facebook');
+        T::contains('aria-label="Notre page Facebook (nouvel onglet)"', $footer, 'Libellé accessible Facebook');
+        T::contains(\App\Services\Settings::get('social_facebook'), $footer, 'Lien vers la vraie page Facebook');
+        T::notContains('social-whatsapp', $footer, 'Pas de lien WhatsApp inventé (numéro non renseigné)');
+        T::ok(!preg_match('#>\s*(Facebook|FACEBOOK|WhatsApp|WHATSAPP)\s*</a>#', $footer), 'Plus de libellé texte à la place des logos');
+        \App\Services\Settings::set('whatsapp_number', '07 00 00 00 00');
+        $footer2 = explode('<footer', (new Client('10.33.0.3'))->get('/')->body)[1] ?? '';
+        T::contains('href="https://wa.me/2250700000000?text=', $footer2, 'Logo WhatsApp lié au numéro renseigné');
+        T::contains('social-whatsapp', $footer2, 'Logo WhatsApp affiché');
+        // Animations AOS : site public uniquement
+        T::contains('/assets/vendor/aos/aos.js', $html, 'AOS chargé sur le site public');
+        T::contains('class="site', $html, 'Pages publiques marquées pour les animations');
+        $a = new Client('10.33.0.4');
+        $admin = T::user('admin', 'visuel@example.test');
+        $a->loginAs($admin);
+        $dash = $a->get('/admin')->body;
+        T::notContains('aos.js', $dash, 'Pas d\'animations dans l\'administration');
+        T::notContains($admin['first_name'] . ' ' . $admin['last_name'], explode('</header>', $dash)[0], 'Nom du compte retiré de l\'en-tête d\'administration');
+        T::notContains('<span class="muted">admin</span>', $dash, 'Rôle technique retiré de l\'en-tête');
+        T::contains('Voir le site', $dash, 'Navigation vers le site conservée');
+        T::contains('Déconnexion', $dash, 'Déconnexion conservée');
+        // Images produits dans le récapitulatif et la commande
+        $c = new Client('10.33.0.5');
+        $c->addToCart('MPCI-LIQ-500', 1);
+        T::contains('class="mini-thumb"', $c->get('/commande')->body, 'Vignette dans le récapitulatif de commande');
+        $page = $c->follow($c->checkout('Abidjan', 'cod'));
+        T::contains('fb-bouteille-fond-jaune.webp', $page->body, 'Vignette produit sur la page de commande');
+    },
+
+    '33 Paramètres du site, moyens de paiement, carrousel et devises (administration → site public)' => function (): void {
+        $a = new Client('10.34.0.1');
+        $a->loginAs(T::user('admin', 'params@example.test'));
+        $pub = static fn (string $p = '/') => (new Client('10.34.0.' . random_int(10, 250)))->get($p)->body;
+        $created = [];
+        $icoBackup = (string) @file_get_contents(BASE_PATH . '/public/favicon.ico');
+        try {
+            // Chaque réglage administrable appartient à une section, une seule.
+            $owners = [];
+            foreach (\App\Controllers\Admin\SiteSettingsController::sections() as $slug => $sec) {
+                foreach (array_merge($sec['keys'], $sec['images'] ?? []) as $k) {
+                    $owners[$k][] = $slug;
+                }
+            }
+            foreach (\App\Services\Settings::definitions() as $k => $def) {
+                if (in_array($k, \App\Controllers\Admin\ContentController::HOME_KEYS, true) || in_array($k, ['carousel_autoplay', 'carousel_interval'], true)) {
+                    continue;
+                }
+                T::eq(1, count($owners[$k] ?? []), "Réglage $k rattaché à une section");
+            }
+            // Identité : nom commercial
+            T::redirectsTo('/admin/parametres/identite', $a->post('/admin/parametres/identite', ['store_name' => 'Miel Pur Katiola Test', 'store_tagline' => 'Slogan test', 'store_description' => 'Présentation test.']), 'Identité enregistrée');
+            $home = $pub();
+            T::contains('Miel Pur Katiola Test', $home, 'Nom commercial mis à jour sur le site public');
+            T::contains('Présentation test.', $home, 'Description courte dans le pied de page');
+            // Une case non cochée d'une autre section n'est pas modifiée par l'enregistrement d'une section.
+            T::eq('1', \App\Services\Settings::get('show_phone'), 'Section isolée : réglages des autres sections intacts');
+            // Coordonnées : numéro WhatsApp → lien unique partout
+            T::redirectsTo('/admin/parametres/coordonnees', $a->post('/admin/parametres/coordonnees', ['phone_country_code' => '+225', 'store_phone' => '07 47 09 90 06', 'store_phone_2' => '05 01 02 03 04', 'show_phone' => '1',
+                'whatsapp_number' => '07 11 22 33 44', 'whatsapp_enabled' => '1', 'whatsapp_message' => 'Bonjour test', 'store_email' => 'contact@example.test', 'sales_email' => 'ventes@example.test', 'show_email' => '1',
+                'store_address' => 'Quartier test', 'store_city' => 'Katiola', 'store_country' => "Côte d'Ivoire", 'maps_url' => 'https://maps.google.com/?q=Katiola', 'show_location' => '1']), 'Coordonnées enregistrées');
+            $wa = 'https://wa.me/2250711223344?text=Bonjour%20test';
+            $home = $pub();
+            T::contains('href="' . $wa . '"', $home, 'WhatsApp : lien généré à partir du numéro (pied de page / bouton flottant)');
+            T::contains($wa, $pub('/contact'), 'WhatsApp : même lien sur la page Contact');
+            T::contains('wa.me/2250711223344', $pub('/boutique/miel-liquide-toutes-fleurs'), 'WhatsApp : même numéro sur la fiche produit');
+            T::contains('+225 05 01 02 03 04', $home, 'Téléphone secondaire affiché avec l\'indicatif');
+            T::contains('href="tel:+2250747099006"', $home, 'Lien tel: valide');
+            T::contains('mailto:ventes@example.test', $home, 'E-mail commercial');
+            T::contains('https://maps.google.com/?q=Katiola', $home, 'Lien Google Maps');
+            $a->post('/admin/parametres/coordonnees', ['phone_country_code' => '+225', 'store_phone' => '07 47 09 90 06', 'whatsapp_number' => '07 11 22 33 44', 'store_city' => 'Katiola', 'store_country' => "Côte d'Ivoire"]);
+            $home = $pub();
+            T::notContains('wa.me/', $home, 'WhatsApp désactivé : aucun bouton');
+            T::notContains('href="tel:', $home, 'Téléphones masqués');
+            T::notContains('mailto:contact@example.test', $home, 'E-mails masqués');
+            T::notContains('Quartier test', $home, 'Localisation masquée');
+            T::status(422, $a->post('/admin/parametres/coordonnees', ['phone_country_code' => '225', 'store_phone' => 'abc', 'store_email' => 'pas-un-email', 'maps_url' => 'javascript:alert(1)']), 'Valeurs invalides refusées');
+            T::eq('07 47 09 90 06', \App\Services\Settings::get('store_phone'), 'Rien enregistré en cas d\'erreur (section entière)');
+            // Réseaux sociaux : ajout et retrait d'une icône
+            $a->post('/admin/parametres/reseaux', ['social_facebook' => \App\Services\Settings::get('social_facebook'), 'social_facebook_enabled' => '1', 'social_youtube' => 'https://www.youtube.com/@mielpur-test', 'social_youtube_enabled' => '1']);
+            T::contains('social-youtube', $pub(), 'Icône YouTube ajoutée');
+            $a->post('/admin/parametres/reseaux', ['social_facebook' => \App\Services\Settings::get('social_facebook'), 'social_youtube' => 'https://www.youtube.com/@mielpur-test', 'social_youtube_enabled' => '1']);
+            $home = $pub();
+            T::notContains('social-facebook', $home, 'Facebook désactivé : icône retirée');
+            T::contains('social-youtube', $home, 'YouTube toujours affiché');
+            T::status(422, $a->post('/admin/parametres/reseaux', ['social_youtube' => 'http://example.test']), 'Lien non https refusé');
+            // Apparence : couleurs, contrôle de contraste, feuille de thème, aperçu
+            T::redirectsTo('/admin/parametres/apparence', $a->post('/admin/parametres/apparence', ['color_primary' => '#1F5C33', 'color_secondary' => '#E9A50A', 'color_accent' => '#EC7110', 'color_background' => '#FFFFFF',
+                'font_heading' => 'georgia', 'font_body' => 'figtree', 'header_show_search' => '1', 'header_show_theme' => '1', 'footer_show_newsletter' => '1', 'footer_show_payments' => '1', 'home_show_payments' => '1']), 'Apparence enregistrée');
+            $css = (new Client('10.34.0.2'))->get('/theme.css');
+            T::contains('--tint: #1F5C33', $css->body, 'Couleur principale appliquée au thème');
+            T::contains('Georgia', $css->body, 'Police des titres appliquée');
+            T::contains('text/css', $css->headers['Content-Type'] ?? '', 'Feuille de style servie');
+            T::contains(theme_css_url(), $pub(), 'Thème versionné chargé par le site');
+            $bad = $a->post('/admin/parametres/apparence', ['color_primary' => '#F2E600', 'color_secondary' => '#E9A50A', 'color_accent' => '#EC7110', 'color_background' => '#FFFFFF', 'font_heading' => 'georgia', 'font_body' => 'figtree']);
+            T::status(422, $bad, 'Couleur illisible refusée');
+            T::contains('Contraste insuffisant', html_entity_decode($bad->body), 'Message de contraste');
+            T::eq('#1F5C33', \App\Services\Settings::get('color_primary'), 'Ancienne couleur conservée');
+            T::status(422, $a->post('/admin/parametres/apparence', ['color_primary' => 'red;}body{display:none', 'font_heading' => '../../x']), 'Aucun CSS libre accepté');
+            $preview = $a->post('/admin/parametres/apparence/apercu', ['color_primary' => '#123456', 'color_secondary' => '#E9A50A', 'color_accent' => '#EC7110', 'color_background' => '#FFFFFF']);
+            T::contains('Aperçu — non publié', $preview->body, 'Aperçu avant publication');
+            T::eq('#1F5C33', \App\Services\Settings::get('color_primary'), 'L\'aperçu n\'enregistre rien');
+            T::contains('--tint: #123456', $a->get('/admin/parametres/apparence/apercu.css?color_primary=%23123456')->body, 'Feuille d\'aperçu');
+            // En-tête : éléments masquables
+            $a->post('/admin/parametres/apparence', ['color_primary' => '#1F5C33', 'color_secondary' => '#E9A50A', 'color_accent' => '#EC7110', 'color_background' => '#FFFFFF', 'font_heading' => 'georgia', 'font_body' => 'figtree', 'footer_show_payments' => '1', 'home_show_payments' => '1']);
+            $home = $pub();
+            T::notContains('href="/boutique#recherche"', explode('</header>', $home)[0], 'Recherche masquée dans l\'en-tête');
+            T::notContains('newsletter-form', $home, 'Lettre d\'information masquée');
+            // Langues
+            $a->post('/admin/parametres/langues', ['lang_default' => 'fr']);
+            T::notContains('lang-menu', $pub(), 'Anglais désactivé : sélecteur masqué');
+            T::redirectsTo('/boutique', (new Client('10.34.0.3'))->get('/en/boutique'), 'Anglais désactivé : version française servie');
+            T::status(422, $a->post('/admin/parametres/langues', ['lang_default' => 'en']), 'Anglais par défaut impossible s\'il est désactivé');
+            $a->post('/admin/parametres/langues', ['lang_en_enabled' => '1', 'lang_default' => 'en']);
+            T::redirectsTo('/en', (new Client('10.34.0.4'))->get('/'), 'Langue par défaut : anglais pour un nouveau visiteur');
+            $fr = new Client('10.34.0.5');
+            $fr->cookies['mpci_lang'] = 'fr';
+            T::status(200, $fr->get('/'), 'Choix du visiteur prioritaire');
+            $a->post('/admin/parametres/langues', ['lang_en_enabled' => '1', 'lang_default' => 'fr']);
+            // Référencement
+            $a->post('/admin/parametres/referencement', ['seo_title' => 'Titre SEO test', 'seo_description' => 'Description SEO test', 'analytics_provider' => 'none']);
+            $home = $pub();
+            T::contains('<title>Titre SEO test</title>', $home, 'Titre du site');
+            T::contains('content="Description SEO test"', $home, 'Méta-description');
+            // Images : logo, favicon, image de partage (contrôle serveur, aperçu, remplacement, suppression)
+            $png = static function (int $w, int $h, array $rgb = [24, 70, 38]) use (&$created): string {
+                $file = tempnam(sys_get_temp_dir(), 'img') . '.png';
+                $im = imagecreatetruecolor($w, $h);
+                imagefill($im, 0, 0, imagecolorallocate($im, ...$rgb));
+                imagepng($im, $file);
+                $created[] = $file;
+                return $file;
+            };
+            T::redirectsTo('/admin/parametres/logos', $a->upload('/admin/parametres/images/brand_logo', [], ['image' => $png(600, 180)]), 'Logo téléversé');
+            $logo = \App\Services\Settings::get('brand_logo');
+            T::ok(str_starts_with($logo, '/uploads/brand/') && is_file(BASE_PATH . '/public' . $logo), 'Fichier stocké, chemin en base');
+            $home = $pub();
+            T::contains('src="' . $logo . '"', explode('</header>', $home)[0], 'Nouveau logo dans l\'en-tête');
+            T::contains('src="' . $logo . '"', explode('<footer', $home)[1] ?? '', 'Logo de l\'en-tête réutilisé dans le pied de page');
+            T::notContains('logo-dark.png', $home, 'Déclinaison sombre de l\'ancien logo non mélangée au nouveau');
+            $a->upload('/admin/parametres/images/brand_logo', [], ['image' => $png(400, 120, [233, 165, 10])]);
+            T::ok(!is_file(BASE_PATH . '/public' . $logo), 'Ancien fichier supprimé au remplacement');
+            $tooSmall = $a->upload('/admin/parametres/images/brand_logo', [], ['image' => $png(80, 30)]);
+            T::contains('trop petite', implode(' ', (array) ($a->session['_flash']['error'] ?? [])), 'Image trop petite refusée');
+            $a->upload('/admin/parametres/images/brand_favicon', [], ['image' => $png(400, 200)]);
+            T::contains('carrée', implode(' ', (array) ($a->session['_flash']['error'] ?? [])), 'Favicon non carré refusé');
+            $a->upload('/admin/parametres/images/brand_favicon', [], ['image' => $png(256, 256)]);
+            T::ok(is_file(BASE_PATH . '/public/uploads/brand/favicon/favicon.ico'), 'Favicon généré depuis l\'image téléversée');
+            T::contains('/uploads/brand/favicon/favicon.ico', $pub(), 'Nouveau favicon déclaré');
+            $a->upload('/admin/parametres/images/og_image', [], ['image' => $png(1200, 630)]);
+            T::contains('og:image" content="' . base_url() . \App\Services\Settings::get('og_image'), $pub(), 'Image de partage');
+            $sectionPage = $a->get('/admin/parametres/logos')->body;
+            T::contains('data-preview=', $sectionPage, 'Aperçu avant enregistrement prévu');
+            foreach (['brand_logo', 'brand_favicon', 'og_image'] as $k) {
+                $a->post('/admin/parametres/images/' . $k . '/supprimer');
+                T::eq('', \App\Services\Settings::get($k), "Image $k retirée");
+            }
+            T::contains('/assets/img/brand/logo.png', $pub(), 'Retour au logo installé');
+            T::ok(!is_file(BASE_PATH . '/public/uploads/brand/favicon/favicon.ico'), 'Icônes téléversées supprimées');
+            // Moyens de paiement : activation, logos, paiement manuel opérationnel avec instructions
+            $foot = static fn () => explode('<footer', $pub())[1] ?? '';
+            T::contains('Paiement à la livraison', $foot(), 'Paiements acceptés : moyen opérationnel affiché');
+            T::notContains('/assets/img/payments/wave.png', $foot(), 'Wave sans clés : logo non affiché');
+            $a->post('/admin/paiements/moov_money', ['name' => 'Moov Money', 'sort_order' => '5', 'is_enabled' => '1', 'show_logo' => '1']);
+            T::eq('missing', \App\Services\PaymentMethods::status(\App\Services\PaymentMethods::find('moov_money'))[0], 'Activé sans instructions : signalé, non proposé');
+            T::notContains('Moov Money', $foot(), 'Non opérationnel : absent du site');
+            $a->post('/admin/paiements/moov_money', ['name' => 'Moov Money', 'sort_order' => '5', 'is_enabled' => '1', 'show_logo' => '1', 'receiver_number' => '01 02 03 04 05', 'beneficiary' => 'Miel Pur CI', 'instructions' => 'Envoyez le montant exact.']);
+            T::contains('Moov Money', $foot(), 'Paiement manuel opérationnel : affiché');
+            $c = new Client('10.34.0.6');
+            $c->addToCart('MPCI-LIQ-500', 1);
+            T::contains('value="moov_money"', $c->get('/commande')->body, 'Proposé au paiement');
+            $order = $c->follow($c->checkout('Abidjan', 'moov_money'));
+            T::contains('01 02 03 04 05', $order->body, 'Instructions affichées après la commande');
+            T::contains('Envoyez le montant exact.', $order->body, 'Instructions du client');
+            $o = DB::one("SELECT * FROM orders WHERE payment_method = 'moov_money' ORDER BY id DESC LIMIT 1");
+            T::eq('pending_payment', $o['status'], 'Commande en attente de paiement');
+            T::eq(null, $o['expires_at'], 'Pas d\'annulation automatique pour un paiement manuel');
+            T::contains('01 02 03 04 05', end(Mailer::$sent)['body'] ?? '', 'Instructions dans l\'e-mail de confirmation');
+            $a->post('/admin/commandes/' . $o['id'] . '/statut', ['status' => 'paid']);
+            T::eq('paid', DB::value('SELECT payment_status FROM orders WHERE id = ?', [(int) $o['id']]), 'Paiement confirmé par l\'équipe');
+            $a->post('/admin/paiements/moov_money/basculer');
+            T::notContains('Moov Money', $foot(), 'Désactivé : retiré du site');
+            $a->post('/admin/paiements', ['name' => 'Virement bancaire']);
+            T::ok(\App\Services\PaymentMethods::find('virement_bancaire') !== null, 'Moyen manuel ajouté');
+            $a->upload('/admin/paiements/virement_bancaire/logo', [], ['logo' => $png(200, 60)]);
+            T::ok(str_starts_with((string) \App\Services\PaymentMethods::find('virement_bancaire')['logo_paths'], '/uploads/brand/payments/'), 'Logo personnalisé enregistré');
+            $a->post('/admin/paiements/virement_bancaire/supprimer');
+            T::ok(\App\Services\PaymentMethods::find('virement_bancaire') === null, 'Moyen manuel inutilisé supprimé');
+            $a->post('/admin/paiements/card/supprimer');
+            T::ok(\App\Services\PaymentMethods::find('card') !== null, 'Moyen intégré non supprimable');
+            // Carrousel : ajout, réordonnancement, désactivation, suppression
+            T::contains('class="carousel"', $pub(), 'Carrousel affiché (diapositives initiales)');
+            $before = count(\App\Services\Slides::all());
+            $r = $a->upload('/admin/carrousel', ['title' => 'Diapositive test', 'body' => 'Texte test', 'button_label' => 'Voir', 'link_url' => '/boutique', 'is_active' => '1'], ['image' => $png(1400, 600)]);
+            T::redirectsTo('/admin/carrousel', $r, 'Diapositive ajoutée');
+            $slide = DB::one("SELECT * FROM home_slides WHERE title = 'Diapositive test'");
+            T::eq($before, (int) $slide['sort_order'], 'Ajoutée en dernière position');
+            T::contains('Diapositive test', $pub(), 'Diapositive publiée sur l\'accueil');
+            $a->post('/admin/carrousel/' . $slide['id'] . '/deplacer/haut');
+            T::eq($before - 1, (int) DB::value('SELECT sort_order FROM home_slides WHERE id = ?', [(int) $slide['id']]), 'Remontée d\'un rang');
+            $a->post('/admin/carrousel/' . $slide['id'] . '/basculer');
+            T::notContains('Diapositive test', $pub(), 'Désactivée : retirée du site');
+            T::contains('Diapositive test', $a->get('/admin/carrousel/apercu?toutes=1')->body, 'Visible dans l\'aperçu complet');
+            T::status(422, $a->upload('/admin/carrousel', ['title' => 'Lien piégé', 'button_label' => 'X', 'link_url' => 'javascript:alert(1)', 'is_active' => '1'], ['image' => $png(1400, 600)]), 'Lien javascript: refusé');
+            T::status(422, $a->upload('/admin/carrousel', ['title' => 'Image trop petite', 'is_active' => '1'], ['image' => $png(400, 200)]), 'Image trop petite refusée');
+            $a->post('/admin/carrousel/' . $slide['id'], ['title' => 'Diapositive test', 'is_active' => '1', 'starts_at' => gmdate('Y-m-d\TH:i', time() + 86400)]);
+            T::notContains('Diapositive test', $pub(), 'Publication programmée : pas encore visible');
+            $path = (string) DB::value('SELECT image_path FROM home_slides WHERE id = ?', [(int) $slide['id']]);
+            $a->post('/admin/carrousel/' . $slide['id'] . '/supprimer');
+            T::ok(\App\Services\Slides::find((int) $slide['id']) === null && !is_file(BASE_PATH . '/public' . $path), 'Diapositive et image supprimées');
+            DB::run('UPDATE home_slides SET is_active = 0');
+            $home = $pub();
+            T::notContains('class="carousel"', $home, 'Sans diapositive active : pas de carrousel vide');
+            T::contains('class="hero"', $home, 'Section d\'accueil de remplacement');
+            T::status(422, $a->post('/admin/carrousel/reglages', ['carousel_autoplay' => '1', 'carousel_interval' => '1']), 'Durée hors limites refusée');
+            // Devises indicatives
+            $eur = DB::one("SELECT * FROM currencies WHERE code = 'EUR'");
+            $a->post('/admin/devises/' . $eur['id'], ['xof_per_unit' => '655.957', 'symbol' => '€', 'decimals' => '2', 'sort_order' => '0', 'is_enabled' => '1']);
+            $product = $pub('/boutique/miel-liquide-toutes-fleurs');
+            T::contains('≈ 6,86', html_entity_decode($product), 'Équivalent indicatif en euros (4 500 FCFA)');
+            T::contains('paiement en francs CFA', html_entity_decode($product), 'Paiement en FCFA rappelé');
+            $usd = DB::one("SELECT * FROM currencies WHERE code = 'USD'");
+            T::status(422, $a->post('/admin/devises/' . $usd['id'], ['xof_per_unit' => '', 'symbol' => '$', 'decimals' => '2', 'is_enabled' => '1']), 'Devise sans taux non activable');
+            $foot = explode('<footer', $pub())[1] ?? '';
+            T::notContains('Prix en francs CFA', $foot, 'Mention « Prix en francs CFA » retirée du pied de page');
+            // Persistance après déconnexion / reconnexion, et droits
+            $a->post('/admin/deconnexion');
+            $b = new Client('10.34.0.7');
+            $b->loginAs(DB::one("SELECT * FROM users WHERE email = 'params@example.test'"));
+            T::contains('Miel Pur Katiola Test', $b->get('/admin/parametres/identite')->body, 'Valeurs conservées après reconnexion');
+            $cust = new Client('10.34.0.8');
+            $cust->loginAs(T::user('customer', 'client-params@example.test'));
+            foreach (['/admin/parametres', '/admin/parametres/apparence', '/admin/paiements', '/admin/carrousel', '/admin/devises'] as $p) {
+                T::status(403, $cust->get($p), "Client : $p refusé");
+            }
+            T::status(403, $cust->post('/admin/parametres/identite', ['store_name' => 'Piraté']), 'Client : modification refusée');
+            T::status(403, $cust->upload('/admin/parametres/images/brand_logo', [], ['image' => $png(600, 180)]), 'Client : téléversement refusé');
+            T::eq('Miel Pur Katiola Test', \App\Services\Settings::get('store_name'), 'Aucune modification par un client');
+            T::status(403, (new Client('10.34.0.9'))->post('/admin/paiements/cod/basculer'), 'Anonyme : refusé');
+        } finally {
+            foreach ($created as $f) {
+                @unlink($f);
+            }
+            foreach (array_merge(glob(BASE_PATH . '/public/uploads/brand/*.webp') ?: [], glob(BASE_PATH . '/public/uploads/brand/payments/*') ?: [], glob(BASE_PATH . '/public/uploads/brand/favicon/*') ?: [], glob(BASE_PATH . '/public/uploads/slides/*') ?: []) as $f) {
+                @unlink($f);
+            }
+            if ($icoBackup !== '') {
+                file_put_contents(BASE_PATH . '/public/favicon.ico', $icoBackup);
             }
         }
     },

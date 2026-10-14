@@ -56,7 +56,9 @@ final class OrderService
 
     public static function items(int $orderId): array
     {
-        return DB::all('SELECT * FROM order_items WHERE order_id = ? ORDER BY id', [$orderId]);
+        // Image actuelle du produit (affichage uniquement ; nom, format et prix restent ceux de la commande).
+        return DB::all('SELECT oi.*, (SELECT pi.path FROM product_images pi WHERE pi.product_id = oi.product_id ORDER BY pi.sort_order, pi.id LIMIT 1) AS image_path
+            FROM order_items oi WHERE oi.order_id = ? ORDER BY oi.id', [$orderId]);
     }
 
     public static function history(int $orderId): array
@@ -128,7 +130,10 @@ final class OrderService
                 }
 
                 $now = gmdate('Y-m-d H:i:s');
-                $online = $method !== 'cod';
+                // cod : confirmation par téléphone ; manual : paiement hors site, réception confirmée par l'équipe (aucune annulation automatique) ;
+                // gateway : paiement en ligne chez le prestataire, délai limité.
+                $kind = PaymentMethods::find($method)['kind'] ?? ($method === 'demo' ? 'gateway' : 'cod');
+                $online = $kind !== 'cod';
                 $number = 'MPCI-' . gmdate('Ymd') . '-' . strtoupper(bin2hex(random_bytes(4)));
                 $orderId = DB::insert('orders', [
                     'number' => $number,
@@ -157,7 +162,7 @@ final class OrderService
                     'total' => $quote['total'],
                     'promo_code' => $summary['promo']['code'] ?? null,
                     'promo_code_id' => isset($summary['promo']['id']) ? (int) $summary['promo']['id'] : null,
-                    'expires_at' => $online ? gmdate('Y-m-d H:i:s', time() + 60 * max(5, Settings::int('payment_timeout_minutes'))) : null,
+                    'expires_at' => $kind === 'gateway' ? gmdate('Y-m-d H:i:s', time() + 60 * max(5, Settings::int('payment_timeout_minutes'))) : null,
                     'created_at' => $now,
                     'updated_at' => $now,
                 ]);

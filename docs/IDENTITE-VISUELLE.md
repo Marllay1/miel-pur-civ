@@ -1,35 +1,49 @@
 # Identité visuelle : logo, favicon et photographies
 
-## 1. Logo officiel (en attente)
+## 1. Logo officiel (installé le 14/10/2026)
 
-Le logo officiel n'a pas encore été fourni. En attendant :
+Source : planche de marque fournie par la boutique (logo, favicon, palette, version monochrome). Les déclinaisons ont été extraites sans modification des formes ni des couleurs : fond ivoire rendu transparent, contours adoucis.
 
-- les en-têtes (site, administration, pages de connexion) affichent le **nom en toutes lettres** (« Miel Pur — de Côte d'Ivoire ») ; l'ancien pictogramme hexagone + goutte, qui était une proposition graphique, a été retiré ;
-- les icônes d'onglet et d'écran d'accueil sont **provisoires** : un monogramme « M » neutre sur fond miel (fichier témoin `public/assets/img/brand/PROVISOIRE.txt`) ;
-- aucun logo n'est déclaré aux moteurs de recherche (données structurées).
+| Fichier (`public/assets/img/brand/`) | Usage |
+|---|---|
+| `logo.png` | En-tête du site, à gauche, lien vers l'accueil : emblème à gauche du nom (disposition horizontale adaptée à la hauteur de l'en-tête, proportions conservées) |
+| `logo-dark.png` | Même logo, nom en ivoire, affiché automatiquement en thème sombre (une seule version visible à la fois) |
+| `logo-stacked.png` / `logo-stacked-dark.png` | Logo complet de la planche (emblème au-dessus du nom) : pied de page, pages de connexion client et administration |
+| `emblem.png` | Symbole seul (goutte, abeille, alvéoles, feuilles) : source des favicons |
+| `favicon.ico` (16/32/48), `favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png` (180, fond blanc), `icon-192.png`, `icon-512.png`, `icon-maskable-512.png`, `site.webmanifest` | Onglet du navigateur, favoris, écran d'accueil iOS/Android ; copie de `favicon.ico` à la racine publique |
 
-### Installer le logo dès réception
+Palette relevée sur la planche et appliquée au site : vert nature `#184626` (boutons, liens, titres), or miel `#E9A50A` (accents), orange `#EC7110`, ivoire `#F4EEDB` (fonds).
 
-Fournir de préférence :
+La disposition horizontale de l'en-tête est une composition des éléments du logo officiel (emblème + nom) : si la boutique dispose d'une version horizontale officielle, la fournir pour la remplacer.
 
-1. le **logo complet** en PNG à fond transparent (au moins 800 px de large) ou en SVG ;
-2. une **version carrée** (emblème sans texte, ou initiale) en PNG d'au moins 512 × 512 px pour les favicons : un logo comportant du texte devient illisible à 16 px.
+### Remplacer le logo
 
-Puis, dans le dossier du projet :
+Le plus simple : **Administration → Paramètres du site → Logos et images** (téléversement avec aperçu, contrôle des dimensions, retour possible au logo installé). En ligne de commande, pour remplacer les fichiers installés :
 
 ```bash
-php bin/brand.php --logo=chemin/logo.png --icon=chemin/embleme.png
+php bin/brand.php --logo=logo-horizontal.png --logo-dark=logo-horizontal-clair.png --logo-stacked=logo.png --logo-stacked-dark=logo-clair.png --icon=embleme.png
 ```
 
-Le script :
+PNG à fond transparent. Seul `--logo` est obligatoire ; sans `--icon`, les favicons sont faits à partir du logo complet (déconseillé : texte illisible en 16 px). `php bin/brand.php --remove-logo` revient au nom en toutes lettres. Après remplacement : rechargement sans cache (Ctrl + F5).
 
-- installe le logo dans `public/assets/img/brand/` (marges vides retirées, largeur limitée à 800 px, **proportions conservées**) ; il est affiché à hauteur fixe (40 px dans l'en-tête, 64 px sur les pages de connexion) sans jamais être déformé ;
-- génère `favicon.ico` (16, 32 et 48 px), `favicon-16.png`, `favicon-32.png`, `apple-touch-icon.png` (180 px, fond opaque exigé par iOS), `icon-192.png`, `icon-512.png`, une icône « maskable » Android et `site.webmanifest`, ainsi qu'une copie de `favicon.ico` à la racine publique ;
-- supprime les icônes provisoires.
+## Logos des moyens de paiement
 
-Options : `--background=#RRGGBB` (fond de l'icône iOS, blanc par défaut). Sans `--icon`, les favicons sont faits à partir du logo complet. `php bin/brand.php --remove-logo` revient au nom en toutes lettres.
+Dans `public/assets/img/payments/`, affichés sur fond neutre, sans déformation, uniquement pour les moyens réellement proposés :
 
-Vérification : recharger le site sans cache (Ctrl + F5) et contrôler l'onglet ; sur téléphone, « Ajouter à l'écran d'accueil ». Les navigateurs gardent parfois l'ancienne icône en cache plusieurs heures.
+| Logo | Fichier | Source |
+|---|---|---|
+| Visa | `visa.svg` | Wikimedia Commons, « Visa Inc. logo (2021–present).svg » (domaine public, marque déposée de Visa) |
+| Mastercard | `mastercard.svg` | Wikimedia Commons, « Mastercard 2019 logo.svg » (symbole seul ; marque déposée de Mastercard) |
+| Orange Money | `orange-money.svg` | Wikimedia Commons, « Orange Money logo » (marque déposée d'Orange) |
+| MTN MoMo | `mtn-momo.png` | logo officiel du portail développeurs MTN MoMo (momodeveloper.mtn.com), réduit à 240 px |
+| Wave | `wave.png` | logo du site officiel wave.com |
+| Moov Money | — | aucun logo officiel téléchargeable trouvé : le nom s'affiche en texte. Téléverser le logo fourni par Moov Africa dans *Moyens de paiement* |
+
+Ces marques appartiennent à leurs titulaires ; vérifier auprès de chaque prestataire, à la signature du contrat, ses règles d'usage du logo.
+
+## Réseaux sociaux
+
+Logos officiels de Facebook et WhatsApp (ainsi qu'Instagram et TikTok si ces comptes sont renseignés), tracés de la bibliothèque [Simple Icons](https://simpleicons.org) 11.14.0 (licence CC0), couleurs de marque officielles, dans `app/config/social-icons.php`. YouTube et LinkedIn sont aussi disponibles. Un réseau n'apparaît que si son adresse est renseignée **et** son affichage coché dans *Administration → Paramètres du site → Réseaux sociaux* (WhatsApp : *Coordonnées*) : aucun lien n'est inventé. Chaque icône a un libellé pour les lecteurs d'écran.
 
 ## 2. Photographies
 
@@ -37,7 +51,7 @@ Toutes les photos du site sont décrites dans `app/config/photos.php` (fichier, 
 
 | Origine | Usage | Mention affichée |
 |---|---|---|
-| **Photos de l'entreprise** : publiées sur la page Facebook officielle (consultée le 14/10/2026) | Accueil (visuel d'ouverture, galerie), catégorie Miels, Coffrets, fiche Miel liquide, Notre histoire, Professionnels | « Photo : Miel Pur de Côte d'Ivoire » |
+| **Photos de l'entreprise** : publiées sur la page Facebook officielle (consultée le 14/10/2026) | Accueil (galerie « Nos produits en images »), catégorie Miels, Coffrets, fiche Miel liquide, Notre histoire, Professionnels | « Photo : Miel Pur de Côte d'Ivoire » |
 | **Photos d'illustration** : Wikimedia Commons, licences libres | Apiculture (Notre démarche), cadre de rayons, miel crémeux, cire, vrac | « Photo d'illustration — auteur, Wikimedia Commons, licence » + badge « Illustration » sur les vignettes |
 
 La page **/credits-photos** (lien dans le pied de page) liste l'ensemble avec auteurs, licences et liens vers les sources.
@@ -46,6 +60,7 @@ La page **/credits-photos** (lien dans le pied de page) liste l'ensemble avec au
 
 | Fichier | Sujet | Auteur | Licence | Source |
 |---|---|---|---|---|
+| `wm-pot-miel-rayon.webp` | Pot de miel avec rayon et cuillère (photo d'ouverture de l'accueil) | Alabama Extension | CC0 1.0 (domaine public) | https://commons.wikimedia.org/wiki/File:Small_Honey_Jar_with_Honeycomb.jpg |
 | `wm-apiculteurs-cameroun.webp` | Apiculteurs autour d'une ruche à barrettes (Cameroun) | Usman H Dukku | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Woman-Beekeeper-Cameroon.jpg |
 | `wm-cadre-rayons.webp` | Cadre de ruche couvert d'abeilles | Øyvind Holmstad | CC BY-SA 4.0 | https://commons.wikimedia.org/wiki/File:Honey_comb_frame_2017.jpg |
 | `wm-pains-cire.webp` | Pains de cire d'abeille | Mauro Cateb | CC BY-SA 3.0 | https://commons.wikimedia.org/wiki/File:Beeswax_blocks.JPG |

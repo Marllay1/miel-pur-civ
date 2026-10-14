@@ -12,6 +12,7 @@ use App\Controllers\PageController;
 use App\Controllers\PaymentController;
 use App\Controllers\SeoController;
 use App\Controllers\ShopController;
+use App\Controllers\ThemeController;
 
 $order = '{number:MPCI-[0-9]+-[A-F0-9]+}';
 
@@ -53,11 +54,13 @@ $router->get('/faq', [PageController::class, 'faq']);
 $router->get('/credits-photos', [PageController::class, 'credits']);
 $router->get('/menu', [PageController::class, 'menu']);
 $router->post('/preferences/theme', [PageController::class, 'theme']);
+$router->get('/langue/{code:fr|en}', [PageController::class, 'language']);
 $router->post('/newsletter', [PageController::class, 'newsletter']);
 $router->get('/newsletter/desinscription/{token:[a-f0-9]+}', [PageController::class, 'unsubscribe']);
 foreach (['conditions-generales-de-vente', 'politique-de-confidentialite', 'politique-de-livraison', 'retours-et-remboursements', 'mentions-legales'] as $legal) {
     $router->get('/' . $legal, [PageController::class, 'legal']);
 }
+$router->get('/theme.css', [ThemeController::class, 'css']);
 $router->get('/sitemap.xml', [SeoController::class, 'sitemap']);
 $router->get('/robots.txt', [SeoController::class, 'robots']);
 
@@ -131,8 +134,39 @@ $router->post('/admin/faq/{id:[0-9]+}/supprimer', [Admin\ContentController::clas
 $router->get('/admin/avis', [Admin\ContentController::class, 'reviews'], ['perm:content.manage']);
 $router->post('/admin/avis/{id:[0-9]+}', [Admin\ContentController::class, 'reviewModerate'], ['perm:content.manage']);
 
-$router->get('/admin/reglages', [Admin\SettingsController::class, 'index'], ['perm:settings.manage']);
-$router->post('/admin/reglages', [Admin\SettingsController::class, 'save'], ['perm:settings.manage']);
+// Paramètres du site (configuration centralisée) ; l'ancienne page « Réglages » y redirige.
+$router->get('/admin/reglages', [Admin\SiteSettingsController::class, 'legacy'], ['perm:settings.manage']);
+$router->get('/admin/parametres', [Admin\SiteSettingsController::class, 'index'], ['perm:settings.manage']);
+$router->post('/admin/parametres/apparence/apercu',[Admin\SiteSettingsController::class, 'preview'], ['perm:settings.manage']);
+$router->get('/admin/parametres/apparence/apercu.css', [Admin\SiteSettingsController::class, 'previewCss'], ['perm:settings.manage']);
+$router->post('/admin/parametres/images/{key:[a-z_]+}', [Admin\SiteSettingsController::class, 'uploadImage'], ['perm:settings.manage']);
+$router->post('/admin/parametres/images/{key:[a-z_]+}/supprimer', [Admin\SiteSettingsController::class, 'deleteImage'], ['perm:settings.manage']);
+$router->get('/admin/parametres/{section:[a-z]+}', [Admin\SiteSettingsController::class, 'edit'], ['perm:settings.manage']);
+$router->post('/admin/parametres/{section:[a-z]+}', [Admin\SiteSettingsController::class, 'save'], ['perm:settings.manage']);
+// Moyens de paiement
+$router->get('/admin/paiements', [Admin\PaymentMethodsController::class, 'index'], ['perm:settings.manage']);
+$router->post('/admin/paiements', [Admin\PaymentMethodsController::class, 'store'], ['perm:settings.manage']);
+$router->get('/admin/paiements/{code:[a-z0-9_]+}', [Admin\PaymentMethodsController::class, 'edit'], ['perm:settings.manage']);
+$router->post('/admin/paiements/{code:[a-z0-9_]+}', [Admin\PaymentMethodsController::class, 'update'], ['perm:settings.manage']);
+$router->post('/admin/paiements/{code:[a-z0-9_]+}/basculer', [Admin\PaymentMethodsController::class, 'toggle'], ['perm:settings.manage']);
+$router->post('/admin/paiements/{code:[a-z0-9_]+}/logo', [Admin\PaymentMethodsController::class, 'uploadLogo'], ['perm:settings.manage']);
+$router->post('/admin/paiements/{code:[a-z0-9_]+}/supprimer', [Admin\PaymentMethodsController::class, 'delete'], ['perm:settings.manage']);
+// Devises d'affichage
+$router->get('/admin/devises', [Admin\CurrenciesController::class, 'index'], ['perm:settings.manage']);
+$router->post('/admin/devises', [Admin\CurrenciesController::class, 'store'], ['perm:settings.manage']);
+$router->post('/admin/devises/{id:[0-9]+}', [Admin\CurrenciesController::class, 'update'], ['perm:settings.manage']);
+$router->post('/admin/devises/{id:[0-9]+}/supprimer', [Admin\CurrenciesController::class, 'delete'], ['perm:settings.manage']);
+// Carrousel de l'accueil
+$router->get('/admin/carrousel', [Admin\SlidesController::class, 'index'], ['perm:content.manage']);
+$router->get('/admin/carrousel/apercu', [Admin\SlidesController::class, 'preview'], ['perm:content.manage']);
+$router->post('/admin/carrousel/reglages', [Admin\SlidesController::class, 'settings'], ['perm:content.manage']);
+$router->get('/admin/carrousel/nouvelle', [Admin\SlidesController::class, 'create'], ['perm:content.manage']);
+$router->post('/admin/carrousel', [Admin\SlidesController::class, 'store'], ['perm:content.manage']);
+$router->get('/admin/carrousel/{id:[0-9]+}', [Admin\SlidesController::class, 'edit'], ['perm:content.manage']);
+$router->post('/admin/carrousel/{id:[0-9]+}', [Admin\SlidesController::class, 'update'], ['perm:content.manage']);
+$router->post('/admin/carrousel/{id:[0-9]+}/basculer', [Admin\SlidesController::class, 'toggle'], ['perm:content.manage']);
+$router->post('/admin/carrousel/{id:[0-9]+}/deplacer/{dir:haut|bas}', [Admin\SlidesController::class, 'move'], ['perm:content.manage']);
+$router->post('/admin/carrousel/{id:[0-9]+}/supprimer', [Admin\SlidesController::class, 'delete'], ['perm:content.manage']);
 $router->get('/admin/livraison', [Admin\SettingsController::class, 'zones'], ['perm:settings.manage']);
 $router->post('/admin/livraison', [Admin\SettingsController::class, 'zoneSave'], ['perm:settings.manage']);
 $router->get('/admin/integrations', [Admin\SettingsController::class, 'integrations'], ['perm:settings.manage']);

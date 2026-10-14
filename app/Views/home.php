@@ -1,16 +1,28 @@
 <?php
 use App\Core\View;
 use App\Services\PaymentService;
-/** @var array $featured @var array $categories @var array $faqs */
-$methods = PaymentService::availableMethods(null);
+/** @var array $featured @var array $categories @var array $faqs @var array $slides */
+$heroImage = \App\Services\Settings::get('home_hero_image');
+// Logos des moyens de paiement réellement proposés (Administration → Moyens de paiement).
+$acceptedPayments = \App\Services\Settings::bool('home_show_payments') ? \App\Services\PaymentMethods::acceptedLogos() : [];
 $catPhotos = ['miels' => 'fb-bouteilles-trio', 'cire-d-abeille' => 'wm-pains-cire', 'coffrets' => 'fb-stand-coffrets'];
 $facebook = \App\Services\Settings::get('social_facebook');
-$gallery = ['fb-bouteille-fond-jaune', 'fb-bouteilles-duo', 'wm-cadre-rayons'];
+$gallery = ['fb-miel-en-rayon-vente', 'fb-bouteille-fond-jaune', 'fb-bouteilles-duo'];
 ?>
+<?php if ($slides): ?>
+<?= View::partial('carousel', ['slides' => $slides]) ?>
+<section class="trust-band" aria-label="<?= e(t('home.trust_label')) ?>">
+  <ul class="wrap trust trust-row">
+    <li><?= icon('leaf') ?><?= e(t('home.trust_bio')) ?></li>
+    <li><?= icon('shield') ?><?= e(t('home.trust_cert')) ?></li>
+    <li><?= icon('truck') ?><?= e(t('home.trust_delivery')) ?></li>
+  </ul>
+</section>
+<?php else: ?>
 <section class="hero">
   <div class="wrap hero-grid">
     <div class="hero-copy">
-      <p class="eyebrow"><span class="dot"><?= icon('pin') ?></span><?= e(setting('store_city')) ?> · Côte d'Ivoire</p>
+      <?php if (\App\Services\Settings::bool('header_show_tagline')): ?><p class="eyebrow"><?= e(setting('store_tagline')) ?></p><?php endif; ?>
       <h1 class="display"><?= e(setting('home_hero_title')) ?></h1>
       <p class="lead"><?= e(setting('home_hero_text')) ?></p>
       <div class="btn-row">
@@ -24,11 +36,16 @@ $gallery = ['fb-bouteille-fond-jaune', 'fb-bouteilles-duo', 'wm-cadre-rayons'];
       </ul>
     </div>
     <figure class="hero-visual hero-photo">
-      <?= photo('fb-miel-en-rayon-vente', '', '(min-width: 960px) 50vw, 100vw', true) ?>
-      <figcaption><?= photo_credit('fb-miel-en-rayon-vente') ?></figcaption>
+      <?php if ($heroImage !== ''): ?>
+      <img src="<?= e($heroImage) ?>" alt="" fetchpriority="high" decoding="async">
+      <?php else: ?>
+      <?= photo('wm-pot-miel-rayon', '', '(min-width: 960px) 50vw, 100vw', true) ?>
+      <figcaption><?= photo_credit('wm-pot-miel-rayon') ?></figcaption>
+      <?php endif; ?>
     </figure>
   </div>
 </section>
+<?php endif; ?>
 
 <?php if ($featured): ?>
 <section class="section" aria-labelledby="h-featured">
@@ -67,7 +84,7 @@ $gallery = ['fb-bouteille-fond-jaune', 'fb-bouteilles-duo', 'wm-cadre-rayons'];
       <figcaption><?= photo_credit('wm-apiculteurs-cameroun') ?></figcaption>
     </figure>
     <div class="story-card">
-      <p class="eyebrow"><span class="dot"><?= icon('hex') ?></span><?= e(t('home.story_eyebrow')) ?></p>
+      <p class="eyebrow"><?= e(t('home.story_eyebrow')) ?></p>
       <h2 id="h-story"><?= e(setting('home_story_title')) ?></h2>
       <div class="prose"><?= rich(setting('home_story_text')) ?></div>
       <div class="cert"><?= icon('shield') ?><div><strong><?= e(t('home.cert_title')) ?></strong><br><span class="muted"><?= e(t('home.cert_text')) ?></span></div></div>
@@ -97,11 +114,9 @@ $gallery = ['fb-bouteille-fond-jaune', 'fb-bouteilles-duo', 'wm-cadre-rayons'];
       <li><strong><?= e(t('home.step3')) ?></strong><span><?= e(t('home.step3_text')) ?></span></li>
       <li><strong><?= e(t('home.step4')) ?></strong><span><?= e(t('home.step4_text')) ?></span></li>
     </ol>
-    <?php if ($methods): ?>
+    <?php if ($acceptedPayments): ?>
     <h3 class="group-title"><?= e(t('home.payment_methods')) ?></h3>
-    <div class="pay-strip">
-      <?php foreach ($methods as $m): ?><span class="pay-badge"><?= pay_logo($m['code']) ?><?= e($m['label']) ?></span><?php endforeach; ?>
-    </div>
+    <?= View::partial('payment-logos', ['methods' => $acceptedPayments]) ?>
     <?php endif; ?>
   </div>
 </section>

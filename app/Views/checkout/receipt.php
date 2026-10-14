@@ -7,7 +7,7 @@ $legal = array_filter([Settings::get('legal_company'), Settings::get('legal_rccm
   <header class="receipt-head">
     <div>
       <p class="receipt-store"><?= e(Settings::get('store_name')) ?></p>
-      <p class="small"><?= e(Settings::get('store_address') !== '' ? Settings::get('store_address') . ', ' : '') ?><?= e(Settings::get('store_city')) ?>, Côte d'Ivoire<br><?= e(Settings::get('store_phone')) ?><?= Settings::get('store_email') !== '' ? ' · ' . e(Settings::get('store_email')) : '' ?><?php if ($legal): ?><br><?= e(implode(' · ', $legal)) ?><?php endif; ?></p>
+      <p class="small"><?= e(implode(', ', array_filter([Settings::get('store_address'), Settings::get('store_city'), Settings::get('store_country')]))) ?><br><?= e(\App\Services\SiteConfig::internationalPhone(Settings::get('store_phone'))) ?><?= Settings::get('store_email') !== '' ? ' · ' . e(Settings::get('store_email')) : '' ?><?php if ($legal): ?><br><?= e(implode(' · ', $legal)) ?><?php endif; ?></p>
     </div>
     <div class="receipt-meta">
       <p><strong><?= e(t('receipt.heading')) ?></strong></p>

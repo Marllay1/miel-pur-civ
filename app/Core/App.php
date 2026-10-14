@@ -42,6 +42,34 @@ final class App
             $locale = Lang::DEFAULT;
         }
         Lang::set($locale);
+        // Langues : Paramètres du site → Langues. Le français est la langue de référence (adresses sans préfixe).
+        try {
+            $englishOn = \App\Services\Settings::bool('lang_en_enabled');
+            $defaultLang = \App\Services\Settings::get('lang_default');
+            $detect = \App\Services\Settings::bool('lang_detect_browser');
+        } catch (\Throwable) {
+            [$englishOn, $defaultLang, $detect] = [true, 'fr', false];
+        }
+        if ($locale === 'en' && !$englishOn) {
+            // Version anglaise désactivée : la page française correspondante est servie.
+            return self::secure($r, Response::redirect($r->path . ($r->query ? '?' . http_build_query($r->query) : '')));
+        }
+        // Accueil sans préfixe : choix mémorisé (sélecteur), sinon langue par défaut, sinon langue du navigateur (si activé).
+        if ($englishOn && $r->method === 'GET' && $locale === Lang::DEFAULT && ($r->server['REQUEST_URI'] ?? '/') === '/' && $r->path === '/') {
+            $chosen = $r->cookie('mpci_lang');
+            if ($chosen === null) {
+                $chosen = $defaultLang === 'en' ? 'en' : 'fr';
+                if ($detect) {
+                    $accept = strtolower((string) ($r->server['HTTP_ACCEPT_LANGUAGE'] ?? ''));
+                    if (preg_match('/^\s*([a-z]{2})/', $accept, $m) && in_array($m[1], ['fr', 'en'], true)) {
+                        $chosen = $m[1];
+                    }
+                }
+            }
+            if ($chosen === 'en') {
+                return self::secure($r, Response::redirect('/en'));
+            }
+        }
         $theme = $r->cookie('mpci_theme');
         View::$shared = ['request' => $r, 'theme' => in_array($theme, ['light', 'dark'], true) ? $theme : null];
         try {

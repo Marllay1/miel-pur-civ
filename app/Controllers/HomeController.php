@@ -23,20 +23,20 @@ final class HomeController
         if (brand_logo_url() !== null) {
             $org['logo'] = base_url() . strtok((string) brand_logo_url(), '?');
         }
-        $address = Settings::get('store_city');
-        if (!Settings::isPlaceholder('store_city')) {
-            $org['address'] = ['@type' => 'PostalAddress', 'addressLocality' => $address, 'addressCountry' => 'CI'];
+        if (\App\Services\SiteConfig::address() !== '' && Settings::get('store_city') !== '') {
+            $org['address'] = array_filter(['@type' => 'PostalAddress', 'streetAddress' => Settings::get('store_address'), 'addressLocality' => Settings::get('store_city'), 'addressCountry' => 'CI']);
         }
-        if (!Settings::isPlaceholder('store_phone')) {
-            $org['telephone'] = Settings::get('store_phone');
+        if (($phone = \App\Services\SiteConfig::mainPhone()) !== '') {
+            $org['telephone'] = $phone;
         }
-        $sameAs = array_values(array_filter([Settings::get('social_facebook'), Settings::get('social_instagram'), Settings::get('social_tiktok')]));
+        $sameAs = array_values(array_map(static fn ($l) => $l[0], array_filter(\App\Services\SiteConfig::socialLinks(), static fn ($k) => $k !== 'whatsapp', ARRAY_FILTER_USE_KEY)));
         if ($sameAs) {
             $org['sameAs'] = $sameAs;
         }
         return view('home', [
             'featured' => Catalog::featured(4),
             'categories' => Catalog::categories(),
+            'slides' => \App\Services\Slides::live(),
             'faqs' => \App\Services\I18n::localize('faq', DB::all('SELECT * FROM faqs WHERE is_active = 1 ORDER BY sort_order, id LIMIT 3')),
             'canonical' => '/',
             'pageTitle' => '',

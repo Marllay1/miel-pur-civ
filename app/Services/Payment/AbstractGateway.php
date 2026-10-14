@@ -11,7 +11,8 @@ abstract class AbstractGateway implements Gateway
 {
     public function label(): string
     {
-        return t('pay.' . $this->code());
+        $m = \App\Services\PaymentMethods::find($this->code());
+        return $m !== null ? \App\Services\PaymentMethods::name($m) : t('pay.' . $this->code());
     }
 
     public function description(): string
@@ -24,17 +25,22 @@ abstract class AbstractGateway implements Gateway
         return false;
     }
 
-    public function isEnabled(): bool
+    /** Clés du prestataire présentes dans .env (intégration technique possible). */
+    public function isConfigured(): bool
     {
-        if (!Settings::bool($this->code() . '_enabled')) {
-            return false;
-        }
         foreach ($this->requiredEnv() as $var) {
             if ((string) Env::get($var, '') === '') {
                 return false;
             }
         }
         return true;
+    }
+
+    /** Proposé aux clients : activé dans Administration → Moyens de paiement ET configuré. */
+    public function isEnabled(): bool
+    {
+        $m = \App\Services\PaymentMethods::find($this->code());
+        return $m !== null && (int) $m['is_enabled'] === 1 && $this->isConfigured();
     }
 
     protected function env(string $key, string $default = ''): string

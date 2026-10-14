@@ -54,7 +54,7 @@ final class DashboardController extends Base
                     $missing++;
                 }
             }
-            $data['todo']['Réglages à compléter'] = [$missing, '/admin/reglages'];
+            $data['todo']['Réglages à compléter'] = [$missing, '/admin/parametres'];
         }
         return admin_view('dashboard', $data);
     }

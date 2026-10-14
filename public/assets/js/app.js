@@ -52,7 +52,135 @@
     initCheckout();
     initPolling();
     initConsent();
+    initLangMenu();
+    $all('[data-carousel]').forEach(initCarousel);
+    initImagePreviews();
+    initAnimations();
   });
+
+  /* Sélecteur de langue : fermeture au clic extérieur et avec Échap (le menu fonctionne aussi sans JavaScript). */
+  /*
+   * Carrousel de l'accueil : fondu discret, flèches, indicateurs, clavier (← →), défilement automatique facultatif
+   * mis en pause au survol, au focus et au toucher ; aucun défilement automatique si l'animation est réduite.
+   */
+  function initCarousel(root) {
+    var slides = $all('[data-slide]', root);
+    var controls = $('[data-carousel-controls]', root);
+    if (slides.length < 2) { return; }
+    root.classList.add('is-enhanced');
+    if (controls) { controls.hidden = false; }
+    var dots = $all('[data-carousel-dot]', root);
+    var pauseBtn = $('[data-carousel-pause]', root);
+    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var delay = parseInt(root.getAttribute('data-autoplay') || '0', 10);
+    var index = 0, timer = null, paused = reduced || !delay, hovering = false;
+
+    function preload(i) {
+      var img = $('img', slides[i]);
+      if (img && img.loading === 'lazy') { img.loading = 'eager'; }
+    }
+    function show(i, focus) {
+      i = (i + slides.length) % slides.length;
+      if (i === index) { return; }
+      slides[index].classList.remove('is-active');
+      slides[index].setAttribute('aria-hidden', 'true');
+      $all('a, button', slides[index]).forEach(function (el) { el.setAttribute('tabindex', '-1'); });
+      index = i;
+      preload(index);
+      slides[index].classList.add('is-active');
+      slides[index].removeAttribute('aria-hidden');
+      $all('a, button', slides[index]).forEach(function (el) { el.removeAttribute('tabindex'); });
+      dots.forEach(function (d, k) { if (k === index) { d.setAttribute('aria-current', 'true'); } else { d.removeAttribute('aria-current'); } });
+      preload((index + 1) % slides.length);
+      if (focus) { var live = $('[data-live-region]'); if (live) { live.textContent = slides[index].getAttribute('aria-label') || ''; } }
+    }
+    function schedule() {
+      clearTimeout(timer);
+      if (!paused && !hovering) { timer = setTimeout(function () { show(index + 1); schedule(); }, delay); }
+    }
+    function setPaused(p) {
+      paused = p;
+      if (pauseBtn) {
+        pauseBtn.classList.toggle('is-paused', p);
+        pauseBtn.setAttribute('aria-label', p ? pauseBtn.getAttribute('data-label-play') : pauseBtn.getAttribute('data-label-pause'));
+      }
+      schedule();
+    }
+    var prev = $('[data-carousel-prev]', root), next = $('[data-carousel-next]', root);
+    if (prev) { prev.addEventListener('click', function () { show(index - 1, true); setPaused(true); }); }
+    if (next) { next.addEventListener('click', function () { show(index + 1, true); setPaused(true); }); }
+    dots.forEach(function (d) { d.addEventListener('click', function () { show(parseInt(d.getAttribute('data-carousel-dot'), 10), true); setPaused(true); }); });
+    if (pauseBtn) { pauseBtn.addEventListener('click', function () { setPaused(!paused); }); }
+    root.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowLeft') { show(index - 1, true); setPaused(true); }
+      if (e.key === 'ArrowRight') { show(index + 1, true); setPaused(true); }
+    });
+    root.addEventListener('mouseenter', function () { hovering = true; schedule(); });
+    root.addEventListener('mouseleave', function () { hovering = false; schedule(); });
+    root.addEventListener('focusin', function () { hovering = true; schedule(); });
+    root.addEventListener('focusout', function (e) { if (!root.contains(e.relatedTarget)) { hovering = false; schedule(); } });
+    var startX = null;
+    root.addEventListener('touchstart', function (e) { startX = e.touches[0].clientX; setPaused(true); }, { passive: true });
+    root.addEventListener('touchend', function (e) {
+      if (startX === null) { return; }
+      var dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 40) { show(index + (dx < 0 ? 1 : -1), true); }
+      startX = null;
+    }, { passive: true });
+    if (pauseBtn && reduced) { pauseBtn.hidden = true; }
+    preload(1);
+    setPaused(paused);
+  }
+
+  /* Aperçu local d'une image avant téléversement (administration) : lecture du fichier dans le navigateur, rien n'est envoyé. */
+  function initImagePreviews() {
+    $all('input[type="file"][data-preview]').forEach(function (input) {
+      var target = doc.getElementById(input.getAttribute('data-preview'));
+      if (!target || !window.FileReader) { return; }
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        if (!file || !/^image\/(png|jpeg|webp)$/.test(file.type)) { target.hidden = true; return; }
+        var reader = new FileReader();
+        reader.onload = function () { target.src = String(reader.result); target.hidden = false; };
+        reader.readAsDataURL(file);
+      });
+    });
+  }
+
+  function initLangMenu() {
+    var menus = $all('[data-lang-menu]');
+    if (!menus.length) { return; }
+    doc.addEventListener('click', function (e) {
+      menus.forEach(function (m) { if (m.open && !m.contains(e.target)) { m.open = false; } });
+    });
+    doc.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') { return; }
+      menus.forEach(function (m) { if (m.open) { m.open = false; var s = m.querySelector('summary'); if (s) { s.focus(); } } });
+    });
+  }
+
+  /*
+   * Animations d'apparition au défilement (AOS) sur les pages publiques. Les attributs sont posés ici, par JavaScript :
+   * sans JavaScript ou avec « réduire les animations », tout le contenu reste visible immédiatement.
+   */
+  function initAnimations() {
+    if (!window.AOS || !doc.body.classList.contains('site')) { return; }
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) { return; }
+    var rules = [
+      ['main .page-head, main .section-head, main .hero-copy, main .story-card, main .pro-card, main .content-card, main .form-card, main .error-page, main .empty-state', 'fade-up'],
+      ['main .hero-photo, main .story-photo, main .page-banner, main .product-gallery', 'fade-in'],
+      ['main .product-card, main .tile, main .gallery-item, main .steps li, main .group, main .disclosure, main .credits-list li, main .product-info', 'fade-up']
+    ];
+    rules.forEach(function (rule) {
+      $all(rule[0]).forEach(function (el, i) {
+        if (el.hasAttribute('data-aos')) { return; }
+        el.setAttribute('data-aos', rule[1]);
+        var siblings = el.parentElement ? el.parentElement.children.length : 1;
+        if (siblings > 1) { el.setAttribute('data-aos-delay', String(Math.min(Array.prototype.indexOf.call(el.parentElement.children, el), 5) * 60)); }
+      });
+    });
+    window.AOS.init({ once: true, duration: 550, easing: 'ease-out-cubic', offset: 24 });
+  }
 
   function initNavbar() {
     $all('.nav-toggle[aria-controls]').forEach(function (toggle) {
@@ -118,6 +246,8 @@
       radio.addEventListener('change', function () {
         var stock = parseInt(radio.getAttribute('data-stock'), 10), low = parseInt(radio.getAttribute('data-low'), 10);
         if (price) { price.textContent = radio.getAttribute('data-price'); }
+        var conv = $('[data-conversion]:not(input)');
+        if (conv && radio.getAttribute('data-conversion')) { conv.textContent = radio.getAttribute('data-conversion'); }
         if (state) {
           var cls = stock === 0 ? 'stock-out' : (stock <= low ? 'stock-low' : 'stock-ok');
           state.className = 'stock-state ' + cls;

@@ -6,8 +6,8 @@ Dernière campagne de tests : 2026-10-14 (itération 2 : paiements intégrés, S
 
 | Suite | Commande | Résultat |
 |---|---|---|
-| Fonctionnelle + sécurité (SQLite ; PHP 8.3 et PHP 8.2) | `php tests/run.php` | 31 scénarios, 1 023 assertions, 0 échec |
-| Fonctionnelle + sécurité (MariaDB 11.4 et MariaDB 10.4 de XAMPP) | `php tests/run.php --mysql` | 31 scénarios, 1 023 assertions, 0 échec |
+| Fonctionnelle + sécurité (SQLite ; PHP 8.3 et PHP 8.2) | `php tests/run.php` | 33 scénarios, 1 349 assertions, 0 échec |
+| Fonctionnelle + sécurité (MariaDB 10.4 de XAMPP) | `php tests/run.php --mysql` | 33 scénarios, 1 349 assertions, 0 échec |
 | Boîte noire HTTP — Apache 2.4 (XAMPP) | `php tests/security-http.php http://miel.localhost` | 66 contrôles, 0 échec |
 | Boîte noire HTTP — Nginx 1.30 | `php tests/security-http.php http://miel-nginx.localhost:8088` | 66 contrôles, 0 échec |
 | Boîte noire HTTP — serveur intégré PHP | `php tests/security-http.php` | 66 contrôles, 0 échec |

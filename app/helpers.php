@@ -48,32 +48,73 @@ function asset(string $path): string
 }
 
 /** Logo officiel (public/assets/img/brand/logo.svg|png|webp, installé par bin/brand.php) ou null tant qu'il n'est pas fourni. */
-function brand_logo_url(): ?string
+/**
+ * Fichier du logo officiel installé par bin/brand.php, ou null.
+ * $variant : '' (horizontal, en-tête), 'dark' (texte clair), 'stacked' (empilé), 'stacked-dark'.
+ */
+function brand_logo_url(string $variant = ''): ?string
 {
-    static $url = false;
-    if ($url === false) {
-        $url = null;
-        foreach (['svg', 'webp', 'png'] as $ext) {
-            if (is_file(BASE_PATH . '/public/assets/img/brand/logo.' . $ext)) {
-                $url = asset('img/brand/logo.' . $ext);
-                break;
-            }
+    // 1. Image téléversée dans Administration → Paramètres du site → Logos et images.
+    $settingKey = ['' => 'brand_logo', 'dark' => 'brand_logo_dark', 'stacked' => 'brand_logo_footer', 'stacked-dark' => 'brand_logo_footer_dark'][$variant] ?? null;
+    $uploaded = static function (string $key): ?string {
+        try {
+            $v = \App\Services\Settings::get($key);
+        } catch (\Throwable) {
+            return null;
+        }
+        return $v !== '' && is_file(BASE_PATH . '/public' . $v) ? $v : null;
+    };
+    if ($settingKey !== null && ($u = $uploaded($settingKey)) !== null) {
+        return $u;
+    }
+    // Un logo téléversé remplace la marque : les fichiers installés (autre dessin) ne sont plus utilisés pour ses déclinaisons.
+    if ($variant === 'dark' && $uploaded('brand_logo') !== null) {
+        return null;
+    }
+    if ($variant === 'stacked-dark' && ($uploaded('brand_logo_footer') !== null || $uploaded('brand_logo') !== null)) {
+        return $uploaded('brand_logo_footer') === null ? brand_logo_url('dark') : null;
+    }
+    if ($variant === 'stacked' && $uploaded('brand_logo') !== null) {
+        return $uploaded('brand_logo');
+    }
+    // 2. Fichiers installés par bin/brand.php.
+    $base = 'logo' . ($variant !== '' ? '-' . $variant : '');
+    foreach (['svg', 'webp', 'png'] as $ext) {
+        if (is_file(BASE_PATH . '/public/assets/img/brand/' . $base . '.' . $ext)) {
+            return asset('img/brand/' . $base . '.' . $ext);
         }
     }
-    return $url;
+    return null;
+}
+
+/** Feuille de thème générée depuis Paramètres du site → Apparence (version incluse : cache invalidé à chaque changement). */
+function theme_css_url(): string
+{
+    try {
+        return '/theme.css?v=' . \App\Services\ThemeService::version();
+    } catch (\Throwable) {
+        return '/theme.css';
+    }
 }
 
 /**
- * Marque affichée dans les en-têtes : logo officiel s'il est installé (proportions conservées),
- * sinon le nom de la boutique en toutes lettres — aucun logo de substitution n'est inventé.
+ * Logo officiel (proportions conservées) : version pour fond clair et, si elle existe, version à texte clair
+ * pour le thème sombre — une seule des deux est affichée (CSS selon le thème). $stacked : emblème au-dessus du texte.
+ * Sans logo installé : nom en toutes lettres (aucun logo de substitution n'est inventé).
  */
-function brand_html(string $sub = ''): string
+function brand_html(string $sub = '', bool $stacked = false): string
 {
     $name = \App\Services\Settings::get('store_name') ?: 'Miel Pur de Côte d\'Ivoire';
-    $logo = brand_logo_url();
-    if ($logo !== null) {
-        return '<img class="brand-logo" src="' . e($logo) . '" alt="' . e($name) . '" decoding="async">'
-            . ($sub !== '' ? '<span class="brand-text"><span class="brand-sub">' . e($sub) . '</span></span>' : '');
+    $prefix = $stacked ? 'stacked' : '';
+    $light = brand_logo_url($prefix) ?? brand_logo_url();
+    if ($light !== null) {
+        $dark = brand_logo_url($prefix === '' ? 'dark' : $prefix . '-dark');
+        $class = 'brand-logo' . ($stacked ? ' brand-logo-stacked' : '');
+        $html = '<img class="' . $class . ($dark !== null ? ' brand-logo-light' : '') . '" src="' . e($light) . '" alt="' . e($name) . '" decoding="async">';
+        if ($dark !== null) {
+            $html .= '<img class="' . $class . ' brand-logo-dark" src="' . e($dark) . '" alt="" aria-hidden="true" decoding="async">';
+        }
+        return $html . ($sub !== '' ? '<span class="brand-text"><span class="brand-sub">' . e($sub) . '</span></span>' : '');
     }
     return '<span class="brand-text brand-wordmark"><span class="brand-name">Miel Pur</span><span class="brand-sub">' . e($sub !== '' ? $sub : 'de Côte d\'Ivoire') . '</span></span>';
 }
@@ -151,9 +192,18 @@ function favicon_tags(): string
         ['apple-touch-icon.png', '<link rel="apple-touch-icon" href="%s" sizes="180x180">'],
         ['site.webmanifest', '<link rel="manifest" href="%s">'],
     ];
+    // Favicon téléversé depuis l'administration (icônes générées dans /uploads/brand/favicon), sinon icônes installées.
+    $dir = '/assets/img/brand';
+    try {
+        if (\App\Services\Settings::get('brand_favicon') !== '' && is_file(BASE_PATH . '/public/uploads/brand/favicon/favicon.ico')) {
+            $dir = '/uploads/brand/favicon';
+        }
+    } catch (\Throwable) {
+    }
     foreach ($tags as [$file, $tpl]) {
-        if (is_file(BASE_PATH . '/public/assets/img/brand/' . $file)) {
-            $out .= sprintf($tpl, e(asset('img/brand/' . $file))) . "\n";
+        $abs = BASE_PATH . '/public' . $dir . '/' . $file;
+        if (is_file($abs)) {
+            $out .= sprintf($tpl, e($dir . '/' . $file . '?v=' . filemtime($abs))) . "\n";
         }
     }
     return $out;
@@ -250,7 +300,25 @@ function payment_status_label(string $status): string
 
 function payment_method_label(string $method): string
 {
+    try {
+        $m = \App\Services\PaymentMethods::find($method);
+    } catch (\Throwable) {
+        $m = null;
+    }
+    if ($m !== null) {
+        return \App\Services\PaymentMethods::name($m);
+    }
     return Lang::has('pay.' . $method) ? t('pay.' . $method) : $method;
+}
+
+/** Logos d'un moyen de paiement (balises img, proportions conservées), ou chaîne vide. */
+function payment_logos(array $logos, string $name, string $class = 'pay-brand'): string
+{
+    $html = '';
+    foreach ($logos as $i => $src) {
+        $html .= '<img class="' . e($class) . '" src="' . e($src) . '" alt="' . ($i === 0 ? e($name) : '') . '" loading="lazy" decoding="async">';
+    }
+    return $html;
 }
 
 /** Échappe puis met en forme : **gras** et [lien](/chemin|https://…). */
@@ -332,13 +400,32 @@ function is_demo_mode(): bool
     }
 }
 
+/** Lien WhatsApp centralisé (Paramètres du site → Coordonnées) ; null si désactivé ou non renseigné. */
 function wa_link(string $text = ''): ?string
 {
-    $number = preg_replace('/\D+/', '', Settings::get('whatsapp_number')) ?? '';
-    if ($number === '') {
-        return null;
+    return \App\Services\SiteConfig::whatsappLink($text !== '' ? $text : null);
+}
+
+/** Logo officiel d'un réseau social (SVG en ligne, couleur de marque, masqué aux lecteurs d'écran). */
+function social_icon(string $network, string $class = 'social-icon'): string
+{
+    static $icons = null;
+    $icons ??= require BASE_PATH . '/app/config/social-icons.php';
+    $i = $icons[$network] ?? null;
+    if ($i === null) {
+        return $network === 'link' || $network === 'other' ? icon('globe', $class) : '';
     }
-    return 'https://wa.me/' . $number . ($text !== '' ? '?text=' . rawurlencode($text) : '');
+    return '<svg class="' . e($class) . ' social-' . e($network) . '" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="' . e($i['color']) . '" d="' . e($i['path']) . '"/></svg>';
+}
+
+/** Liens sociaux réellement renseignés : [réseau => [url, libellé accessible]]. Aucun lien n'est inventé. */
+function social_links(): array
+{
+    $out = [];
+    foreach (\App\Services\SiteConfig::socialLinks() as $network => [$url, $label]) {
+        $out[$network] = [$url, $label];
+    }
+    return $out;
 }
 
 function tel_link(string $phone): string
@@ -409,7 +496,7 @@ function aria_invalid(array $errors, string $field): string
 }
 
 /**
- * Icônes au trait (style « symboles » iOS), dessinées à la main, décoratives par défaut.
+ * Icônes au trait, dessinées à la main, décoratives par défaut.
  */
 function icon(string $name, string $class = 'icon'): string
 {
@@ -455,15 +542,13 @@ function icon(string $name, string $class = 'icon'): string
     return '<svg class="' . e($class) . '" viewBox="0 0 24 24" aria-hidden="true" focusable="false">' . $svg . '</svg>';
 }
 
-/** Pastille d'un moyen de paiement (couleurs génériques, sans logo de marque). */
+/** Pictogramme neutre d'un moyen de paiement (aucun logo d'opérateur imité ; le nom est affiché à côté). */
 function pay_logo(string $code): string
 {
     $inner = match ($code) {
         'cod' => icon('cash'),
         'card' => icon('card'),
-        'orange_money' => 'OM',
-        'mtn_momo' => 'MoMo',
-        'wave' => 'W',
+        'orange_money', 'mtn_momo', 'wave' => icon('phone'), // pas d'imitation des logos des opérateurs
         default => icon('lock'),
     };
     return '<span class="pay-logo ' . e($code) . '" aria-hidden="true">' . $inner . '</span>';

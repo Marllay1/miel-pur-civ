@@ -25,9 +25,19 @@ final class DemoGateway extends AbstractGateway
         return (string) Env::get('DEMO_PAYMENT_SECRET', '');
     }
 
+    public function isConfigured(): bool
+    {
+        return Env::bool('DEMO_PAYMENT_ENABLED') && strlen($this->secret()) >= 32;
+    }
+
     public function isEnabled(): bool
     {
-        return Env::bool('DEMO_PAYMENT_ENABLED') && strlen($this->secret()) >= 32 && Settings::bool('demo_payment_enabled');
+        return $this->isConfigured() && Settings::bool('demo_payment_enabled');
+    }
+
+    public function label(): string
+    {
+        return t('pay.demo');
     }
 
     public function requiredEnv(): array

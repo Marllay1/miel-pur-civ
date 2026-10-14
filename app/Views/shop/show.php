@@ -41,6 +41,7 @@ $wa = wa_link(t('wa.product', ['product' => $product['name']]));
 
     <?php if ($selected): ?>
     <p class="product-price" data-price><?= money((int) $selected['price']) ?></p>
+    <?php if (\App\Services\Currencies::enabled()): ?><p class="currency-note"><span data-conversion><?= e(implode(' · ', \App\Services\Currencies::conversions((int) $selected['price']))) ?></span> <span class="muted"><?= e(t('currency.indicative')) ?></span></p><?php endif; ?>
     <p class="stock-state <?= (int) $selected['stock'] === 0 ? 'stock-out' : ((int) $selected['stock'] <= $low ? 'stock-low' : 'stock-ok') ?>" data-stock-state>
       <?= e((int) $selected['stock'] === 0 ? t('product.out') : ((int) $selected['stock'] <= $low ? t('product.low', ['count' => (int) $selected['stock']]) : t('product.in_stock'))) ?>
     </p>
@@ -54,7 +55,7 @@ $wa = wa_link(t('wa.product', ['product' => $product['name']]));
           <?php foreach ($variants as $v): $out = (int) $v['stock'] === 0; ?>
           <label>
             <input type="radio" name="variant_id" value="<?= (int) $v['id'] ?>" required
-              data-price="<?= e(money((int) $v['price'])) ?>" data-stock="<?= (int) $v['stock'] ?>" data-low="<?= $low ?>"
+              data-price="<?= e(money((int) $v['price'])) ?>" data-conversion="<?= e(implode(' · ', \App\Services\Currencies::conversions((int) $v['price']))) ?>" data-stock="<?= (int) $v['stock'] ?>" data-low="<?= $low ?>"
               data-label-out="<?= e(t('product.out')) ?>" data-label-low="<?= e(t('product.low', ['count' => '__N__'])) ?>" data-label-ok="<?= e(t('product.in_stock')) ?>"
               <?= (int) $v['id'] === (int) $selected['id'] ? 'checked' : '' ?><?= $out ? ' disabled' : '' ?>>
             <?= e($v['label']) ?><span class="variant-price"><?= money((int) $v['price']) ?></span>
@@ -78,8 +79,8 @@ $wa = wa_link(t('wa.product', ['product' => $product['name']]));
     <?php endif; ?>
 
     <div class="action-tiles product-meta">
-      <?php if ($wa): ?><a class="action-tile" href="<?= e($wa) ?>" rel="noopener" target="_blank"><?= icon('chat') ?><?= e(t('product.ask_whatsapp')) ?></a><?php endif; ?>
-      <?php if (Settings::get('store_phone') !== ''): ?><a class="action-tile" href="<?= e(tel_link(Settings::get('store_phone'))) ?>"><?= icon('phone') ?><?= e(t('product.call')) ?></a><?php endif; ?>
+      <?php if ($wa): ?><a class="action-tile" href="<?= e($wa) ?>" rel="noopener" target="_blank"><?= social_icon('whatsapp', 'icon') ?><?= e(t('product.ask_whatsapp')) ?></a><?php endif; ?>
+      <?php $tel = \App\Services\SiteConfig::phones()[0] ?? null; if ($tel): ?><a class="action-tile" href="<?= e($tel['href']) ?>"><?= icon('phone') ?><?= e(t('product.call')) ?></a><?php endif; ?>
       <a class="action-tile" href="/commandes-professionnelles"><?= icon('building') ?><?= e(t('product.bulk')) ?></a>
     </div>
 

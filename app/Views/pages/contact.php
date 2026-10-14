@@ -3,7 +3,12 @@ use App\Core\View;
 use App\Services\Settings;
 /** @var array $errors @var array $old */
 $val = static fn (string $k) => e($old[$k] ?? '');
-$wa = wa_link(t('wa.greeting'));
+$wa = wa_link();
+$phones = \App\Services\SiteConfig::phones();
+$emails = \App\Services\SiteConfig::emails();
+$address = \App\Services\SiteConfig::address();
+$maps = \App\Services\SiteConfig::mapsUrl();
+$socials = \App\Services\SiteConfig::socialLinks();
 ?>
 <div class="wrap page-head"><h1><?= e(t('nav.contact')) ?></h1><p class="lead"><?= e(t('contact.lead')) ?></p></div>
 <div class="wrap two-cols">
@@ -41,15 +46,16 @@ $wa = wa_link(t('wa.greeting'));
   </form>
   <aside>
     <div class="action-tiles">
-      <?php if (Settings::get('store_phone') !== ''): ?><a class="action-tile" href="<?= e(tel_link(Settings::get('store_phone'))) ?>"><?= icon('phone') ?><?= e(t('product.call')) ?></a><?php endif; ?>
-      <?php if ($wa): ?><a class="action-tile" href="<?= e($wa) ?>" rel="noopener" target="_blank"><?= icon('chat') ?>WhatsApp</a><?php endif; ?>
-      <?php if (Settings::get('store_email') !== ''): ?><a class="action-tile" href="mailto:<?= e(Settings::get('store_email')) ?>"><?= icon('mail') ?>E-mail</a><?php endif; ?>
+      <?php if ($phones): ?><a class="action-tile" href="<?= e($phones[0]['href']) ?>"><?= icon('phone') ?><?= e(t('product.call')) ?></a><?php endif; ?>
+      <?php if ($wa): ?><a class="action-tile" href="<?= e($wa) ?>" rel="noopener" target="_blank" aria-label="<?= e(t('social.whatsapp')) ?>"><?= social_icon('whatsapp', 'icon') ?>WhatsApp</a><?php endif; ?>
+      <?php if (isset($socials['facebook'])): ?><a class="action-tile" href="<?= e($socials['facebook'][0]) ?>" rel="noopener" target="_blank" aria-label="<?= e($socials['facebook'][1]) ?>"><?= social_icon('facebook', 'icon') ?>Facebook</a><?php endif; ?>
+      <?php if ($emails): ?><a class="action-tile" href="mailto:<?= e(reset($emails)) ?>"><?= icon('mail') ?>E-mail</a><?php endif; ?>
     </div>
     <h2 class="group-title"><?= e(t('contact.details')) ?></h2>
     <div class="group">
-      <div class="cell"><span class="cell-icon"><?= icon('pin') ?></span><span class="cell-body"><?= e(Settings::get('store_address') !== '' ? Settings::get('store_address') . ', ' : '') ?><?= e(Settings::get('store_city')) ?>, Côte d'Ivoire</span></div>
-      <?php if (Settings::get('store_phone') !== ''): ?><a class="cell" href="<?= e(tel_link(Settings::get('store_phone'))) ?>"><span class="cell-icon green"><?= icon('phone') ?></span><span class="cell-body"><?= e(Settings::get('store_phone')) ?></span><span class="cell-chevron"><?= icon('chevron') ?></span></a><?php endif; ?>
-      <?php if (Settings::get('store_email') !== ''): ?><a class="cell" href="mailto:<?= e(Settings::get('store_email')) ?>"><span class="cell-icon gray"><?= icon('mail') ?></span><span class="cell-body"><?= e(Settings::get('store_email')) ?></span><span class="cell-chevron"><?= icon('chevron') ?></span></a><?php endif; ?>
+      <?php if ($address !== ''): ?><?php if ($maps): ?><a class="cell" href="<?= e($maps) ?>" rel="noopener" target="_blank"><?php else: ?><div class="cell"><?php endif; ?><span class="cell-icon"><?= icon('pin') ?></span><span class="cell-body"><?= e($address) ?></span><?= $maps ? '<span class="cell-chevron">' . icon('chevron') . '</span></a>' : '</div>' ?><?php endif; ?>
+      <?php foreach ($phones as $p): ?><a class="cell" href="<?= e($p['href']) ?>"><span class="cell-icon green"><?= icon('phone') ?></span><span class="cell-body"><?= e($p['display']) ?></span><span class="cell-chevron"><?= icon('chevron') ?></span></a><?php endforeach; ?>
+      <?php foreach ($emails as $kind => $email): ?><a class="cell" href="mailto:<?= e($email) ?>"><span class="cell-icon gray"><?= icon('mail') ?></span><span class="cell-body"><?= e($email) ?><?php if ($kind === 'sales'): ?><br><span class="cell-sub"><?= e(t('contact.sales_email')) ?></span><?php endif; ?></span><span class="cell-chevron"><?= icon('chevron') ?></span></a><?php endforeach; ?>
       <?php if (setting('opening_hours') !== ''): ?><div class="cell"><span class="cell-icon gray"><?= icon('clock') ?></span><span class="cell-body"><?= e(setting('opening_hours')) ?></span></div><?php endif; ?>
     </div>
   </aside>

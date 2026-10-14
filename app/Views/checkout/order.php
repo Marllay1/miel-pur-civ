@@ -1,5 +1,5 @@
 <?php
-/** @var array $order @var string $token @var array $items @var array $history @var ?array $shipment @var bool $canPay @var bool $needsPhone @var ?array $lastPayment */
+/** @var array $order @var string $token @var array $items @var array $history @var ?array $shipment @var bool $canPay @var bool $needsPhone @var ?array $lastPayment @var ?array $manual */
 $flow = $order['payment_method'] === 'cod'
     ? ['pending_confirmation', 'preparing', 'shipped', 'delivered']
     : ['pending_payment', 'paid', 'preparing', 'shipped', 'delivered'];
@@ -19,6 +19,20 @@ $currentIndex = array_search($order['status'], $flow, true);
   <div>
     <?php if ($order['status'] === 'pending_confirmation'): ?>
     <div class="notice notice-green"><?= icon('phone') ?><p><?= e(t('order.cod_notice', ['phone' => $order['customer_phone'], 'total' => money((int) $order['total'])])) ?></p></div>
+    <?php elseif ($order['status'] === 'pending_payment' && $manual !== null): ?>
+    <div class="group order-status-card manual-pay">
+      <h2><?= e(t('order.manual_title', ['method' => payment_method_label($order['payment_method'])])) ?></h2>
+      <?= payment_logos(\App\Services\PaymentMethods::logos($manual), payment_method_label($order['payment_method'])) ?>
+      <dl class="manual-details">
+        <div><dt><?= e(t('order.manual_amount')) ?></dt><dd><strong><?= money((int) $order['total']) ?></strong></dd></div>
+        <?php if ((string) $manual['receiver_number'] !== ''): ?><div><dt><?= e(t('order.manual_receiver')) ?></dt><dd><strong><?= e($manual['receiver_number']) ?></strong></dd></div><?php endif; ?>
+        <?php if ((string) $manual['merchant_number'] !== ''): ?><div><dt><?= e(t('order.manual_merchant')) ?></dt><dd><?= e($manual['merchant_number']) ?></dd></div><?php endif; ?>
+        <?php if ((string) $manual['beneficiary'] !== ''): ?><div><dt><?= e(t('order.manual_beneficiary')) ?></dt><dd><?= e($manual['beneficiary']) ?></dd></div><?php endif; ?>
+        <div><dt><?= e(t('order.manual_reference')) ?></dt><dd><strong><?= e($order['number']) ?></strong></dd></div>
+      </dl>
+      <?php if (\App\Services\PaymentMethods::instructions($manual) !== ''): ?><div class="prose"><?= rich(\App\Services\PaymentMethods::instructions($manual)) ?></div><?php endif; ?>
+      <p class="notice"><?= icon('info') ?> <?= e(t('order.manual_notice')) ?></p>
+    </div>
     <?php elseif ($order['status'] === 'pending_payment'): ?>
     <div class="group order-status-card">
       <?php if ($canPay): ?>
@@ -61,7 +75,7 @@ $currentIndex = array_search($order['status'], $flow, true);
         <thead><tr><th scope="col"><?= e(t('order.product')) ?></th><th scope="col" class="num"><?= e(t('order.qty')) ?></th><th scope="col" class="num"><?= e(t('totals.total')) ?></th></tr></thead>
         <tbody>
           <?php foreach ($items as $i): ?>
-          <tr><td><?= e($i['product_name']) ?><br><span class="muted small"><?= e($i['variant_label']) ?> · <?= money((int) $i['unit_price']) ?></span></td><td class="num"><?= (int) $i['quantity'] ?></td><td class="num"><?= money((int) $i['line_total']) ?></td></tr>
+          <tr><td><div class="order-line"><?php if (!empty($i['image_path'])): ?><img class="mini-thumb" src="<?= e($i['image_path']) ?>" alt="" width="48" height="48" loading="lazy" decoding="async"><?php endif; ?><span><?= e($i['product_name']) ?><br><span class="muted small"><?= e($i['variant_label']) ?> · <?= money((int) $i['unit_price']) ?></span></span></div></td><td class="num"><?= (int) $i['quantity'] ?></td><td class="num"><?= money((int) $i['line_total']) ?></td></tr>
           <?php endforeach; ?>
         </tbody>
         <tfoot>

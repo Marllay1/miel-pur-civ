@@ -34,9 +34,43 @@ Les transitions impossibles (par exemple « livrée » sans passer par « expéd
 - **Avis** : publier ou refuser. Ne jamais publier d'avis inventé ni modifier le texte d'un client.
 - **Accueil** : titres et textes ; conserver les marqueurs `[À COMPLÉTER]` tant que l'information n'est pas vérifiée (ils sont surlignés sur le site).
 
-## Réglages
+## Paramètres du site (`/admin/parametres`)
 
-Coordonnées, mentions légales, réseaux sociaux, WhatsApp, paiement à la livraison, paiement simulé, montant minimum, délai de paiement, seuil de stock faible, e-mail de notification des commandes, mesure d'audience. **Zones de livraison** : frais, seuil de gratuité, délai, paiement à la livraison autorisé, retrait.
+Toutes les informations courantes se modifient ici, sans toucher au code ; chaque valeur est enregistrée en base de données et reprise automatiquement par toutes les pages (en-tête, pied de page, contact, fiche produit, panier, e-mails, données structurées). Chaque section s'enregistre séparément ; si une valeur est invalide, **rien n'est enregistré** et le champ fautif est signalé. Chaque modification est inscrite au journal d'audit.
+
+| Section | Contenu |
+|---|---|
+| Identité de l'entreprise | nom commercial (FR/EN), slogan, présentation courte du pied de page |
+| Logos et images | logo de l'en-tête (clair/sombre), logo du pied de page (clair/sombre), favicon, image de partage, image d'ouverture de l'accueil. Téléversement PNG/JPEG/WebP (5 Mo max), **aperçu avant envoi**, dimensions minimales contrôlées par le serveur, image ré-encodée ; remplacement (l'ancien fichier est supprimé) et suppression avec confirmation (retour au logo installé). Le favicon doit être carré : toutes les tailles d'icônes sont générées automatiquement |
+| Coordonnées et contact | indicatif pays, téléphones principal et secondaire, WhatsApp (numéro, message prérempli FR/EN, activation ; le lien `wa.me` est généré automatiquement), e-mails public et commercial, adresse, ville, pays, horaires, lien Google Maps ; chaque bloc peut être affiché ou masqué |
+| Réseaux sociaux | Facebook, Instagram, TikTok, YouTube, LinkedIn, autre lien (avec son nom) : adresse **https** vérifiée, case d'affichage, aperçu de l'icône ; option d'affichage dans l'en-tête |
+| Apparence | couleurs principale, secondaire, d'accent et de fond (sélecteur), polices parmi une liste fermée ; éléments affichés dans l'en-tête et le pied de page. Les **contrastes sont vérifiés** (WCAG AA, 4,5:1) avant l'enregistrement ; bouton **Aperçu** (nouvel onglet, rien n'est publié). Aucun CSS libre |
+| Langues | anglais activé ou non, langue par défaut, détection de la langue du navigateur |
+| Livraison, paiements et commandes | e-mail de notification des commandes, minimum de commande, délai de paiement, seuil de stock faible, consignes de livraison ; liens vers *Moyens de paiement*, *Zones de livraison*, *Devises*, *Intégrations* |
+| Référencement et partage | titre et description du site (FR/EN), mesure d'audience |
+| Politiques et mentions légales | raison sociale, RCCM, NCC, directeur de la publication, hébergeur ; liens vers *Pages et légal* et *FAQ* |
+
+## Moyens de paiement (`/admin/paiements`)
+
+Pour chaque moyen : activation, affichage du logo, logo personnalisé (téléversement), nom et description (FR/EN), ordre d'affichage, et pour un paiement manuel : numéro de réception, numéro marchand, bénéficiaire, instructions (FR/EN). L'état indique honnêtement si le moyen est **proposé aux clients** :
+
+- **paiement à la livraison** : proposé s'il est activé (et autorisé par la zone de livraison) ;
+- **prestataire intégré** (Wave, Orange Money, MTN MoMo, carte via CinetPay) : proposé seulement s'il est activé **et** que ses clés sont présentes dans `.env` (les clés manquantes sont listées) ;
+- **paiement manuel** (Moov Money, virement, autre moyen ajouté) : proposé seulement s'il est activé **et** qu'un numéro de réception ou des instructions sont renseignés. Le client voit les instructions après la commande et dans l'e-mail ; la commande reste *en attente de paiement* jusqu'à ce que l'équipe vérifie la réception et passe la commande à « Payée ».
+
+Un logo n'est **jamais** affiché pour un moyen non proposé (pied de page « Paiements acceptés », panier, étape de paiement, accueil). Un moyen manuel jamais utilisé peut être supprimé ; les moyens intégrés ne peuvent être que désactivés.
+
+## Carrousel de l'accueil (`/admin/carrousel`)
+
+Diapositives affichées directement sous l'en-tête : image (1200 × 500 minimum) et image mobile facultative (600 × 700 minimum), texte alternatif, titre, texte, bouton et lien (page du site `/…` ou adresse `https://`), ordre (flèches ↑ ↓), activation, période de publication facultative. *Aperçu (toutes)* montre aussi les diapositives désactivées. Réglages : défilement automatique et durée (4 à 15 s). Sans diapositive publiée, l'accueil affiche son image d'ouverture. N'annoncer que des offres réellement disponibles.
+
+## Devises d'affichage (`/admin/devises`)
+
+Les prix et le paiement restent **en francs CFA**. Une devise activée (euro, dollar…) affiche seulement un **équivalent indicatif** à côté du prix (fiche produit, panier), avec le taux saisi par l'équipe ; une devise sans taux ne peut pas être activée. Pas de conversion automatique selon la localisation : l'euro a une parité fixe (655,957 FCFA), les autres taux sont à mettre à jour régulièrement. Un client à l'étranger ne peut commander que si une zone de livraison couvre son adresse.
+
+## Zones de livraison
+
+Frais, seuil de gratuité, délai, paiement à la livraison autorisé, retrait.
 
 ## Intégrations
 

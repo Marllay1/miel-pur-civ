@@ -9,6 +9,8 @@ declare(strict_types=1);
  *       --icon : version carrée/emblème du logo pour les favicons (recommandé : un logo avec texte devient illisible en 16 px).
  *                À défaut, les favicons sont produits à partir de --logo (image raster), centrée sans déformation.
  *       --background : fond de l'icône écran d'accueil iOS (qui n'accepte pas la transparence). Par défaut : blanc.
+ *       --logo-dark, --logo-stacked, --logo-stacked-dark : déclinaisons facultatives (texte clair pour le thème sombre ;
+ *       version empilée emblème + texte pour le pied de page et les pages de connexion).
  *   php bin/brand.php --placeholder [--font=chemin/police.ttf]
  *       Icônes PROVISOIRES neutres (monogramme « M ») en attendant le logo officiel ; aucun logo n'est installé.
  *   php bin/brand.php --remove-logo
@@ -26,7 +28,7 @@ use App\Services\Settings;
 if (!extension_loaded('gd')) {
     fail('Extension GD requise (php.ini : extension=gd).');
 }
-$opts = getopt('', ['logo:', 'icon:', 'background:', 'placeholder', 'font:', 'remove-logo']);
+$opts = getopt('', ['logo:', 'logo-dark:', 'logo-stacked:', 'logo-stacked-dark:', 'icon:', 'background:', 'placeholder', 'font:', 'remove-logo']);
 $dir = BASE_PATH . '/public/assets/img/brand';
 if (!is_dir($dir) && !mkdir($dir, 0755, true)) {
     fail("Impossible de créer $dir");
@@ -58,7 +60,11 @@ function load_image(string $path): \GdImage
 function trim_image(\GdImage $img): \GdImage
 {
     $cropped = @imagecropauto($img, IMG_CROP_TRANSPARENT) ?: @imagecropauto($img, IMG_CROP_SIDES);
-    return $cropped instanceof \GdImage ? $cropped : $img;
+    $result = $cropped instanceof \GdImage ? $cropped : $img;
+    // L'image recadrée est une nouvelle ressource : sans ces réglages, sa transparence serait perdue (fond noir).
+    imagealphablending($result, false);
+    imagesavealpha($result, true);
+    return $result;
 }
 
 /** Image carrée de $size px : $src centrée, proportions conservées, marge $pad (fraction), fond $bg (null = transparent). */
@@ -114,42 +120,16 @@ function hex_color(string $hex): array
 /** Génère l'ensemble des icônes à partir d'une image source carrée ou non. */
 function write_icons(string $dir, \GdImage $src, array $bg, string $themeColor): void
 {
-    $src = trim_image($src);
-    $pngs = [];
-    foreach ([16, 32, 48] as $s) {
-        $pngs[$s] = png_bytes(square($src, $s, $s <= 16 ? 0.02 : 0.05));
-    }
-    write_ico($dir . '/favicon.ico', $pngs);
-    copy($dir . '/favicon.ico', BASE_PATH . '/public/favicon.ico');
-    file_put_contents($dir . '/favicon-16.png', $pngs[16]);
-    file_put_contents($dir . '/favicon-32.png', $pngs[32]);
-    imagepng(square($src, 180, 0.1, $bg), $dir . '/apple-touch-icon.png', 9);
-    imagepng(square($src, 192, 0.1), $dir . '/icon-192.png', 9);
-    imagepng(square($src, 512, 0.1), $dir . '/icon-512.png', 9);
-    // Icône « maskable » (Android) : zone de sécurité de 80 %, fond opaque.
-    imagepng(square($src, 512, 0.2, $bg), $dir . '/icon-maskable-512.png', 9);
     try {
-        $name = Settings::get('store_name') ?: 'Miel Pur de Côte d\'Ivoire';
+        $name = Settings::get('store_name') ?: "Miel Pur de Côte d'Ivoire";
     } catch (\Throwable) {
-        $name = 'Miel Pur de Côte d\'Ivoire'; // base indisponible : nom par défaut
+        $name = "Miel Pur de Côte d'Ivoire"; // base indisponible : nom par défaut
     }
-    file_put_contents($dir . '/site.webmanifest', json_encode([
-        'name' => $name,
-        'short_name' => 'Miel Pur',
-        'start_url' => '/',
-        'display' => 'browser',
-        'background_color' => '#FFFFFF',
-        'theme_color' => $themeColor,
-        'icons' => [
-            ['src' => '/assets/img/brand/icon-192.png', 'sizes' => '192x192', 'type' => 'image/png'],
-            ['src' => '/assets/img/brand/icon-512.png', 'sizes' => '512x512', 'type' => 'image/png'],
-            ['src' => '/assets/img/brand/icon-maskable-512.png', 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
-        ],
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+    \App\Services\BrandIcons::generate($src, $dir, '/assets/img/brand', $bg, $themeColor, $name);
 }
 
 if (isset($opts['remove-logo'])) {
-    foreach (glob($dir . '/logo.*') ?: [] as $f) {
+    foreach (array_merge(glob($dir . '/logo.*') ?: [], glob($dir . '/logo-*.png') ?: []) as $f) {
         unlink($f);
         out('✔ Retiré : ' . basename($f));
     }
@@ -219,6 +199,20 @@ if (str_ends_with(strtolower($logoPath), '.svg')) {
     out('✔ Logo installé : public/assets/img/brand/logo.png (' . imagesx($logo) . '×' . imagesy($logo) . ' px)');
     $iconSource = $logo;
 }
+// Déclinaisons facultatives : texte clair pour le thème sombre, version empilée (pied de page, connexion).
+foreach (['logo-dark', 'logo-stacked', 'logo-stacked-dark'] as $variant) {
+    @unlink($dir . '/' . $variant . '.png');
+    if (!isset($opts[$variant])) {
+        continue;
+    }
+    $img = trim_image(load_image((string) $opts[$variant]));
+    if (imagesx($img) > 800) {
+        $img = imagescale($img, 800, (int) round(imagesy($img) * 800 / imagesx($img)), IMG_BICUBIC);
+        imagesavealpha($img, true);
+    }
+    imagepng($img, $dir . '/' . $variant . '.png', 9);
+    out('✔ Déclinaison installée : ' . $variant . '.png (' . imagesx($img) . '×' . imagesy($img) . ' px)');
+}
 if (isset($opts['icon'])) {
     $iconSource = load_image((string) $opts['icon']);
 }
@@ -228,6 +222,6 @@ if ($iconSource === null) {
 }
 @unlink($dir . '/favicon.svg');
 @unlink($dir . '/PROVISOIRE.txt');
-write_icons($dir, $iconSource, $bg, '#E6A93A');
+write_icons($dir, $iconSource, $bg, '#184626');
 out('✔ Favicons générés : favicon.ico (16/32/48), PNG 16/32, apple-touch-icon 180, icônes 192/512 et manifeste.');
 out('  Vérifiez l\'onglet du navigateur (rechargement forcé : Ctrl+F5) et l\'icône d\'écran d\'accueil sur mobile.');

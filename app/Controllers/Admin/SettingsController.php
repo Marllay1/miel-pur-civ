@@ -16,51 +16,6 @@ use App\Services\Settings;
 
 final class SettingsController extends Base
 {
-    public function index(Request $r, array $errors = [], array $old = []): Response
-    {
-        $groups = [];
-        foreach (Settings::definitions() as $key => $def) {
-            if (in_array($key, ContentController::HOME_KEYS, true)) {
-                continue;
-            }
-            $groups[$def['group']][$key] = $def + ['value' => $old[$key] ?? Settings::get($key)];
-        }
-        return admin_view('settings/index', ['groups' => $groups, 'errors' => $errors, 'pageTitle' => 'Réglages'], $errors ? 422 : 200);
-    }
-
-    public function save(Request $r): Response
-    {
-        $errors = [];
-        $changed = [];
-        foreach (Settings::definitions() as $key => $def) {
-            if (in_array($key, ContentController::HOME_KEYS, true)) {
-                continue;
-            }
-            $isBool = ($def['type'] ?? '') === 'bool';
-            if (!$isBool && !array_key_exists($key, $r->post)) {
-                continue;
-            }
-            $value = $isBool ? ($r->str($key) === '1' ? '1' : '0') : (string) $r->post[$key];
-            if ($value === Settings::get($key)) {
-                continue;
-            }
-            try {
-                Settings::set($key, $value);
-                $changed[] = $key;
-            } catch (\InvalidArgumentException $e) {
-                $errors[$key] = $e->getMessage();
-            }
-        }
-        if ($errors) {
-            return $this->index($r, $errors, $r->post);
-        }
-        if ($changed) {
-            Audit::log('settings.update', 'settings', null, ['keys' => $changed]);
-        }
-        Session::flash('success', $changed ? 'Réglages enregistrés (' . count($changed) . ' modification(s)).' : 'Aucune modification.');
-        return redirect('/admin/reglages');
-    }
-
     public function zones(Request $r, array $errors = [], ?array $old = null, int $status = 200): Response
     {
         $edit = $r->int('id') ? DB::one('SELECT * FROM shipping_zones WHERE id = ?', [(int) $r->int('id')]) : null;
@@ -114,7 +69,7 @@ final class SettingsController extends Base
             }
             $gateways[$code] = [
                 'label' => $g->label(), 'enabled' => $g->isEnabled(), 'configured' => !in_array(false, $env, true),
-                'setting' => Settings::bool($code . '_enabled'), 'env' => $env, 'demo' => $code === 'demo',
+                'setting' => (int) (\App\Services\PaymentMethods::find($code)['is_enabled'] ?? 0) === 1, 'env' => $env, 'demo' => $code === 'demo',
                 'webhook' => base_url() . '/webhooks/paiement/' . $code,
             ];
         }
@@ -137,7 +92,7 @@ final class SettingsController extends Base
             ['SMTP : hôte et identifiants renseignés', $mailDriver !== 'smtp' || ((string) Env::get('SMTP_HOST', '') !== '' && (string) Env::get('SMTP_USERNAME', '') !== '')],
             ['SMTP : certificat du serveur vérifié (SMTP_ALLOW_SELF_SIGNED=0)', !Env::bool('SMTP_ALLOW_SELF_SIGNED')],
             ['E-mail de notification des commandes valide', filter_var(Settings::get('order_notification_email'), FILTER_VALIDATE_EMAIL) !== false],
-            ['Au moins un moyen de paiement proposé', Settings::bool('cod_enabled') || $online !== []],
+            ['Au moins un moyen de paiement proposé', \App\Services\PaymentMethods::operational() !== []],
             ['Aucun produit de démonstration actif', (int) DB::value('SELECT COUNT(*) FROM products WHERE is_demo = 1 AND is_active = 1 AND deleted_at IS NULL') === 0],
             ['Pages légales validées', (int) DB::value('SELECT COUNT(*) FROM pages WHERE is_legal = 1 AND is_validated = 0') === 0],
             ['Coordonnées et mentions légales renseignées', $placeholders === []],

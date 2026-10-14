@@ -9,7 +9,7 @@ $ok = static fn (bool $v) => $v ? '<span class="check-ok">✔ oui</span>' : '<sp
     <?php foreach ($checks as [$label, $pass]): ?><li class="<?= $pass ? 'is-ok' : 'is-no' ?>"><?= $ok($pass) ?> <?= e($label) ?></li><?php endforeach; ?>
   </ul>
   <?php if ($placeholders): ?>
-  <p class="small"><strong>Réglages encore à compléter :</strong> <?= e(implode(' · ', $placeholders)) ?> — <a href="/admin/reglages">Réglages</a></p>
+  <p class="small"><strong>Réglages encore à compléter :</strong> <?= e(implode(' · ', $placeholders)) ?> — <a href="/admin/parametres">Paramètres du site</a></p>
   <?php endif; ?>
 </section>
 
@@ -18,7 +18,7 @@ $ok = static fn (bool $v) => $v ? '<span class="check-ok">✔ oui</span>' : '<sp
   <div class="table-wrap"><table class="table">
     <thead><tr><th>Moyen</th><th>État</th><th>Variables d'environnement (.env)</th></tr></thead>
     <tbody>
-      <tr><td><strong>Paiement à la livraison</strong></td><td><?= \App\Services\Settings::bool('cod_enabled') ? '<span class="status status-delivered">Actif</span>' : '<span class="status">Désactivé</span>' ?></td><td class="small">Aucune (réglage « Paiement à la livraison » et option par zone)</td></tr>
+      <tr><td><strong>Paiement à la livraison</strong></td><td><?= \App\Services\PaymentMethods::isOperational(\App\Services\PaymentMethods::find('cod') ?? ['is_enabled' => 0, 'kind' => 'cod']) ? '<span class="status status-delivered">Actif</span>' : '<span class="status">Désactivé</span>' ?></td><td class="small">Aucune (<a href="/admin/paiements/cod">Moyens de paiement</a> et option par zone)</td></tr>
       <?php foreach ($gateways as $code => $g): ?>
       <tr>
         <td><strong><?= e($g['label']) ?></strong>
@@ -29,7 +29,7 @@ $ok = static fn (bool $v) => $v ? '<span class="check-ok">✔ oui</span>' : '<sp
           <?php elseif ($g['enabled']): ?>
             <span class="status status-delivered">Actif — proposé aux clients</span>
           <?php elseif ($g['configured']): ?>
-            <span class="status">Configuré, désactivé dans les Réglages</span>
+            <span class="status">Configuré, désactivé dans <a href="/admin/paiements">Moyens de paiement</a></span>
           <?php else: ?>
             <span class="status status-cancelled">Clés manquantes — non proposé</span>
           <?php endif; ?>

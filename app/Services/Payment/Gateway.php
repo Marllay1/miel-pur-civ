@@ -23,6 +23,9 @@ interface Gateway
     /** Vrai si le prestataire est activé en administration ET si toutes ses variables d'environnement sont présentes. */
     public function isEnabled(): bool;
 
+    /** Clés et paramètres techniques présents (indépendamment de l'activation en administration). */
+    public function isConfigured(): bool;
+
     /** Variables d'environnement requises (seule leur présence est affichée, jamais leur valeur). */
     public function requiredEnv(): array;
 
