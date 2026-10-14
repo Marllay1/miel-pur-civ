@@ -12,6 +12,7 @@ use App\Core\Response;
 use App\Core\Session;
 use App\Core\Validator;
 use App\Services\CartService;
+use App\Services\DeliveryLocation;
 use App\Services\OrderService;
 use App\Services\Payment\PaymentException;
 use App\Services\PaymentLedger;
@@ -92,10 +93,33 @@ final class CheckoutController
             'errors' => $errors,
             'old' => $old,
             'idempotencyKey' => $key,
+            'withMap' => DeliveryLocation::mapEnabled(),
+            'location' => ['gps' => DeliveryLocation::gpsEnabled(), 'map' => DeliveryLocation::mapEnabled(), 'tiles' => DeliveryLocation::tileUrl(), 'attribution' => DeliveryLocation::tileAttribution(),
+                'geocoder' => DeliveryLocation::geocoderEnabled(), 'bounds' => DeliveryLocation::BOUNDS],
             'expectedTotal' => $old['expected_total'] ?? ($zone !== null ? $quote['total'] : ''),
             'pageTitle' => t('checkout.title'),
             'noindex' => true,
         ], $status);
+    }
+
+    /**
+     * Adresse estimée pour une position GPS (géocodage inverse effectué par le serveur), seulement si un service est configuré.
+     * Le résultat est mémorisé en session et joint à la commande ; il ne remplace jamais l'adresse saisie par le client.
+     */
+    public function geocode(Request $r): Response
+    {
+        if (!DeliveryLocation::geocoderEnabled()) {
+            return Response::json(['ok' => false, 'reason' => 'disabled'], 404);
+        }
+        if (!RateLimiter::hit('geocode:' . $r->ip(), 20, 600)) {
+            return Response::json(['ok' => false, 'reason' => 'throttled'], 429);
+        }
+        [$loc, $errors] = DeliveryLocation::validate(['gps_lat' => $r->str('lat'), 'gps_lng' => $r->str('lng')], false);
+        if ($errors || $loc['location_method'] !== 'gps') {
+            return Response::json(['ok' => false, 'reason' => 'invalid', 'message' => reset($errors) ?: t('location.invalid')], 422);
+        }
+        $address = DeliveryLocation::reverseGeocode((string) $loc['delivery_lat'], (string) $loc['delivery_lng']);
+        return Response::json(['ok' => $address !== null, 'address' => $address, 'reason' => $address === null ? 'unavailable' : null]);
     }
 
     public function estimate(Request $r): Response
@@ -143,8 +167,13 @@ final class CheckoutController
             'note' => 'max:1000',
             'cgv' => 'accepted',
         ];
-        if ($zone === null || (int) $zone['is_pickup'] === 0) {
-            $rules += ['city' => 'required|max:100', 'district' => 'max:150', 'address' => 'required|max:255', 'landmark' => 'max:255'];
+        $pickup = $zone !== null && (int) $zone['is_pickup'] === 1;
+        // Position GPS facultative, validée par le serveur ; elle ne remplace pas l'adresse écrite (conservée telle quelle) :
+        // l'adresse n'est seulement plus obligatoire quand une position valide est jointe.
+        [$location, $locationErrors] = DeliveryLocation::validate($r->post, $pickup);
+        if (!$pickup) {
+            $rules += ['city' => 'required|max:100', 'district' => 'max:150', 'address' => ($location['location_method'] === 'gps' ? '' : 'required|') . 'max:255',
+                'landmark' => 'max:255', 'delivery_instructions' => 'max:1000'];
         }
         $gateway = PaymentService::gateway($r->str('payment_method'));
         if ($gateway !== null && $gateway->needsPhone()) {
@@ -152,9 +181,10 @@ final class CheckoutController
         }
         $labels = ['first_name' => t('field.first_name'), 'last_name' => t('field.last_name'), 'email' => t('field.email_label'), 'phone' => t('field.phone'),
             'zone_id' => t('field.zone'), 'payment_method' => t('field.payment_method'), 'city' => t('field.city'), 'district' => t('field.district'),
-            'address' => t('field.address'), 'landmark' => t('field.landmark'), 'note' => t('field.note'), 'payer_phone' => t('field.payer_phone')];
+            'address' => t('field.address'), 'landmark' => t('field.landmark'), 'note' => t('field.note'), 'payer_phone' => t('field.payer_phone'),
+            'delivery_instructions' => t('field.delivery_instructions')];
         $v = Validator::make($r->post, $rules, $labels);
-        $errors = $v->errors;
+        $errors = $v->errors + $locationErrors;
         if ($zone === null && !isset($errors['zone_id'])) {
             $errors['zone_id'] = t('checkout.choose_zone_error');
         }
@@ -167,8 +197,9 @@ final class CheckoutController
         if ($errors) {
             return $this->form($r, $errors, $r->post, 422);
         }
-        $data = $v->data + ['city' => '', 'district' => '', 'address' => '', 'landmark' => ''];
+        $data = $v->data + ['city' => '', 'district' => '', 'address' => '', 'landmark' => '', 'delivery_instructions' => ''];
         $data['pay_mode'] = ($data['pay_mode'] ?? '') === 'deposit' ? 'deposit' : 'full';
+        $data['location'] = $location + ['geocoded_address' => DeliveryLocation::cachedAddress($location['delivery_lat'], $location['delivery_lng'])];
         $result = OrderService::create($data, $cart, Auth::id(), $key, $r->int('expected_total'));
         switch ($result['status']) {
             case 'created':

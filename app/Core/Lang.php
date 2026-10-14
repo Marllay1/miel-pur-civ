@@ -14,6 +14,29 @@ final class Lang
 
     private static string $locale = self::DEFAULT;
     private static array $strings = [];
+    /** Chargeur des textes modifiés en administration (texts_overrides), branché au démarrage ; null en dehors de l'application. */
+    public static ?\Closure $overrideLoader = null;
+    private static array $overrides = [];
+
+    public static function flushOverrides(): void
+    {
+        self::$overrides = [];
+    }
+
+    private static function override(string $locale, string $key): ?string
+    {
+        if (self::$overrideLoader === null) {
+            return null;
+        }
+        if (!isset(self::$overrides[$locale])) {
+            try {
+                self::$overrides[$locale] = (self::$overrideLoader)($locale);
+            } catch (\Throwable) {
+                self::$overrides[$locale] = [];
+            }
+        }
+        return self::$overrides[$locale][$key] ?? null;
+    }
 
     public static function set(string $locale): void
     {
@@ -46,7 +69,7 @@ final class Lang
 
     public static function t(string $key, array $params = []): string
     {
-        $text = self::table(self::$locale)[$key] ?? self::table(self::DEFAULT)[$key] ?? $key;
+        $text = self::override(self::$locale, $key) ?? self::table(self::$locale)[$key] ?? self::table(self::DEFAULT)[$key] ?? $key;
         if (is_array($text)) {
             $count = (int) ($params['count'] ?? 0);
             $text = $count > 1 ? $text[1] : $text[0];

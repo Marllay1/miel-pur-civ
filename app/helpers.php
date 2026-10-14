@@ -159,6 +159,12 @@ function image_alt(array $image): string
 {
     $key = photo_key_for_path((string) ($image['path'] ?? ''));
     if ($key === null) {
+        if (!Lang::isDefault() && isset($image['id'])) {
+            $en = \App\Services\I18n::get('image', (int) $image['id'], Lang::get())['alt'] ?? '';
+            if ($en !== '') {
+                return $en;
+            }
+        }
         return (string) ($image['alt'] ?? '');
     }
     $p = photos()[$key];
@@ -553,3 +559,4 @@ function pay_logo(string $code): string
     };
     return '<span class="pay-logo ' . e($code) . '" aria-hidden="true">' . $inner . '</span>';
 }
+

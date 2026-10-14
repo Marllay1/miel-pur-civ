@@ -20,6 +20,7 @@ final class I18n
         'page' => ['title', 'body', 'meta_description'],
         'faq' => ['question', 'answer', 'category'],
         'zone' => ['name', 'description', 'delay_text'],
+        'image' => ['alt'],
     ];
 
     /** Applique les traductions de la langue courante à une liste de lignes (clé d'identifiant configurable). */

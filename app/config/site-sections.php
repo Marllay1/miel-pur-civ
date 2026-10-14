@@ -36,7 +36,15 @@ return [
         'title' => 'Apparence',
         'intro' => 'Couleurs et polices du thème clair, éléments affichés dans l\'en-tête et le pied de page. Les contrastes sont vérifiés avant l\'enregistrement.',
         'keys' => ['color_primary', 'color_secondary', 'color_accent', 'color_background', 'font_heading', 'font_body',
-            'header_show_tagline', 'header_show_search', 'header_show_theme', 'footer_show_newsletter', 'footer_show_payments', 'home_show_payments'],
+            'header_show_tagline', 'header_show_search', 'header_show_theme', 'footer_show_newsletter', 'footer_show_payments'],
+    ],
+    'accueil' => [
+        'title' => 'Page d\'accueil',
+        'intro' => 'Bouton « Demander un devis » (encart Professionnels, sous « Nos produits ») et sections affichées sur l\'accueil. Les diapositives, blocs de réassurance, textes, photos et produits mis en avant ont leur propre écran (liens ci-dessous).',
+        'keys' => ['cta_quote_label', 'cta_quote_label_en', 'cta_quote_link',
+            'home_show_highlights', 'home_show_featured', 'home_show_categories', 'home_show_story', 'home_show_gallery', 'home_show_steps', 'home_show_payments', 'home_show_pro', 'home_show_faq'],
+        'links' => [['/admin/carrousel', 'Carrousel (diapositives)'], ['/admin/reassurance', 'Blocs de réassurance'], ['/admin/contenu', 'Textes de l\'accueil (titres, présentation, histoire, professionnels)'],
+            ['/admin/photos', 'Photos de l\'entreprise (galeries)'], ['/admin/produits', 'Produits « À la une »'], ['/admin/textes', 'Textes de l\'interface (titres de sections, libellés)']],
     ],
     'langues' => [
         'title' => 'Langues',
@@ -46,7 +54,7 @@ return [
     'commerce' => [
         'title' => 'Livraison et commandes',
         'intro' => 'Règles de commande. Les moyens et paramètres de paiement, zones de livraison et devises ont chacun leur écran.',
-        'keys' => ['max_qty_per_line', 'low_stock_threshold', 'delivery_instructions', 'delivery_instructions_en', 'demo_mode', 'demo_payment_enabled'],
+        'keys' => ['max_qty_per_line', 'low_stock_threshold', 'delivery_instructions', 'delivery_instructions_en', 'checkout_gps_enabled', 'checkout_map_enabled', 'checkout_geocoder', 'demo_mode', 'demo_payment_enabled'],
         'links' => [['/admin/paiements', 'Moyens de paiement'], ['/admin/livraison', 'Zones de livraison (frais, gratuité, délais)'], ['/admin/devises', 'Devises d\'affichage'], ['/admin/integrations', 'Intégrations et liste de contrôle avant ouverture']],
     ],
     'paiement' => [

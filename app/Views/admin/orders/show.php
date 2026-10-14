@@ -77,7 +77,23 @@ $collectable = $balance > 0 && in_array('delivered', $transitions, true);
     <section class="card">
       <h2>Livraison</h2>
       <p><strong><?= e($order['shipping_zone_name']) ?></strong><?= (int) $order['is_pickup'] ? ' (retrait)' : '' ?></p>
-      <?php if (!(int) $order['is_pickup']): ?><p><?= e($order['shipping_address']) ?><br><?= e(trim(($order['shipping_district'] ? $order['shipping_district'] . ', ' : '') . $order['shipping_city'])) ?><?= $order['shipping_landmark'] ? '<br>Repère : ' . e($order['shipping_landmark']) : '' ?></p><?php endif; ?>
+      <?php if (!(int) $order['is_pickup']): ?>
+      <h3 class="small">Adresse saisie par le client</h3>
+      <p><?= $order['shipping_address'] !== null ? e($order['shipping_address']) . '<br>' : '<span class="muted">Adresse non renseignée (position GPS fournie)</span><br>' ?><?= e(trim(($order['shipping_district'] ? $order['shipping_district'] . ', ' : '') . $order['shipping_city'])) ?><?= $order['shipping_landmark'] ? '<br>Repère : ' . e($order['shipping_landmark']) : '' ?></p>
+      <?php if ($order['delivery_instructions']): ?><p class="small"><strong>Instructions :</strong><br><?= nl2br(e($order['delivery_instructions'])) ?></p><?php endif; ?>
+      <?php if ($order['location_method'] === 'gps' && $order['delivery_lat'] !== null): $lat = rtrim(rtrim((string) $order['delivery_lat'], '0'), '.'); $lng = rtrim(rtrim((string) $order['delivery_lng'], '0'), '.'); ?>
+      <div class="gps-admin">
+        <h3 class="small">Position GPS transmise par le client</h3>
+        <p class="small">Latitude <code><?= e($lat) ?></code>, longitude <code><?= e($lng) ?></code>
+          <?= $order['delivery_accuracy_m'] !== null ? '<br>Précision annoncée par l\'appareil : environ ' . (int) $order['delivery_accuracy_m'] . ' m' : '' ?>
+          <?= (int) $order['location_adjusted'] ? '<br>Marqueur déplacé à la main par le client' : '' ?></p>
+        <?php if ($order['geocoded_address']): ?><p class="small muted">Adresse estimée par le service de géocodage (indicative) : <?= e($order['geocoded_address']) ?></p><?php endif; ?>
+        <p class="btn-row"><a class="btn btn-ghost btn-small" href="<?= e(\App\Services\DeliveryLocation::mapLink($lat, $lng)) ?>" rel="noopener noreferrer" target="_blank">Ouvrir sur OpenStreetMap</a>
+          <a class="btn btn-ghost btn-small" href="<?= e(\App\Services\DeliveryLocation::googleMapsLink($lat, $lng)) ?>" rel="noopener noreferrer" target="_blank">Ouvrir dans Google Maps</a></p>
+        <p class="hint">Position indiquée par le client : ce n'est ni une preuve d'identité ni une preuve de réception.</p>
+      </div>
+      <?php else: ?><p class="small muted">Localisation : saisie manuelle (pas de position GPS).</p><?php endif; ?>
+      <?php endif; ?>
       <form action="/admin/commandes/<?= (int) $order['id'] ?>/livraison" method="post">
         <?= csrf_field() ?>
         <div class="field"><label for="s-carrier">Livreur / transporteur</label><input id="s-carrier" name="carrier" maxlength="120" value="<?= e($shipment['carrier'] ?? '') ?>"></div>

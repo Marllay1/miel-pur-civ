@@ -1776,14 +1776,16 @@ return [
                 $a->upload('/admin/carrousel', ['title' => $title, 'is_active' => '1', 'source_note' => 'Page Facebook', 'source_confirm' => '1'], ['image' => $png(1400, 600)]);
             }
             $home = $anon->get('/')->body;
-            T::ok(strpos($home, 'Diapo Alpha') !== false && strpos($home, 'Diapo Alpha') < strpos($home, 'Diapo Beta'), 'Deux diapositives, dans l\'ordre');
+            // Le carrousel n'affiche plus de texte : les diapositives sont suivies par leur image.
+            $img = static fn (string $t): string => (string) DB::value('SELECT image_path FROM home_slides WHERE title = ?', [$t]);
+            T::ok(strpos($home, $img('Diapo Alpha')) !== false && strpos($home, $img('Diapo Alpha')) < strpos($home, $img('Diapo Beta')), 'Deux diapositives, dans l\'ordre');
             $beta = (int) DB::value("SELECT id FROM home_slides WHERE title = 'Diapo Beta'");
             $a->post('/admin/carrousel/' . $beta . '/deplacer/haut');
             $home = $anon->get('/')->body;
-            T::ok(strpos($home, 'Diapo Beta') < strpos($home, 'Diapo Alpha'), 'Ordre modifié visible sur l\'accueil');
+            T::ok(strpos($home, $img('Diapo Beta')) < strpos($home, $img('Diapo Alpha')), 'Ordre modifié visible sur l\'accueil');
             $a->post('/admin/carrousel/' . DB::value("SELECT id FROM home_slides WHERE title = 'Diapo Alpha'") . '/basculer');
-            T::notContains('Diapo Alpha', $anon->get('/')->body, 'Diapositive désactivée retirée');
-            T::contains('Diapo Beta', $anon->get('/')->body, 'Autre diapositive toujours affichée');
+            T::notContains($img('Diapo Alpha'), $anon->get('/')->body, 'Diapositive désactivée retirée');
+            T::contains($img('Diapo Beta'), $anon->get('/')->body, 'Autre diapositive toujours affichée');
 
             // 5. Messagerie : formulaire public → base de données → boîte de réception
             \App\Services\Settings::set('order_notification_email', 'equipe@example.test');
@@ -2114,5 +2116,260 @@ return [
         T::contains('Remboursement', $journal, 'Journal : remboursements');
         $csv = $a2->get('/admin/paiements/journal/export');
         T::contains('Commande', $csv->body, 'Export CSV du journal');
+    },
+
+    '36 Accueil : carrousel, appels à l\'action, blocs de réassurance, textes du site, mentions de paiement' => function (): void {
+        $a = new Client('10.37.0.1');
+        $admin = T::user('admin', 'accueil@example.test');
+        $a->loginAs($admin);
+        $pub = static fn (string $p = '/') => (new Client('10.37.0.' . random_int(10, 250)))->get($p)->body;
+        $before = glob(BASE_PATH . '/public/uploads/slides/*') ?: [];
+        $tmp = [];
+        $png = static function (int $w, int $h, array $rgb) use (&$tmp): string {
+            $file = tempnam(sys_get_temp_dir(), 'img') . '.png';
+            $im = imagecreatetruecolor($w, $h);
+            imagefill($im, 0, 0, imagecolorallocate($im, ...$rgb));
+            imagepng($im, $file);
+            $tmp[] = $file;
+            return $file;
+        };
+        try {
+            // Carrousel : images seules (sans texte ni bouton), coulissage automatique, flèches et indicateurs, sans bouton lecture / pause
+            $home = $pub();
+            $carousel = explode('</section>', explode('class="carousel"', $home)[1] ?? '')[0];
+            T::contains('data-autoplay="7000"', $home, 'Coulissage automatique');
+            T::contains('data-carousel-prev', $carousel, 'Flèche « précédente »');
+            T::contains('data-carousel-next', $carousel, 'Flèche « suivante »');
+            T::contains('data-carousel-dot', $carousel, 'Indicateurs de position');
+            T::notContains('data-carousel-pause', $carousel, 'Plus de bouton lecture / pause');
+            T::notContains('carousel-title', $carousel, 'Aucun titre sur les images');
+            T::notContains('carousel-text', $carousel, 'Aucun texte sur les images');
+            T::notContains('class="btn', $carousel, 'Aucun bouton sur les images');
+            T::contains('<h1 class="sr-only">', $home, 'Titre de page conservé pour l\'accessibilité');
+            // « Découvrir la boutique » retiré de l'accueil ; « Demander un devis » dans l'encart Professionnels, sous « Nos produits »
+            T::notContains('Découvrir la boutique', html_entity_decode($home), 'Plus de bouton « Découvrir la boutique » sur l\'accueil');
+            $pro = explode('</section>', explode('aria-labelledby="h-pro"', $home)[1] ?? '')[0];
+            T::contains('href="/commandes-professionnelles"', $pro, '« Demander un devis » dans l\'encart Professionnels → formulaire de devis');
+            T::contains('Demander un devis', $pro, 'Texte du bouton');
+            T::notContains('btn-large', $pro, 'Bouton de taille normale');
+            T::ok(strpos($home, 'id="h-featured"') < strpos($home, 'id="h-pro"') && strpos($home, 'id="h-pro"') < strpos($home, 'id="h-cats"'), 'Encart Professionnels juste après « Nos produits »');
+            $header = explode('</header>', $home)[0];
+            T::notContains('header-cta', $header, 'Pas de bouton « Demander un devis » dans l\'en-tête');
+            T::contains('href="/commandes-professionnelles"', $header, 'Lien « Professionnels » dans le menu');
+            T::contains('name="company"', $pub('/commandes-professionnelles'), 'Destination devis : formulaire fonctionnel');
+            $cta = ['cta_quote_label' => 'Devis pro', 'cta_quote_label_en' => '', 'cta_quote_link' => '/commandes-professionnelles?source=accueil', 'home_show_highlights' => '1',
+                'home_show_featured' => '1', 'home_show_categories' => '1', 'home_show_story' => '1', 'home_show_gallery' => '1', 'home_show_steps' => '1', 'home_show_pro' => '1', 'home_show_faq' => '1'];
+            T::status(422, $a->post('/admin/parametres/accueil', ['cta_quote_link' => 'javascript:alert(1)'] + $cta), 'Lien de bouton invalide refusé');
+            T::status(422, $a->post('/admin/parametres/accueil', ['cta_quote_link' => '//evil.example'] + $cta), 'Lien externe sans https refusé');
+            T::redirectsTo('/admin/parametres/accueil', $a->post('/admin/parametres/accueil', $cta), 'Bouton enregistré');
+            $home = $pub();
+            T::contains('Devis pro', $home, 'Texte du bouton modifié');
+            T::contains('href="/commandes-professionnelles?source=accueil"', $home, 'Lien du bouton modifié');
+            T::contains('Devis pro', $pub('/en'), 'Texte anglais vide : texte français affiché');
+            $a->post('/admin/parametres/accueil', ['cta_quote_label' => ''] + $cta);
+            T::contains('Demander un devis', html_entity_decode($pub()), 'Texte vide : texte par défaut, jamais de bouton vide');
+            $a->post('/admin/parametres/accueil', ['home_show_story' => '', 'home_show_steps' => ''] + $cta);
+            $home = $pub();
+            T::notContains('id="h-story"', $home, 'Section « Notre démarche » masquable');
+            T::notContains('id="h-steps"', $home, 'Section « Commander, simplement » masquable');
+            $a->post('/admin/parametres/accueil', $cta);
+
+            // Remplacement d'une image du carrousel (ordinateur et mobile)
+            $slide = DB::one('SELECT * FROM home_slides WHERE is_active = 1 ORDER BY sort_order, id LIMIT 1');
+            T::redirectsTo('/admin/carrousel', $a->upload('/admin/carrousel/' . $slide['id'], ['title' => $slide['title'], 'body' => (string) $slide['body'], 'button_label' => (string) $slide['button_label'],
+                'link_url' => (string) $slide['link_url'], 'is_active' => '1', 'source_note' => 'Page Facebook, photo test', 'source_confirm' => '1'],
+                ['image' => $png(1600, 700, [120, 80, 20]), 'image_mobile' => $png(700, 900, [90, 60, 10])]), 'Image du carrousel remplacée');
+            $slide = DB::one('SELECT * FROM home_slides WHERE id = ?', [(int) $slide['id']]);
+            $home = $pub();
+            T::contains('src="' . $slide['image_path'] . '"', $home, 'Nouvelle image (ordinateur)');
+            T::contains('srcset="' . $slide['image_mobile_path'] . '"', $home, 'Image dédiée au mobile');
+
+            // Blocs de réassurance : contenu, ordre, visibilité, lien, champs vides
+            $band = static fn (string $html): string => explode('</section>', explode('class="trust-band"', $html)[1] ?? '')[0];
+            $b = $band($pub());
+            T::contains('Livraison dans toute la Côte d', html_entity_decode($b), 'Nouvelle formulation de la livraison');
+            T::notContains('partout dans le monde', $b, 'Aucune couverture internationale promise');
+            T::eq(3, substr_count($b, '<li>'), 'Trois blocs');
+            $ids = array_column(DB::all('SELECT id FROM home_highlights ORDER BY sort_order, id'), 'id');
+            $a->post('/admin/reassurance/' . $ids[0], ['icon' => 'leaf', 'title' => 'Miel de Katiola', 'title_en' => '', 'body' => '', 'link_url' => '', 'is_active' => '1']);
+            $b = $band($pub());
+            T::contains('Miel de Katiola', $b, 'Titre du bloc modifié');
+            T::contains('Miel de Katiola', $band($pub('/en')), 'Titre anglais vide : français affiché');
+            T::status(422, $a->post('/admin/reassurance/' . $ids[1], ['icon' => 'shield', 'title' => '', 'is_active' => '1']), 'Titre obligatoire');
+            T::status(422, $a->post('/admin/reassurance/' . $ids[1], ['icon' => 'shield', 'title' => 'X', 'link_url' => 'javascript:alert(1)', 'is_active' => '1']), 'Lien invalide refusé');
+            T::status(422, $a->post('/admin/reassurance/' . $ids[1], ['icon' => '../../x', 'title' => 'X', 'is_active' => '1']), 'Icône hors liste refusée');
+            $a->post('/admin/reassurance/' . $ids[2] . '/deplacer/haut');
+            $b = $band($pub());
+            T::ok(strpos($b, 'Livraison') < strpos($b, 'Qualité'), 'Ordre modifié');
+            $a->post('/admin/reassurance/' . $ids[1], ['icon' => 'shield', 'title' => 'Qualité certifiée', 'is_active' => '']);
+            T::notContains('Qualité certifiée', $band($pub()), 'Bloc désactivé masqué');
+            $a->post('/admin/reassurance', ['icon' => 'chat', 'title' => 'À votre écoute', 'body' => 'Conseils par téléphone et WhatsApp.', 'link_url' => '/contact', 'is_active' => '1']);
+            T::contains('href="/contact"', $band($pub()), 'Bloc ajouté avec lien');
+            $a->post('/admin/reassurance/' . DB::value("SELECT id FROM home_highlights WHERE title = 'À votre écoute'") . '/supprimer');
+            T::notContains('À votre écoute', $band($pub()), 'Bloc supprimé');
+            $a->post('/admin/parametres/accueil', ['home_show_highlights' => ''] + $cta);
+            T::notContains('class="trust-band"', $pub(), 'Bande de réassurance masquable');
+            $a->post('/admin/parametres/accueil', $cta);
+
+            // Textes du site : titre modifié, paramètres conservés, balises refusées, retour au texte d'origine
+            T::redirectsTo('/admin/textes?rubrique=accueil', $a->post('/admin/textes/accueil', ['t' => ['home.featured' => ['fr' => 'Nos miels du moment', 'en' => 'Our honey right now']]]), 'Texte enregistré');
+            T::contains('Nos miels du moment', $pub(), 'Titre modifié sur le site');
+            T::contains('Our honey right now', $pub('/en'), 'Titre anglais modifié');
+            T::status(422, $a->post('/admin/textes/accueil', ['t' => ['home.featured' => ['fr' => '<script>alert(1)</script>']]]), 'Balises refusées');
+            T::status(422, $a->post('/admin/textes/panier', ['t' => ['checkout.free_from' => ['fr' => 'Gratuit']]]), 'Paramètre « :amount » obligatoire');
+            $a->post('/admin/textes/accueil', ['t' => ['nav.admin' => ['fr' => 'Piraté']]]);
+            T::eq(null, DB::value("SELECT value FROM text_overrides WHERE lang_key = 'nav.admin'"), 'Texte hors rubrique ignoré');
+            T::contains('Nos miels du moment', $a->get('/admin/textes?rubrique=accueil')->body, 'Valeur modifiée affichée en administration');
+            // Persistance après déconnexion / reconnexion
+            $a->post('/admin/deconnexion');
+            $a2 = new Client('10.37.0.3');
+            $a2->loginAs($admin);
+            T::contains('/commandes-professionnelles?source=accueil', $a2->get('/admin/parametres/accueil')->body, 'Bouton conservé après reconnexion');
+            T::contains('Miel de Katiola', $a2->get('/admin/reassurance')->body, 'Blocs conservés après reconnexion');
+            $a2->post('/admin/textes/accueil', ['t' => ['home.featured' => ['fr' => '', 'en' => '']]]);
+            T::contains('Nos produits', $pub(), 'Champ vide : texte d\'origine');
+
+            // Mentions « Paiements acceptés » retirées (pied de page, « Commander, simplement ») ; paiement à la livraison toujours proposé
+            $home = html_entity_decode($pub());
+            T::notContains(t('footer.payments'), $home, 'Pied de page sans « Paiements acceptés »');
+            T::notContains(t('home.payment_methods'), $home, '« Commander, simplement » sans moyens de paiement');
+            T::notContains('Paiements acceptés', html_entity_decode($pub('/boutique')), 'Aucune occurrence sur les autres pages');
+            $c = new Client('10.37.0.4');
+            $c->addToCart('MPCI-LIQ-250', 1);
+            T::contains('value="cod"', $c->get('/commande')->body, 'Paiement à la livraison toujours proposé à la commande');
+
+            // Droits
+            $cust = new Client('10.37.0.5');
+            $cust->loginAs(T::user('customer', 'client-accueil@example.test'));
+            foreach (['/admin/textes', '/admin/reassurance', '/admin/parametres/accueil'] as $p) {
+                T::status(403, $cust->get($p), "Client : $p refusé");
+            }
+            T::status(403, $cust->post('/admin/textes/accueil', ['t' => ['home.featured' => ['fr' => 'Piraté']]]), 'Client : modification des textes refusée');
+            T::status(403, $cust->post('/admin/reassurance', ['icon' => 'leaf', 'title' => 'Piraté']), 'Client : ajout de bloc refusé');
+        } finally {
+            foreach (array_diff(glob(BASE_PATH . '/public/uploads/slides/*') ?: [], $before) as $f) {
+                @unlink($f);
+            }
+            foreach ($tmp as $f) {
+                @unlink($f);
+            }
+        }
+    },
+    '37 Localisation à la commande : saisie manuelle, position GPS facultative, administration' => function (): void {
+        $a = new Client('10.38.0.1');
+        $a->loginAs(T::user('admin', 'livraison@example.test'));
+        $order = static fn (string $n): array => OrderService::findByNumber($n);
+        $client = static function (string $ip): Client {
+            $c = new Client($ip);
+            $c->addToCart('MPCI-LIQ-250', 1);
+            return $c;
+        };
+        try {
+            // Formulaire : deux méthodes, géolocalisation autorisée pour le site seulement, carte locale (Leaflet)
+            $c = $client('10.38.0.2');
+            $form = $c->get('/commande');
+            T::contains('name="delivery_instructions"', $form->body, 'Méthode A : instructions pour trouver le domicile');
+            T::contains('data-gps-start', $form->body, 'Méthode B : bouton « Utiliser ma position GPS »');
+            T::contains(t('location.why'), html_entity_decode($form->body, ENT_QUOTES), 'Raison de la demande expliquée');
+            T::contains('vendor/leaflet/leaflet.js', $form->body, 'Carte : bibliothèque servie par le site');
+            T::contains('geolocation=(self)', $form->headers['Permissions-Policy'] ?? '', 'Géolocalisation autorisée pour le site lui-même uniquement');
+            T::contains('img-src \'self\' data: https://tile.openstreetmap.org', $form->headers['Content-Security-Policy'] ?? '', 'Fonds de carte autorisés');
+            T::notContains('leaflet', $c->get('/')->body, 'Carte chargée seulement sur la page de commande');
+
+            // Saisie manuelle : adresse obligatoire sans position, données conservées sans perte
+            T::status(422, $c->checkout('Abidjan', 'cod', ['address' => '']), 'Sans position GPS : adresse obligatoire');
+            $instructions = "Portail bleu après la pharmacie du carrefour, 2e étage.\nAppeler en arrivant : le gardien ouvre de 8 h à 18 h. " . str_repeat('Précision ', 80);
+            [$n1] = Client::orderRef($c->checkout('Abidjan', 'cod', ['district' => 'Cocody Angré 7e tranche', 'landmark' => 'Face à l\'école', 'delivery_instructions' => $instructions]));
+            $o1 = $order($n1);
+            T::eq('manual', $o1['location_method'], 'Méthode : saisie manuelle');
+            T::eq(null, $o1['delivery_lat'], 'Aucune coordonnée');
+            T::eq(trim($instructions), $o1['delivery_instructions'], 'Instructions conservées intégralement');
+            T::eq('Face à l\'école', $o1['shipping_landmark'], 'Repère conservé');
+            T::eq('Cocody Angré 7e tranche', $o1['shipping_district'], 'Commune / quartier conservé');
+            T::eq('07 00 00 00 01', $o1['customer_phone'], 'Téléphone conservé');
+            $page = $a->get('/admin/commandes/' . $o1['id'])->body;
+            T::contains('saisie manuelle', $page, 'Administration : méthode affichée');
+            T::contains('Portail bleu après la pharmacie', $page, 'Administration : instructions affichées');
+            T::notContains('Position GPS transmise', $page, 'Pas de bloc GPS vide');
+
+            // Position GPS validée (marqueur déplacé), sans adresse écrite : acceptée, adresse non inventée
+            $c2 = $client('10.38.0.3');
+            [$n2, $t2] = Client::orderRef($c2->checkout('Abidjan', 'cod', ['address' => '', 'landmark' => 'Immeuble jaune', 'gps_lat' => '5.3599517', 'gps_lng' => '-4.0082563',
+                'gps_accuracy' => '23.4', 'gps_adjusted' => '1', 'geocoded_address' => 'Adresse forgée', 'location_method' => 'manual']));
+            $o2 = $order($n2);
+            T::eq('gps', $o2['location_method'], 'Méthode : GPS');
+            T::eq(5.359952, round((float) $o2['delivery_lat'], 6), 'Latitude enregistrée (6 décimales)');
+            T::eq(-4.008256, round((float) $o2['delivery_lng'], 6), 'Longitude enregistrée (6 décimales)');
+            T::eq(23, (int) $o2['delivery_accuracy_m'], 'Précision enregistrée');
+            T::eq(1, (int) $o2['location_adjusted'], 'Marqueur déplacé : noté');
+            T::eq(null, $o2['shipping_address'], 'Adresse écrite non inventée');
+            T::eq(null, $o2['geocoded_address'], 'Adresse estimée envoyée par le navigateur ignorée');
+            T::eq('Immeuble jaune', $o2['shipping_landmark'], 'Repère conservé avec le GPS');
+            $page = $a->get('/admin/commandes/' . $o2['id'])->body;
+            T::contains('Position GPS transmise par le client', $page, 'Administration : bloc GPS distinct');
+            T::contains('5.359952', $page, 'Administration : latitude');
+            T::contains('https://www.openstreetmap.org/?mlat=5.359952&amp;mlon=-4.008256', $page, 'Administration : ouverture sur une carte');
+            T::contains('Marqueur déplacé', $page, 'Administration : correction signalée');
+            T::contains('Adresse non renseignée', $page, 'Administration : absence d\'adresse écrite signalée');
+            T::contains(t('location.gps_sent'), $c2->get("/commande/$n2?t=$t2")->body, 'Client : position transmise indiquée');
+            T::contains('GPS : 5.359952', $c2->get("/commande/$n2/recu?t=$t2")->body, 'Récapitulatif imprimable : coordonnées pour le livreur');
+            // GPS + adresse écrite : les deux sont conservées
+            $c3 = $client('10.38.0.4');
+            [$n3] = Client::orderRef($c3->checkout('Abidjan', 'cod', ['address' => 'Rue des Jardins, villa 12', 'gps_lat' => '5.36', 'gps_lng' => '-4.01']));
+            T::eq('Rue des Jardins, villa 12', $order($n3)['shipping_address'], 'Adresse écrite conservée avec le GPS');
+            T::eq('gps', $order($n3)['location_method'], 'Position jointe');
+
+            // Coordonnées invalides ou hors zone : refusées avec un message, aucune commande créée
+            $before = (int) DB::value('SELECT COUNT(*) FROM orders');
+            foreach ([['abc', '-4.01', 'location.invalid'], ['95', '-4.01', 'location.invalid'], ['5.36', '', 'location.invalid'], ['48.8566', '2.3522', 'location.outside']] as [$lat, $lng, $msg]) {
+                $r = $client('10.38.1.' . random_int(1, 250))->checkout('Abidjan', 'cod', ['address' => 'Rue test', 'gps_lat' => $lat, 'gps_lng' => $lng]);
+                T::status(422, $r, "Coordonnées « $lat, $lng » refusées");
+                T::contains(t($msg), html_entity_decode($r->body, ENT_QUOTES), 'Message clair');
+            }
+            T::eq($before, (int) DB::value('SELECT COUNT(*) FROM orders'), 'Aucune commande avec des coordonnées invalides');
+            // Retrait sur place : position ignorée
+            $c4 = $client('10.38.0.5');
+            [$n4] = Client::orderRef($c4->checkout('Retrait à Katiola', 'cod', ['gps_lat' => '8.1', 'gps_lng' => '-5.1']));
+            T::eq(null, $order($n4)['delivery_lat'], 'Retrait : aucune position enregistrée');
+
+            // Fonction désactivée : saisie manuelle seule
+            \App\Services\Settings::set('checkout_gps_enabled', '0');
+            $c5 = $client('10.38.0.6');
+            T::notContains('data-gps-start', $c5->get('/commande')->body, 'GPS désactivé : bouton absent');
+            T::status(422, $c5->checkout('Abidjan', 'cod', ['address' => '', 'gps_lat' => '5.36', 'gps_lng' => '-4.01']), 'GPS désactivé : coordonnées ignorées, adresse obligatoire');
+            \App\Services\Settings::set('checkout_gps_enabled', '1');
+            \App\Services\Settings::set('checkout_map_enabled', '0');
+            $f = (new Client('10.38.0.7'))->get('/');
+            T::notContains('tile.openstreetmap.org', $f->headers['Content-Security-Policy'] ?? '', 'Carte désactivée : aucun hôte de tuiles autorisé');
+            \App\Services\Settings::set('checkout_map_enabled', '1');
+
+            // Adresse estimée : désactivée par défaut ; si configurée, demandée par le serveur et jointe à la commande
+            T::status(404, (new Client('10.38.0.8'))->get('/commande/adresse-estimee?lat=5.36&lng=-4.01'), 'Géocodage non configuré : indisponible');
+            \App\Services\Settings::set('checkout_geocoder', 'nominatim');
+            Env::set('GEOCODER_CONTACT_EMAIL', 'contact@example.test');
+            $calls = [];
+            \App\Core\HttpClient::$fakes['GET https://nominatim.openstreetmap.org/reverse'] = static function (array $req) use (&$calls): array {
+                $calls[] = $req;
+                return ['status' => 200, 'body' => json_encode(['display_name' => 'Rue des Jardins, Cocody, Abidjan, Côte d\'Ivoire'])];
+            };
+            $c6 = $client('10.38.0.9');
+            $geo = $c6->get('/commande/adresse-estimee?lat=5.360000&lng=-4.010000');
+            T::eq('Rue des Jardins, Cocody, Abidjan, Côte d\'Ivoire', json_decode($geo->body, true)['address'] ?? null, 'Adresse estimée renvoyée');
+            T::contains('contact@example.test', (string) ($calls[0]['headers']['User-Agent'] ?? ''), 'Application identifiée auprès du service');
+            T::status(422, $c6->get('/commande/adresse-estimee?lat=48.85&lng=2.35'), 'Géocodage refusé hors zone');
+            [$n6] = Client::orderRef($c6->checkout('Abidjan', 'cod', ['address' => 'Villa 3', 'gps_lat' => '5.36', 'gps_lng' => '-4.01']));
+            T::eq('Rue des Jardins, Cocody, Abidjan, Côte d\'Ivoire', $order($n6)['geocoded_address'], 'Adresse estimée jointe à la commande');
+            T::eq('Villa 3', $order($n6)['shipping_address'], 'L\'adresse estimée ne remplace pas l\'adresse saisie');
+            T::contains('Adresse estimée par le service de géocodage', $a->get('/admin/commandes/' . $order($n6)['id'])->body, 'Administration : adresse estimée distinguée');
+
+            // Accès : coordonnées réservées à l'équipe et au client concerné
+            $other = new Client('10.38.0.10');
+            $other->loginAs(T::user('customer', 'autre-livraison@example.test'));
+            T::status(403, $other->get('/admin/commandes/' . $o2['id']), 'Client : fiche d\'administration refusée');
+            T::status(404, $other->get("/commande/$n2"), 'Autre client : commande inaccessible');
+        } finally {
+            unset(\App\Core\HttpClient::$fakes['GET https://nominatim.openstreetmap.org/reverse']);
+            Env::set('GEOCODER_CONTACT_EMAIL', '');
+        }
     },
 ];

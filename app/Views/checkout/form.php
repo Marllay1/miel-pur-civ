@@ -1,6 +1,6 @@
 <?php
 use App\Core\View;
-/** @var array $summary @var array $zones @var ?array $zone @var array $quote @var array $methods @var array $methodsByZone @var array $depositByZone @var bool $wholesale @var ?array $pro @var ?array $invoice @var array $addresses @var array $errors @var array $old @var string $idempotencyKey */
+/** @var array $location @var array $summary @var array $zones @var ?array $zone @var array $quote @var array $methods @var array $methodsByZone @var array $depositByZone @var bool $wholesale @var ?array $pro @var ?array $invoice @var array $addresses @var array $errors @var array $old @var string $idempotencyKey */
 $val = static fn (string $k, string $d = '') => e($old[$k] ?? $d);
 $selectedZone = (int) ($old['zone_id'] ?? 0);
 $selectedMethod = (string) ($old['payment_method'] ?? '');
@@ -78,6 +78,8 @@ $currentDeposit = $depositByZone[$selectedZone] ?? null;
       <?= field_error($errors, 'zone_id') ?>
 
       <div class="form-card mt" data-address-fields>
+        <p class="group-title"><?= e(t('location.manual_title')) ?></p>
+        <?php if (setting('store_country') !== ''): ?><p class="small muted"><?= e(t('location.country', ['country' => setting('store_country')])) ?></p><?php endif; ?>
         <?php if ($addresses): ?>
         <div class="field">
           <label for="saved-address"><?= e(t('checkout.saved_address')) ?></label>
@@ -108,7 +110,34 @@ $currentDeposit = $depositByZone[$selectedZone] ?? null;
             <label for="f-landmark"><?= e(t('field.landmark_short')) ?> <span class="hint"><?= e(t('form.optional')) ?></span></label>
             <input id="f-landmark" name="landmark" maxlength="255" placeholder="<?= e(t('checkout.landmark_placeholder')) ?>" value="<?= $val('landmark') ?>">
           </div>
+          <div class="field field-full">
+            <label for="f-delivery_instructions"><?= e(t('field.delivery_instructions_short')) ?> <span class="hint"><?= e(t('form.optional')) ?></span></label>
+            <textarea id="f-delivery_instructions" name="delivery_instructions" rows="2" maxlength="1000" placeholder="<?= e(t('checkout.instructions_placeholder')) ?>"<?= aria_invalid($errors, 'delivery_instructions') ?>><?= $val('delivery_instructions') ?></textarea>
+            <?= field_error($errors, 'delivery_instructions') ?>
+          </div>
         </div>
+        <?php if ($location['gps']): ?>
+        <div class="gps-box" id="f-gps" data-gps data-map="<?= $location['map'] ? '1' : '0' ?>" data-tiles="<?= e((string) $location['tiles']) ?>" data-attribution="<?= e($location['attribution']) ?>"
+             data-geocoder="<?= $location['geocoder'] ? '1' : '0' ?>" data-geocode-url="/commande/adresse-estimee" data-bounds="<?= e(json_encode($location['bounds'])) ?>"
+             data-msg-denied="<?= e(t('location.denied')) ?>" data-msg-unavailable="<?= e(t('location.unavailable')) ?>" data-msg-timeout="<?= e(t('location.timeout')) ?>"
+             data-msg-unsupported="<?= e(t('location.unsupported')) ?>" data-msg-insecure="<?= e(t('location.insecure')) ?>" data-msg-map="<?= e(t('location.map_unavailable')) ?>"
+             data-msg-outside="<?= e(t('location.outside')) ?>" data-msg-searching="<?= e(t('location.searching')) ?>" data-msg-found="<?= e(t('location.found')) ?>"
+             data-msg-coords="<?= e(t('location.coords')) ?>" data-msg-accuracy="<?= e(t('location.accuracy')) ?>" data-msg-estimated="<?= e(t('location.estimated')) ?>">
+          <p class="group-title"><?= e(t('location.title')) ?> <span class="hint"><?= e(t('form.optional')) ?></span></p>
+          <p class="small muted"><?= e(t('location.why')) ?></p>
+          <button class="btn btn-gray btn-small" type="button" data-gps-start><?= icon('pin') ?><?= e(t('location.use')) ?></button>
+          <p class="notice small" data-gps-status role="status" aria-live="polite" hidden></p>
+          <div class="gps-map" data-gps-map hidden></div>
+          <p class="small" data-gps-coords hidden></p>
+          <p class="small muted" data-gps-address hidden></p>
+          <button class="link-btn small" type="button" data-gps-clear hidden><?= e(t('location.clear')) ?></button>
+          <input type="hidden" name="gps_lat" value="<?= $val('gps_lat') ?>" data-gps-lat>
+          <input type="hidden" name="gps_lng" value="<?= $val('gps_lng') ?>" data-gps-lng>
+          <input type="hidden" name="gps_accuracy" value="<?= $val('gps_accuracy') ?>" data-gps-accuracy>
+          <input type="hidden" name="gps_adjusted" value="<?= $val('gps_adjusted') ?>" data-gps-adjusted>
+          <?= field_error($errors, 'gps') ?>
+        </div>
+        <?php endif; ?>
       </div>
       <p class="notice notice-green" data-pickup-note hidden><?= icon('info') ?> <?= e(t('checkout.pickup_note')) ?></p>
       <div class="step-actions">

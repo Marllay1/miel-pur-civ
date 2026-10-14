@@ -21,15 +21,6 @@ $interval = max(4, min(15, \App\Services\Settings::int('carousel_interval') ?: 7
         <?php if ((string) $s['image_mobile_path'] !== ''): ?><source media="(max-width: 699px)" srcset="<?= e($s['image_mobile_path']) ?>"><?php endif; ?>
         <img src="<?= e($s['image_path']) ?>" alt="<?= e((string) $s['image_alt']) ?>"<?= $i === 0 ? ' fetchpriority="high"' : ' loading="lazy"' ?> decoding="async">
       </picture>
-      <div class="carousel-content">
-        <div class="carousel-panel">
-          <?php if ($i === 0 && !$preview): ?><h1 class="carousel-title"><?= e($s['title']) ?></h1><?php else: ?><h2 class="carousel-title"><?= e($s['title']) ?></h2><?php endif; ?>
-          <?php if ((string) $s['body'] !== ''): ?><p class="carousel-text"><?= e($s['body']) ?></p><?php endif; ?>
-          <?php if ((string) $s['button_label'] !== '' && (string) $s['link_url'] !== ''): ?>
-          <a class="btn btn-large" href="<?= $preview ? '#' : e($s['link_url']) ?>"<?= str_starts_with((string) $s['link_url'], 'https://') ? ' rel="noopener"' : '' ?><?= $i === 0 ? '' : ' tabindex="-1"' ?>><?= e($s['button_label']) ?> <?= icon('arrow-right') ?></a>
-          <?php endif; ?>
-        </div>
-      </div>
     </article>
     <?php endforeach; ?>
   </div>
@@ -40,7 +31,6 @@ $interval = max(4, min(15, \App\Services\Settings::int('carousel_interval') ?: 7
       <?php foreach ($slides as $i => $s): ?><button type="button" class="carousel-dot" data-carousel-dot="<?= $i ?>" aria-label="<?= e(t('carousel.go', ['n' => $i + 1, 'title' => $s['title']])) ?>"<?= $i === 0 ? ' aria-current="true"' : '' ?>></button><?php endforeach; ?>
     </div>
     <button class="carousel-btn" type="button" data-carousel-next aria-label="<?= e(t('carousel.next')) ?>"><?= icon('chevron') ?></button>
-    <?php if ($autoplay): ?><button class="carousel-btn carousel-pause" type="button" data-carousel-pause aria-label="<?= e(t('carousel.pause')) ?>" data-label-pause="<?= e(t('carousel.pause')) ?>" data-label-play="<?= e(t('carousel.play')) ?>"><svg class="cp-pause" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="3.5" y="3" width="3" height="10" rx="1"/><rect x="9.5" y="3" width="3" height="10" rx="1"/></svg><svg class="cp-play" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M5 3.2v9.6L13 8z"/></svg></button><?php endif; ?>
   </div>
   <?php endif; ?>
 </section>

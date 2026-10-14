@@ -1,0 +1,33 @@
+{
+  "_comment": "Photos libres de droits (Wikimedia Commons) ajoutées aux fiches produits à la demande de l'entreprise, en attendant ses propres photos. Sans marque visible d'un autre producteur. Importées par bin/import-photos.php ; crédits sur /credits-photos.",
+  "miel-liquide-toutes-fleurs": [
+    {"title": "File:Antiguan honey products at an exhibition in Saint Lucia.jpg", "alt": "Pot de miel liquide doré avec un morceau de rayon", "alt_en": "Jar of golden liquid honey with a piece of honeycomb"},
+    {"title": "File:Honey Bottle.jpg", "alt": "Bouteille de miel liquide ambré", "alt_en": "Bottle of amber liquid honey"},
+    {"title": "File:Jar and honey stick.jpg", "alt": "Miel liquide coulant d'une cuillère en bois dans un pot", "alt_en": "Liquid honey dripping from a wooden dipper into a jar"},
+    {"title": "File:Honey dripper load.jpg", "alt": "Cuillère à miel au-dessus d'un pot de miel liquide", "alt_en": "Honey dipper above a jar of liquid honey"},
+    {"title": "File:Honey at Asheville Farmers Market.jpg", "alt": "Pots de miel de différentes teintes sur des étagères", "alt_en": "Jars of honey in different shades on shelves"}
+  ],
+  "miel-cremeux": [
+    {"title": "File:Creamed honey Maillard reaction after aging.jpg", "alt": "Pot de miel crémeux à côté d'un pot de miel liquide", "alt_en": "Jar of creamed honey next to a jar of liquid honey"},
+    {"title": "File:Cristallizzazione del miele IMG 0373.JPG", "alt": "Miel en cours de cristallisation dans un pot", "alt_en": "Honey crystallising in a jar"},
+    {"title": "File:Crystallized honey.jpg", "alt": "Cristaux de miel en gros plan", "alt_en": "Close-up of honey crystals"},
+    {"title": "File:Honey jars.jpg", "alt": "Pots de miel crémeux et de miel liquide en rayon", "alt_en": "Jars of creamed and liquid honey on a shelf"}
+  ],
+  "miel-vrac-professionnels": [
+    {"title": "File:Honeycombs In Bucket.jpg", "alt": "Rayons de miel dans un seau", "alt_en": "Honeycombs in a bucket"},
+    {"title": "File:Crystallized honey with close-up.jpg", "alt": "Miel en flacon grand format et gros plan sur sa texture", "alt_en": "Honey in a large container and a close-up of its texture"},
+    {"title": "File:Honey for sale in Ethiopia.jpg", "alt": "Miel conditionné en grande quantité sur un marché", "alt_en": "Honey packed in large quantities at a market"},
+    {"title": "File:Jars of Honey on Display at the Fair (42128624510).jpg", "alt": "Trois pots de miel foncé", "alt_en": "Three jars of dark honey"},
+    {"title": "File:20140910-ARS-LSC-01298 (15083408360).jpg", "alt": "Apiculteur filtrant du miel au-dessus d'un fût", "alt_en": "Beekeeper straining honey over a drum"}
+  ],
+  "pain-de-cire-d-abeille": [
+    {"title": "File:Beeswax blocks.JPG", "alt": "Deux pains de cire d'abeille", "alt_en": "Two blocks of beeswax"},
+    {"title": "File:Pure Natural Beeswax Blocks.jpg", "alt": "Pains de cire d'abeille jaune", "alt_en": "Yellow beeswax blocks"},
+    {"title": "File:Melting beeswax.jpg", "alt": "Pastilles de cire d'abeille en train de fondre", "alt_en": "Beeswax pellets melting"}
+  ],
+  "coffret-decouverte": [
+    {"title": "File:Honey box.jpg", "alt": "Coffret ouvert contenant plusieurs petits pots de miel", "alt_en": "Open box holding several small jars of honey"},
+    {"title": "File:Dipper stick and honey in a jar.jpg", "alt": "Pot de miel, cuillère en bois et rayon présentés avec des fleurs", "alt_en": "Jar of honey, wooden dipper and honeycomb presented with flowers"},
+    {"title": "File:Runny hunny.jpg", "alt": "Pot de miel et cuillère à miel servis avec des biscuits", "alt_en": "Jar of honey and honey dipper served with biscuits"}
+  ]
+}

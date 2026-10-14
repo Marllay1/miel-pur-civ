@@ -105,7 +105,7 @@ $action = $product ? '/admin/produits/' . $product['id'] : '/admin/produits';
 
 <section class="card" id="images">
   <h2>Photos</h2>
-  <p class="small muted">Uniquement des photographies de l'entreprise (page Facebook officielle ou photos fournies par l'entreprise), associées à ce produit seulement si la correspondance est certaine. Les fichiers sont stockés sur le serveur ; seul leur chemin est enregistré en base. La première photo est la photo principale.</p>
+  <p class="small muted">Photos de l'entreprise (page Facebook officielle, photos fournies) ou photos libres de droits dont la provenance est indiquée (auteur, licence, source) : jamais de photo d'un autre producteur ni de photo protégée. Les photos de l'entreprise sont à privilégier. Les fichiers sont stockés sur le serveur ; seul leur chemin est enregistré en base. La première photo est la photo principale.</p>
   <?php if ($images): ?>
   <ol class="image-admin-list">
     <?php foreach ($images as $i => $img): $iid = (int) $img['id']; ?>
@@ -132,7 +132,7 @@ $action = $product ? '/admin/produits/' . $product['id'] : '/admin/produits';
             <div class="field"><label for="ir-<?= $iid ?>">Nouveau fichier</label><input id="ir-<?= $iid ?>" name="image" type="file" accept="image/jpeg,image/png,image/webp" required data-preview="irp-<?= $iid ?>"></div>
             <img id="irp-<?= $iid ?>" class="image-preview" alt="" hidden>
             <div class="field"><label for="irs-<?= $iid ?>">Provenance</label><input id="irs-<?= $iid ?>" name="source_note" maxlength="255" required value="<?= e((string) $img['source_note']) ?>"></div>
-            <label class="check field-full"><input type="checkbox" name="source_confirm" value="1" required> Photo issue des ressources de l'entreprise</label>
+            <label class="check field-full"><input type="checkbox" name="source_confirm" value="1" required> J'ai le droit d'utiliser cette photo (photo de l'entreprise ou photo libre de droits dont la provenance est indiquée)</label>
             <div class="field-full"><button class="btn btn-ghost btn-small" type="submit">Remplacer</button></div>
           </form>
         </details>
@@ -140,15 +140,15 @@ $action = $product ? '/admin/produits/' . $product['id'] : '/admin/produits';
     </li>
     <?php endforeach; ?>
   </ol>
-  <?php else: ?><p class="notice notice-amber small">Aucune photo : le site affiche un visuel neutre (initiale du produit), jamais une photo d'une autre source.</p><?php endif; ?>
+  <?php else: ?><p class="notice notice-amber small">Aucune photo : le site affiche un visuel neutre (initiale du produit), jamais une photo d'un autre producteur.</p><?php endif; ?>
   <h3>Ajouter une photo</h3>
   <form action="/admin/produits/<?= (int) $product['id'] ?>/images" method="post" enctype="multipart/form-data" class="form-grid">
     <?= csrf_field() ?>
     <div class="field"><label for="img-file">Fichier (JPEG, PNG ou WebP, 5 Mo max.)</label><input id="img-file" name="image" type="file" accept="image/jpeg,image/png,image/webp" required data-preview="img-preview"></div>
     <img id="img-preview" class="image-preview" alt="" hidden>
     <div class="field"><label for="img-alt">Texte alternatif (description de l'image)</label><input id="img-alt" name="alt" required maxlength="200"></div>
-    <div class="field"><label for="img-source">Provenance <span class="hint">ex. Page Facebook, publication du 12/03/2025</span></label><input id="img-source" name="source_note" required maxlength="255"></div>
-    <label class="check field-full"><input type="checkbox" name="source_confirm" value="1" required> Je confirme que cette photo provient des ressources de l'entreprise (page Facebook officielle ou photo fournie par l'entreprise) et qu'elle représente bien ce produit.</label>
+    <div class="field"><label for="img-source">Provenance <span class="hint">ex. « Page Facebook, publication du 12/03/2025 » ou « Photo libre de droits · CC BY 4.0 · auteur · lien »</span></label><input id="img-source" name="source_note" required maxlength="255"></div>
+    <label class="check field-full"><input type="checkbox" name="source_confirm" value="1" required> Je confirme avoir le droit d'utiliser cette photo (photo de l'entreprise, ou photo libre de droits dont la provenance est indiquée ci-dessus) et qu'elle convient à ce produit.</label>
     <label class="check field-full"><input type="checkbox" name="first" value="1"> Photo principale</label>
     <div class="field-full"><button class="btn btn-ghost btn-small" type="submit">Téléverser</button> <span class="hint">L'image est ré-encodée en WebP (1600 px max.).</span></div>
   </form>

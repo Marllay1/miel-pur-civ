@@ -47,7 +47,17 @@ Logos officiels de Facebook et WhatsApp (ainsi qu'Instagram et TikTok si ces com
 
 ## 2. Photographies
 
-**Depuis le 14/10/2026, le site n'utilise que des photographies de l'entreprise** (page Facebook officielle, ou photos fournies par l'entreprise). Les photos d'illustration libres de droits utilisées auparavant ont été retirées du site, des produits, du carrousel et des fichiers. Aucune photo de banque d'images, de concurrent ou générée artificiellement n'est utilisée ; un produit sans photo vérifiable affiche un visuel neutre et est marqué « Photo à fournir » dans l'administration.
+**Photos de l'entreprise** (page Facebook officielle, photos fournies) pour le carrousel, les galeries et la photo de l'histoire. **Fiches produits** : à la demande de l'entreprise (14/10/2026), 19 photos libres de droits de Wikimedia Commons ont été ajoutées en attendant ses propres photos, sans mention sur les fiches (choix de l'entreprise) ; leurs auteurs et licences sont crédités sur /credits-photos, comme l'exigent les licences CC BY et CC BY-SA. Ont été écartées : les photos montrant la marque d'un autre producteur, et toute image générée. Aucune image n'a été générée artificiellement.
+
+| Produit | Photos ajoutées (licences) |
+|---|---|
+| Miel liquide toutes fleurs | 4 (domaine public, CC0, CC BY 2.0, CC BY-SA 3.0) — une 5ᵉ (CC BY-SA 4.0) sera ajoutée à la prochaine exécution du script (limite de débit de Wikimedia) |
+| Miel crémeux | 4 (domaine public, CC BY-SA 3.0, CC BY-SA 4.0) |
+| Miel en vrac | 5 (domaine public, CC0, CC BY 2.0, CC BY 4.0, CC BY-SA 4.0) |
+| Pain de cire d'abeille | 3 (CC BY-SA 3.0, CC BY-SA 4.0) |
+| Coffret découverte | 3 (domaine public, CC BY 2.0, CC BY-SA 4.0) |
+
+La liste exacte (titre Wikimedia, texte alternatif FR/EN) est dans `database/seeds/stock-photos.json` ; la provenance complète (licence, auteur, lien) est enregistrée sur chaque photo. Pour les retirer : Produits → fiche → Photos → Supprimer.
 
 Où se gèrent les photos :
 

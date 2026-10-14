@@ -8,6 +8,7 @@ $optionLabels = [
     'font_heading' => array_map(static fn ($f) => $f[0], $fonts), 'font_body' => array_map(static fn ($f) => $f[0], $fonts),
     'lang_default' => ['fr' => 'Français', 'en' => 'English'],
     'analytics_provider' => ['none' => 'Aucune', 'plausible' => 'Plausible', 'ga4' => 'Google Analytics 4'],
+    'checkout_geocoder' => ['none' => 'Aucun (coordonnées seules)', 'nominatim' => 'Nominatim (OpenStreetMap)'],
     'deposit_mode' => ['percent' => 'Pourcentage du total', 'fixed' => 'Montant fixe (FCFA)'],
 ];
 ?>

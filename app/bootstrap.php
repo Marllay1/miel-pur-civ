@@ -30,3 +30,6 @@ if (!App\Core\Env::bool('APP_DEBUG')) {
 }
 ini_set('expose_php', '0');
 mb_internal_encoding('UTF-8');
+
+// Textes de l'interface modifiés en administration (Textes du site), prioritaires sur app/lang/*.php.
+App\Core\Lang::$overrideLoader = static fn (string $locale): array => App\Services\TextOverrides::load($locale);

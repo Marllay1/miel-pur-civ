@@ -6,8 +6,8 @@ Dernière campagne de tests : 2026-10-14 (itération 2 : paiements intégrés, S
 
 | Suite | Commande | Résultat |
 |---|---|---|
-| Fonctionnelle + sécurité (SQLite ; PHP 8.3 et PHP 8.2) | `php tests/run.php` | 35 scénarios, 1 532 assertions, 0 échec |
-| Fonctionnelle + sécurité (MariaDB 10.4 de XAMPP) | `php tests/run.php --mysql` | 35 scénarios, 1 532 assertions, 0 échec |
+| Fonctionnelle + sécurité (SQLite ; PHP 8.3 et PHP 8.2) | `php tests/run.php` | 37 scénarios, 1 663 assertions, 0 échec |
+| Fonctionnelle + sécurité (MariaDB 10.4 de XAMPP) | `php tests/run.php --mysql` | 37 scénarios, 1 663 assertions, 0 échec |
 | Boîte noire HTTP — Apache 2.4 (XAMPP) | `php tests/security-http.php http://miel.localhost` | 66 contrôles, 0 échec |
 | Boîte noire HTTP — Nginx 1.30 | `php tests/security-http.php http://miel-nginx.localhost:8088` | 66 contrôles, 0 échec |
 | Boîte noire HTTP — serveur intégré PHP | `php tests/security-http.php` | 66 contrôles, 0 échec |
@@ -27,6 +27,7 @@ Dernière campagne de tests : 2026-10-14 (itération 2 : paiements intégrés, S
 | Logique métier | 04, 06, 07, 17, 26 | prix/total falsifiés, quantités invalides, clé d'idempotence forgée, double commande, changement de prix en cours, zone désactivée, promo plafonnée, paiement en ligne d'une commande à la livraison, stock jamais négatif (application + contrainte CHECK) |
 | Paiement / webhooks | 08, 09, 26, 28 | signature HMAC (Wave, paiement simulé), horodatage, corps modifié, rejeu, montant, contenu > 64 Ko, secret trop court, paiement tardif ; notifications non signées (MTN, Orange) ou non concordantes (CinetPay) jamais crues : état vérifié auprès du prestataire ; vérification avant toute expiration ; aucun secret affiché en administration |
 | Paiement : montants et statuts | 35 | acompte, solde, état du paiement et remboursements calculés par le serveur ; champs injectés ignorés ; déclaration du client jamais prise pour un encaissement ; encaissement plafonné au reste dû, remboursement à l'encaissé ; doublons de notification ; paiement sur facture réservé aux professionnels autorisés ; actions d'encaissement, remboursement, journal, comptes professionnels et paramètres réservées à l'équipe ; chaque action tracée au journal d'audit |
+| Contenus administrables | 36 | textes d'interface : rubriques fermées (clé hors rubrique ignorée), balises et caractères de contrôle refusés, paramètres conservés, valeurs échappées à l'affichage ; liens des boutons et blocs limités aux pages du site ou à `https://` ; icônes en liste fermée ; écrans réservés à l'équipe |
 | Messagerie | 16, 25, 34 | validation, anti-spam (champ piège, délai, horodatage signé), limitation 5 messages/h par IP, messages jamais exposés côté public (l'espace client ne montre que les messages du client connecté), boîte de réception réservée à l'équipe, suppression limitée aux messages traités |
 | Abus | 25 | limites : suivi (10/15 min), contact, avis, inscription, réinitialisation (3 e-mails/h), webhook (120/min) |
 | Divulgation | 27, HTTP | aucune trace technique en 500 (journalisée côté serveur), pas de `X-Powered-By`, aucun message PHP, `.env`/journaux/sources/`.git` inaccessibles (17 chemins de traversée testés), méthodes TRACE/PUT/DELETE/PATCH refusées, en-têtes Host et X-Forwarded-Host ignorés pour les liens envoyés par e-mail, en-tête Server sans numéro de version |

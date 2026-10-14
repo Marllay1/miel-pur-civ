@@ -192,14 +192,23 @@ final class App
             }
         } catch (\Throwable) {
         }
-        $csp = "default-src 'self'; script-src 'self'$extraScript; style-src 'self'; img-src 'self' data:; font-src 'self'; "
+        // Fonds de carte de la localisation à la commande (hôte des tuiles autorisé en image, seulement si la carte est activée).
+        $extraImg = '';
+        try {
+            if (\App\Services\Settings::bool('checkout_map_enabled') && ($tileHost = \App\Services\DeliveryLocation::tileOrigin()) !== null) {
+                $extraImg = ' ' . $tileHost;
+            }
+        } catch (\Throwable) {
+        }
+        $csp = "default-src 'self'; script-src 'self'$extraScript; style-src 'self'; img-src 'self' data:$extraImg; font-src 'self'; "
             . "connect-src 'self'$extraConnect; form-action 'self'$formTargets; frame-ancestors 'none'; base-uri 'self'; object-src 'none'";
         $resp->headers += [
             'Content-Security-Policy' => $csp,
             'X-Content-Type-Options' => 'nosniff',
             'X-Frame-Options' => 'DENY',
             'Referrer-Policy' => 'strict-origin-when-cross-origin',
-            'Permissions-Policy' => 'camera=(), microphone=(), geolocation=(), payment=()',
+            // Géolocalisation : autorisée pour le site lui-même (bouton « Utiliser ma position GPS »), jamais pour un contenu tiers.
+            'Permissions-Policy' => 'camera=(), microphone=(), geolocation=(self), payment=()',
             'Cross-Origin-Opener-Policy' => 'same-origin',
         ];
         if ($r->isSecure() || Cookie::secure()) {

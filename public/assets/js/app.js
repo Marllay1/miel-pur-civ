@@ -50,6 +50,7 @@
     initAutosubmit();
     initGallery();
     initCheckout();
+    initGps();
     initPolling();
     initConsent();
     initLangMenu();
@@ -60,76 +61,72 @@
 
   /* Sélecteur de langue : fermeture au clic extérieur et avec Échap (le menu fonctionne aussi sans JavaScript). */
   /*
-   * Carrousel de l'accueil : fondu discret, flèches, indicateurs, clavier (← →), défilement automatique facultatif
-   * mis en pause au survol, au focus et au toucher ; aucun défilement automatique si l'animation est réduite.
+   * Carrousel de l'accueil : coulissage horizontal automatique, flèches, indicateurs, clavier (← →), glissement du doigt.
+   * Une navigation manuelle relance le minuteur (le défilement continue) ; arrêt momentané pendant le survol, le focus clavier,
+   * le toucher et quand l'onglet est masqué. Si le visiteur demande de réduire les animations, le changement est instantané.
    */
   function initCarousel(root) {
     var slides = $all('[data-slide]', root);
     var controls = $('[data-carousel-controls]', root);
-    if (slides.length < 2) { return; }
+    var track = $('[data-carousel-track]', root);
+    if (slides.length < 2 || !track) { return; }
     root.classList.add('is-enhanced');
     if (controls) { controls.hidden = false; }
     var dots = $all('[data-carousel-dot]', root);
-    var pauseBtn = $('[data-carousel-pause]', root);
-    var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var delay = parseInt(root.getAttribute('data-autoplay') || '0', 10);
-    var index = 0, timer = null, paused = reduced || !delay, hovering = false;
+    var index = 0, timer = null, holds = { hover: false, focus: false, touch: false, hidden: false };
 
     function preload(i) {
       var img = $('img', slides[i]);
       if (img && img.loading === 'lazy') { img.loading = 'eager'; }
     }
-    function show(i, focus) {
+    function show(i, announce) {
       i = (i + slides.length) % slides.length;
       if (i === index) { return; }
       slides[index].classList.remove('is-active');
       slides[index].setAttribute('aria-hidden', 'true');
-      $all('a, button', slides[index]).forEach(function (el) { el.setAttribute('tabindex', '-1'); });
       index = i;
       preload(index);
       slides[index].classList.add('is-active');
       slides[index].removeAttribute('aria-hidden');
-      $all('a, button', slides[index]).forEach(function (el) { el.removeAttribute('tabindex'); });
+      track.style.transform = 'translateX(' + (-100 * index) + '%)';
       dots.forEach(function (d, k) { if (k === index) { d.setAttribute('aria-current', 'true'); } else { d.removeAttribute('aria-current'); } });
       preload((index + 1) % slides.length);
-      if (focus) { var live = $('[data-live-region]'); if (live) { live.textContent = slides[index].getAttribute('aria-label') || ''; } }
+      if (announce) { var live = $('[data-live-region]'); if (live) { live.textContent = slides[index].getAttribute('aria-label') || ''; } }
     }
     function schedule() {
       clearTimeout(timer);
-      if (!paused && !hovering) { timer = setTimeout(function () { show(index + 1); schedule(); }, delay); }
-    }
-    function setPaused(p) {
-      paused = p;
-      if (pauseBtn) {
-        pauseBtn.classList.toggle('is-paused', p);
-        pauseBtn.setAttribute('aria-label', p ? pauseBtn.getAttribute('data-label-play') : pauseBtn.getAttribute('data-label-pause'));
+      if (delay && !holds.hover && !holds.focus && !holds.touch && !holds.hidden) {
+        timer = setTimeout(function () { show(index + 1); schedule(); }, delay);
       }
-      schedule();
     }
+    function go(i) { show(i, true); schedule(); }
     var prev = $('[data-carousel-prev]', root), next = $('[data-carousel-next]', root);
-    if (prev) { prev.addEventListener('click', function () { show(index - 1, true); setPaused(true); }); }
-    if (next) { next.addEventListener('click', function () { show(index + 1, true); setPaused(true); }); }
-    dots.forEach(function (d) { d.addEventListener('click', function () { show(parseInt(d.getAttribute('data-carousel-dot'), 10), true); setPaused(true); }); });
-    if (pauseBtn) { pauseBtn.addEventListener('click', function () { setPaused(!paused); }); }
+    if (prev) { prev.addEventListener('click', function () { go(index - 1); }); }
+    if (next) { next.addEventListener('click', function () { go(index + 1); }); }
+    dots.forEach(function (d) { d.addEventListener('click', function () { go(parseInt(d.getAttribute('data-carousel-dot'), 10)); }); });
     root.addEventListener('keydown', function (e) {
-      if (e.key === 'ArrowLeft') { show(index - 1, true); setPaused(true); }
-      if (e.key === 'ArrowRight') { show(index + 1, true); setPaused(true); }
+      if (e.key === 'ArrowLeft') { go(index - 1); }
+      if (e.key === 'ArrowRight') { go(index + 1); }
     });
-    root.addEventListener('mouseenter', function () { hovering = true; schedule(); });
-    root.addEventListener('mouseleave', function () { hovering = false; schedule(); });
-    root.addEventListener('focusin', function () { hovering = true; schedule(); });
-    root.addEventListener('focusout', function (e) { if (!root.contains(e.relatedTarget)) { hovering = false; schedule(); } });
+    root.addEventListener('mouseenter', function () { holds.hover = true; schedule(); });
+    root.addEventListener('mouseleave', function () { holds.hover = false; schedule(); });
+    root.addEventListener('focusin', function () { holds.focus = true; schedule(); });
+    root.addEventListener('focusout', function (e) { if (!root.contains(e.relatedTarget)) { holds.focus = false; schedule(); } });
+    doc.addEventListener('visibilitychange', function () { holds.hidden = doc.hidden; schedule(); });
     var startX = null;
-    root.addEventListener('touchstart', function (e) { startX = e.touches[0].clientX; setPaused(true); }, { passive: true });
+    root.addEventListener('touchstart', function (e) { startX = e.touches[0].clientX; holds.touch = true; schedule(); }, { passive: true });
     root.addEventListener('touchend', function (e) {
-      if (startX === null) { return; }
-      var dx = e.changedTouches[0].clientX - startX;
-      if (Math.abs(dx) > 40) { show(index + (dx < 0 ? 1 : -1), true); }
+      holds.touch = false;
+      if (startX !== null) {
+        var dx = e.changedTouches[0].clientX - startX;
+        if (Math.abs(dx) > 40) { show(index + (dx < 0 ? 1 : -1), true); }
+      }
       startX = null;
+      schedule();
     }, { passive: true });
-    if (pauseBtn && reduced) { pauseBtn.hidden = true; }
     preload(1);
-    setPaused(paused);
+    schedule();
   }
 
   /* Aperçu local d'une image avant téléversement (administration) : lecture du fichier dans le navigateur, rien n'est envoyé. */
@@ -404,7 +401,7 @@
       var pickup = z && z.getAttribute('data-pickup') === '1';
       if (addressFields) {
         addressFields.hidden = !!pickup;
-        ['city', 'address'].forEach(function (n) { var el = form.elements[n]; if (el) { el.required = !pickup; } });
+        ['city', 'address'].forEach(function (n) { var el = form.elements[n]; if (el) { el.required = !pickup && !(n === 'address' && form.elements.gps_lat && form.elements.gps_lat.value); } });
       }
       if (pickupNote) { pickupNote.hidden = !pickup; }
       var allowed = z ? (methodsByZone[z.value] || []) : null;
@@ -455,6 +452,104 @@
   }
 
   /* Paiement validé sur le téléphone (MTN MoMo) : interrogation régulière, le serveur vérifie auprès du prestataire. */
+  /*
+   * Localisation à la commande (facultative) : la position n'est demandée qu'au clic sur « Utiliser ma position GPS ».
+   * Carte Leaflet (si activée et chargée) avec un marqueur déplaçable pour corriger la position ; adresse estimée seulement
+   * si un service de géocodage est configuré côté serveur. En cas d'échec, la saisie manuelle reste toujours possible.
+   */
+  function initGps() {
+    var box = $('[data-gps]');
+    if (!box) { return; }
+    var form = box.closest('form');
+    var start = $('[data-gps-start]', box), status = $('[data-gps-status]', box), mapEl = $('[data-gps-map]', box);
+    var coordsEl = $('[data-gps-coords]', box), addrEl = $('[data-gps-address]', box), clear = $('[data-gps-clear]', box);
+    var inLat = $('[data-gps-lat]', box), inLng = $('[data-gps-lng]', box), inAcc = $('[data-gps-accuracy]', box), inAdj = $('[data-gps-adjusted]', box);
+    var bounds = {};
+    try { bounds = JSON.parse(box.getAttribute('data-bounds') || '{}'); } catch (err) { bounds = {}; }
+    var map = null, marker = null, tileErrors = 0;
+    function msg(key) { return box.getAttribute('data-msg-' + key) || ''; }
+    function say(text, kind) {
+      status.textContent = text;
+      status.hidden = !text;
+      status.className = 'notice small' + (kind === 'error' ? ' notice-amber' : (kind === 'ok' ? ' notice-green' : ''));
+    }
+    function inside(lat, lng) {
+      return !bounds.lat_min || (lat >= bounds.lat_min && lat <= bounds.lat_max && lng >= bounds.lng_min && lng <= bounds.lng_max);
+    }
+    function addressRequired() {
+      var addr = form && form.elements.address, zone = form && $('input[name="zone_id"]:checked', form);
+      var pickup = zone && zone.getAttribute('data-pickup') === '1';
+      if (addr) { addr.required = !pickup && !inLat.value; }
+    }
+    function estimate(lat, lng) {
+      if (box.getAttribute('data-geocoder') !== '1' || !window.fetch) { return; }
+      fetch(box.getAttribute('data-geocode-url') + '?lat=' + encodeURIComponent(lat) + '&lng=' + encodeURIComponent(lng), { headers: { 'Accept': 'application/json' }, credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (d && d.ok && d.address) { addrEl.textContent = msg('estimated') + ' ' + d.address; addrEl.hidden = false; } })
+        .catch(function () {});
+    }
+    function setPosition(lat, lng, acc, adjusted) {
+      inLat.value = lat.toFixed(6);
+      inLng.value = lng.toFixed(6);
+      if (acc !== null) { inAcc.value = Math.round(acc); }
+      if (adjusted) { inAdj.value = '1'; }
+      coordsEl.textContent = msg('coords') + ' ' + inLat.value + ', ' + inLng.value + (inAcc.value && !adjusted ? ' — ' + msg('accuracy').replace(':m', inAcc.value) : '');
+      coordsEl.hidden = false;
+      clear.hidden = false;
+      addrEl.hidden = true;
+      if (inside(lat, lng)) { say(msg('found'), 'ok'); } else { say(msg('outside'), 'error'); }
+      addressRequired();
+      estimate(inLat.value, inLng.value);
+    }
+    function showMap(lat, lng) {
+      if (box.getAttribute('data-map') !== '1') { return; }
+      if (!window.L || !box.getAttribute('data-tiles')) { say(msg('map'), 'error'); return; }
+      mapEl.hidden = false;
+      if (!map) {
+        window.L.Icon.Default.imagePath = '/assets/vendor/leaflet/images/';
+        map = window.L.map(mapEl, { scrollWheelZoom: false }).setView([lat, lng], 17);
+        var layer = window.L.tileLayer(box.getAttribute('data-tiles'), { maxZoom: 19, attribution: box.getAttribute('data-attribution') || '' }).addTo(map);
+        layer.on('tileerror', function () { tileErrors++; if (tileErrors === 4) { say(msg('map'), 'error'); } });
+        marker = window.L.marker([lat, lng], { draggable: true, keyboard: true }).addTo(map);
+        marker.on('dragend', function () { var p = marker.getLatLng(); setPosition(p.lat, p.lng, null, true); });
+        map.on('click', function (e) { marker.setLatLng(e.latlng); setPosition(e.latlng.lat, e.latlng.lng, null, true); });
+      } else {
+        marker.setLatLng([lat, lng]);
+        map.setView([lat, lng], 17);
+        map.invalidateSize();
+      }
+    }
+    start.addEventListener('click', function () {
+      if (!('geolocation' in navigator)) { say(msg('unsupported'), 'error'); return; }
+      if (window.isSecureContext === false) { say(msg('insecure'), 'error'); return; }
+      say(msg('searching'));
+      start.disabled = true;
+      navigator.geolocation.getCurrentPosition(function (pos) {
+        start.disabled = false;
+        inAdj.value = '';
+        setPosition(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy, false);
+        showMap(pos.coords.latitude, pos.coords.longitude);
+      }, function (err) {
+        start.disabled = false;
+        say(err && err.code === 1 ? msg('denied') : (err && err.code === 3 ? msg('timeout') : msg('unavailable')), 'error');
+      }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
+    });
+    clear.addEventListener('click', function () {
+      inLat.value = inLng.value = inAcc.value = inAdj.value = '';
+      coordsEl.hidden = addrEl.hidden = mapEl.hidden = clear.hidden = true;
+      say('');
+      addressRequired();
+    });
+    if (form) { $all('input[name="zone_id"]', form).forEach(function (r) { r.addEventListener('change', addressRequired); }); }
+    // Position déjà validée (formulaire renvoyé après une erreur) : affichage restauré, sans nouvelle demande au navigateur.
+    if (inLat.value && inLng.value && !isNaN(parseFloat(inLat.value)) && !isNaN(parseFloat(inLng.value))) {
+      var lat0 = parseFloat(inLat.value), lng0 = parseFloat(inLng.value);
+      setPosition(lat0, lng0, null, inAdj.value === '1');
+      showMap(lat0, lng0);
+    }
+    addressRequired();
+  }
+
   function initPolling() {
     var box = $('[data-poll-url]');
     if (!box || !window.fetch) { return; }

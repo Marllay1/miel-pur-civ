@@ -97,8 +97,20 @@ The Katiola region, in north-central Côte d'Ivoire, is renowned for the quality
     'header_show_search' => ['label' => 'En-tête : bouton de recherche', 'group' => 'Apparence', 'default' => '1', 'type' => 'bool'],
     'header_show_theme' => ['label' => 'En-tête : bouton clair / sombre', 'group' => 'Apparence', 'default' => '1', 'type' => 'bool'],
     'footer_show_newsletter' => ['label' => "Pied de page : inscription à la lettre d'information", 'group' => 'Apparence', 'default' => '1', 'type' => 'bool'],
-    'footer_show_payments' => ['label' => 'Pied de page : logos « Paiements acceptés »', 'group' => 'Apparence', 'default' => '1', 'type' => 'bool'],
-    'home_show_payments' => ['label' => 'Accueil : logos des moyens de paiement', 'group' => 'Apparence', 'default' => '1', 'type' => 'bool'],
+    'footer_show_payments' => ['label' => 'Pied de page : logos « Paiements acceptés »', 'group' => 'Apparence', 'default' => '0', 'type' => 'bool'],
+    'home_show_payments' => ['label' => 'Section « Commander, simplement » : logos des moyens de paiement', 'group' => 'Accueil', 'default' => '0', 'type' => 'bool'],
+    // Page d'accueil : appels à l'action et sections (Administration → Paramètres du site → Page d'accueil).
+    'cta_quote_label' => ['label' => 'Bouton « Demander un devis » (encart Professionnels) : texte', 'group' => 'Accueil', 'default' => 'Demander un devis'],
+    'cta_quote_label_en' => ['label' => 'Bouton « Demander un devis » : texte (anglais)', 'group' => 'Accueil', 'default' => 'Request a quote'],
+    'cta_quote_link' => ['label' => 'Bouton « Demander un devis » : lien', 'group' => 'Accueil', 'default' => '/commandes-professionnelles', 'type' => 'link'],
+    'home_show_highlights' => ['label' => 'Afficher les blocs de réassurance sous le carrousel', 'group' => 'Accueil', 'default' => '1', 'type' => 'bool'],
+    'home_show_featured' => ['label' => 'Section « Nos produits » (produits « À la une »)', 'group' => 'Accueil', 'default' => '1', 'type' => 'bool'],
+    'home_show_categories' => ['label' => 'Section des catégories', 'group' => 'Accueil', 'default' => '1', 'type' => 'bool'],
+    'home_show_story' => ['label' => 'Section « Notre démarche »', 'group' => 'Accueil', 'default' => '1', 'type' => 'bool'],
+    'home_show_gallery' => ['label' => 'Galerie de photos', 'group' => 'Accueil', 'default' => '1', 'type' => 'bool'],
+    'home_show_steps' => ['label' => 'Section « Commander, simplement »', 'group' => 'Accueil', 'default' => '1', 'type' => 'bool'],
+    'home_show_pro' => ['label' => 'Encart professionnels', 'group' => 'Accueil', 'default' => '1', 'type' => 'bool'],
+    'home_show_faq' => ['label' => 'Questions fréquentes', 'group' => 'Accueil', 'default' => '1', 'type' => 'bool'],
 
     // Langues (le français est la langue de référence ; l'anglais n'est proposé que s'il est activé)
     'lang_en_enabled' => ['label' => 'Proposer la version anglaise', 'group' => 'Langues', 'default' => '1', 'type' => 'bool'],
@@ -123,6 +135,10 @@ The Katiola region, in north-central Côte d'Ivoire, is renowned for the quality
     // Livraison et carrousel
     'delivery_instructions' => ['label' => 'Instructions de livraison affichées au client (facultatif)', 'group' => 'Commerce', 'default' => '', 'type' => 'text'],
     'delivery_instructions_en' => ['label' => 'Instructions de livraison (anglais)', 'group' => 'Commerce', 'default' => '', 'type' => 'text'],
+    // Localisation à la commande (Paramètres du site → Livraison et commandes).
+    'checkout_gps_enabled' => ['label' => 'Proposer « Utiliser ma position GPS » à la commande', 'group' => 'Commerce', 'default' => '1', 'type' => 'bool'],
+    'checkout_map_enabled' => ['label' => 'Afficher une carte pour vérifier et déplacer la position (fonds OpenStreetMap, voir docs/LOCALISATION.md)', 'group' => 'Commerce', 'default' => '1', 'type' => 'bool'],
+    'checkout_geocoder' => ['label' => 'Adresse estimée à partir de la position (géocodage)', 'group' => 'Commerce', 'default' => 'none', 'options' => ['none', 'nominatim'], 'hint' => 'désactivé par défaut ; Nominatim : service public soumis à conditions, voir docs/LOCALISATION.md'],
     // Paramètres de paiement (Administration → Paramètres du site → Paramètres de paiement). Valeurs initiales à confirmer par l'entreprise.
     'deposit_enabled' => ['label' => 'Proposer le paiement par acompte', 'group' => 'Paiement', 'default' => '0', 'type' => 'bool'],
     'deposit_mode' => ['label' => 'Calcul de l\'acompte', 'group' => 'Paiement', 'default' => 'percent', 'options' => ['percent', 'fixed']],

@@ -43,7 +43,7 @@ php tests/run.php
 php tests/run.php --mysql
 ```
 
-35 scénarios (dont 8 de sécurité, 1 sur les paiements intégrés, 1 sur la séparation client/administration, 1 sur l'identité visuelle et la langue, 1 sur les paramètres du site, 1 sur les produits, photos et la messagerie, 1 sur le système de paiement : acompte, facture, remboursements), 1 532 assertions — réussis sous PHP 8.3 et 8.2, SQLite et MariaDB 10.4 ; 66 contrôles HTTP en boîte noire réussis contre Apache, Nginx et le serveur intégré (`php tests/security-http.php <url>`) ; 15 contrôles SMTP (`php tests/smtp-check.php --mailpit`). Voir [docs/TESTS.md](docs/TESTS.md) et [docs/SECURITE.md](docs/SECURITE.md).
+37 scénarios (dont 8 de sécurité, 1 sur les paiements intégrés, 1 sur la séparation client/administration, 1 sur l'identité visuelle et la langue, 1 sur les paramètres du site, 1 sur les produits, photos et la messagerie, 1 sur le système de paiement, 1 sur l'accueil et les contenus administrables, 1 sur la localisation de livraison), 1 663 assertions — réussis sous PHP 8.3 et 8.2, SQLite et MariaDB 10.4 ; 66 contrôles HTTP en boîte noire réussis contre Apache, Nginx et le serveur intégré (`php tests/security-http.php <url>`) ; 15 contrôles SMTP (`php tests/smtp-check.php --mailpit`). Voir [docs/TESTS.md](docs/TESTS.md) et [docs/SECURITE.md](docs/SECURITE.md).
 
 ## Documentation
 

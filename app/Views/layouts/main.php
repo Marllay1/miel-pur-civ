@@ -25,7 +25,7 @@ $flashes = Session::pullFlashes();
 $path = App::$request?->path ?? '/';
 $query = App::$request?->query ?? [];
 $navItems = ['/boutique' => t('nav.shop'), '/a-propos' => t('nav.about'), '/commandes-professionnelles' => t('nav.pro'), '/faq' => t('nav.faq'), '/contact' => t('nav.contact')];
-$isActive = static fn (string $href) => $path === $href || str_starts_with($path, $href . '/');
+$isActive =static fn (string $href) => $path === $href || str_starts_with($path, $href . '/');
 $analytics = Settings::get('analytics_provider');
 $wa = wa_link();
 $socialLinks = social_links();
@@ -76,6 +76,7 @@ $tabs = [
 <?= favicon_tags() ?><link rel="preload" href="/assets/fonts/figtree-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/figtree-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="<?= e(asset('vendor/aos/aos.css')) ?>">
+<?php if (!empty($withMap)): ?><link rel="stylesheet" href="<?= e(asset('vendor/leaflet/leaflet.css')) ?>"><?php endif; ?>
 <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
 <link rel="stylesheet" href="<?= e(theme_css_url()) ?>">
 <?php foreach ($jsonLd ?? [] as $ld): ?>
@@ -245,6 +246,7 @@ $acceptedPayments = Settings::bool('footer_show_payments') ? \App\Services\Payme
 </div>
 <?php endif; ?>
 <script src="<?= e(asset('vendor/aos/aos.js')) ?>" defer></script>
+<?php if (!empty($withMap)): ?><script src="<?= e(asset('vendor/leaflet/leaflet.js')) ?>" defer></script><?php endif; ?>
 <script src="<?= e(asset('js/app.js')) ?>" defer></script>
 </body>
 </html>

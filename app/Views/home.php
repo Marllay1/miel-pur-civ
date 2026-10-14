@@ -1,41 +1,30 @@
 <?php
 use App\Core\View;
-use App\Services\PaymentService;
+use App\Services\Settings;
 /** @var array $featured @var array $categories @var array $faqs @var array $slides */
-$heroImage = \App\Services\Settings::get('home_hero_image');
-// Logos des moyens de paiement réellement proposés (Administration → Moyens de paiement).
-$acceptedPayments = \App\Services\Settings::bool('home_show_payments') ? \App\Services\PaymentMethods::acceptedLogos() : [];
-$facebook = \App\Services\Settings::get('social_facebook');
+$heroImage = Settings::get('home_hero_image');
+// Logos des moyens de paiement réellement proposés (masqués par défaut : Paramètres du site → Page d'accueil).
+$acceptedPayments = Settings::bool('home_show_payments') ? \App\Services\PaymentMethods::acceptedLogos() : [];
+$facebook = Settings::get('social_facebook');
 // Photos choisies dans Administration → Photos de l'entreprise (aucune image codée en dur).
-$gallery = \App\Services\Media::homeGallery();
+$gallery = Settings::bool('home_show_gallery') ? \App\Services\Media::homeGallery() : [];
 $story = \App\Services\Media::story();
-$categories = array_values(array_filter($categories, static fn (array $c) => $c['parent_id'] === null));
+$categories = Settings::bool('home_show_categories') ? array_values(array_filter($categories, static fn (array $c) => $c['parent_id'] === null)) : [];
+$featured = Settings::bool('home_show_featured') ? $featured : [];
+$faqs = Settings::bool('home_show_faq') ? $faqs : [];
+// Blocs de réassurance (Administration → Blocs de réassurance).
+$highlights = Settings::bool('home_show_highlights') ? \App\Services\HomeHighlights::visible() : [];
 ?>
 <?php if ($slides): ?>
+<h1 class="sr-only"><?= e(setting('home_hero_title')) ?></h1>
 <?= View::partial('carousel', ['slides' => $slides]) ?>
-<section class="trust-band" aria-label="<?= e(t('home.trust_label')) ?>">
-  <ul class="wrap trust trust-row">
-    <li><?= icon('leaf') ?><?= e(t('home.trust_bio')) ?></li>
-    <li><?= icon('shield') ?><?= e(t('home.trust_cert')) ?></li>
-    <li><?= icon('truck') ?><?= e(t('home.trust_delivery')) ?></li>
-  </ul>
-</section>
 <?php else: ?>
 <section class="hero">
   <div class="wrap hero-grid">
     <div class="hero-copy">
-      <?php if (\App\Services\Settings::bool('header_show_tagline')): ?><p class="eyebrow"><?= e(setting('store_tagline')) ?></p><?php endif; ?>
+      <?php if (Settings::bool('header_show_tagline')): ?><p class="eyebrow"><?= e(setting('store_tagline')) ?></p><?php endif; ?>
       <h1 class="display"><?= e(setting('home_hero_title')) ?></h1>
       <p class="lead"><?= e(setting('home_hero_text')) ?></p>
-      <div class="btn-row">
-        <a class="btn btn-large" href="/boutique"><?= e(t('home.cta_shop')) ?> <?= icon('arrow-right') ?></a>
-        <a class="btn btn-large btn-tinted" href="/commandes-professionnelles"><?= e(t('home.cta_pro')) ?></a>
-      </div>
-      <ul class="trust">
-        <li><?= icon('leaf') ?><?= e(t('home.trust_bio')) ?></li>
-        <li><?= icon('shield') ?><?= e(t('home.trust_cert')) ?></li>
-        <li><?= icon('truck') ?><?= e(t('home.trust_delivery')) ?></li>
-      </ul>
     </div>
     <?php if ($heroImage !== ''): ?>
     <figure class="hero-visual hero-photo"><img src="<?= e($heroImage) ?>" alt="" fetchpriority="high" decoding="async"></figure>
@@ -43,6 +32,18 @@ $categories = array_values(array_filter($categories, static fn (array $c) => $c[
     <figure class="hero-visual hero-photo"><?= \App\Services\Media::img($story, '', true) ?></figure>
     <?php endif; ?>
   </div>
+</section>
+<?php endif; ?>
+<?php if ($highlights): ?>
+<section class="trust-band" aria-label="<?= e(t('home.trust_label')) ?>">
+  <ul class="wrap trust-row">
+    <?php foreach ($highlights as $h): ?>
+    <li><span class="highlight-icon" aria-hidden="true"><?= icon((string) $h['icon']) ?></span>
+      <?php if ((string) $h['link_url'] !== ''): ?><a href="<?= e((string) $h['link_url']) ?>"<?= str_starts_with((string) $h['link_url'], 'https://') ? ' rel="noopener"' : '' ?>><?php endif; ?>
+      <span><strong><?= e($h['title']) ?></strong><?php if ((string) $h['body'] !== ''): ?><span class="trust-text"><?= e($h['body']) ?></span><?php endif; ?></span>
+      <?php if ((string) $h['link_url'] !== ''): ?></a><?php endif; ?></li>
+    <?php endforeach; ?>
+  </ul>
 </section>
 <?php endif; ?>
 
@@ -55,6 +56,23 @@ $categories = array_values(array_filter($categories, static fn (array $c) => $c[
     </div>
     <div class="product-rail">
       <?php foreach ($featured as $product): ?><?= View::partial('product-card', ['product' => $product]) ?><?php endforeach; ?>
+    </div>
+  </div>
+</section>
+<?php endif; ?>
+
+<?php // « Demander un devis » : texte et lien dans Paramètres du site → Page d'accueil.
+$quoteLink = Settings::get('cta_quote_link') !== '' ? Settings::get('cta_quote_link') : '/commandes-professionnelles';
+$quoteLabel = trim(Settings::localized('cta_quote_label')) !== '' ? Settings::localized('cta_quote_label') : t('home.pro_cta');
+if (Settings::bool('home_show_pro')): ?>
+<section class="section" aria-labelledby="h-pro">
+  <div class="wrap">
+    <div class="pro-card">
+      <div>
+        <h2 id="h-pro"><?= e(t('home.pro_title')) ?></h2>
+        <p><?= e(setting('home_pro_text')) ?></p>
+      </div>
+      <a class="btn" href="<?= e($quoteLink) ?>"><?= e($quoteLabel) ?></a>
     </div>
   </div>
 </section>
@@ -76,6 +94,7 @@ $categories = array_values(array_filter($categories, static fn (array $c) => $c[
 </section>
 <?php endif; ?>
 
+<?php if (Settings::bool('home_show_story')): ?>
 <section class="section" aria-labelledby="h-story">
   <div class="wrap story<?= $story !== null ? ' story-split' : '' ?>">
     <?php if ($story !== null): ?>
@@ -90,6 +109,7 @@ $categories = array_values(array_filter($categories, static fn (array $c) => $c[
     </div>
   </div>
 </section>
+<?php endif; ?>
 
 <?php if ($gallery): ?>
 <section class="section" aria-labelledby="h-gallery">
@@ -105,6 +125,7 @@ $categories = array_values(array_filter($categories, static fn (array $c) => $c[
 </section>
 <?php endif; ?>
 
+<?php if (Settings::bool('home_show_steps')): ?>
 <section class="section" aria-labelledby="h-steps">
   <div class="wrap">
     <div class="section-head"><h2 id="h-steps"><?= e(t('home.steps_title')) ?></h2></div>
@@ -120,18 +141,7 @@ $categories = array_values(array_filter($categories, static fn (array $c) => $c[
     <?php endif; ?>
   </div>
 </section>
-
-<section class="section" aria-labelledby="h-pro">
-  <div class="wrap">
-    <div class="pro-card">
-      <div>
-        <h2 id="h-pro"><?= e(t('home.pro_title')) ?></h2>
-        <p><?= e(setting('home_pro_text')) ?></p>
-      </div>
-      <a class="btn btn-large" href="/commandes-professionnelles"><?= e(t('home.pro_cta')) ?></a>
-    </div>
-  </div>
-</section>
+<?php endif; ?>
 
 <?php if ($faqs): ?>
 <section class="section" aria-labelledby="h-faq">

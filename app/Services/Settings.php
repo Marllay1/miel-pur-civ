@@ -101,6 +101,12 @@ final class Settings
                     throw new \InvalidArgumentException($label . ' : lien complet commençant par https:// attendu.');
                 }
                 return $value;
+            case 'link':
+                // Lien de bouton : page du site (/boutique) ou adresse complète en https://.
+                if (!Slides::validLink($value)) {
+                    throw new \InvalidArgumentException($label . ' : lien invalide (page du site commençant par /, ou adresse en https://).');
+                }
+                return $value;
             case 'email':
                 if (filter_var($value, FILTER_VALIDATE_EMAIL) === false) {
                     throw new \InvalidArgumentException($label . ' : adresse e-mail invalide.');

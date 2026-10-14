@@ -268,15 +268,15 @@ final class ProductController extends Base
     }
 
     /**
-     * Provenance d'une photo : seules les photographies de l'entreprise (page Facebook officielle, photos fournies par l'entreprise)
-     * sont acceptées ; l'administrateur le confirme et indique la source.
+     * Provenance d'une photo : photo de l'entreprise (page Facebook officielle, photo fournie) ou photo libre de droits
+     * (auteur, licence, source) ; l'administrateur confirme son droit d'usage et indique la source.
      * @return array{0:?string, 1:?string} [source, erreur]
      */
     private function photoSource(Request $r): array
     {
         $source = mb_substr(trim($r->str('source_note')), 0, 255);
         if ($r->str('source_confirm') !== '1') {
-            return [null, 'Confirmez que la photo provient des ressources de l\'entreprise (page Facebook officielle ou photo fournie par l\'entreprise).'];
+            return [null, 'Confirmez que vous avez le droit d\'utiliser cette photo (photo de l\'entreprise, ou photo libre de droits dont la provenance est indiquée).'];
         }
         if ($source === '') {
             return [null, 'Indiquez la provenance de la photo (ex. « Page Facebook, publication du 12/03/2025 »).'];

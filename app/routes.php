@@ -31,6 +31,7 @@ $router->post('/panier/code-promo/retirer', [CartController::class, 'removePromo
 
 $router->get('/commande', [CheckoutController::class, 'form']);
 $router->get('/commande/estimation', [CheckoutController::class, 'estimate']);
+$router->get('/commande/adresse-estimee', [CheckoutController::class, 'geocode']);
 $router->post('/commande', [CheckoutController::class, 'store']);
 $router->get('/commande/' . $order, [CheckoutController::class, 'show']);
 $router->post('/commande/' . $order . '/payer', [CheckoutController::class, 'pay']);
@@ -133,6 +134,13 @@ $router->get('/admin/messages/{id:[0-9]+}', [Admin\MessageController::class, 'sh
 $router->post('/admin/messages/{id:[0-9]+}', [Admin\MessageController::class, 'status'], ['perm:content.manage']);
 $router->post('/admin/messages/{id:[0-9]+}/reponse', [Admin\MessageController::class, 'reply'], ['perm:content.manage']);
 $router->post('/admin/messages/{id:[0-9]+}/supprimer', [Admin\MessageController::class, 'delete'], ['perm:content.manage']);
+$router->get('/admin/textes', [Admin\TextsController::class, 'index'], ['perm:content.manage']);
+$router->post('/admin/textes/{group:[a-z]+}', [Admin\TextsController::class, 'save'], ['perm:content.manage']);
+$router->get('/admin/reassurance', [Admin\HighlightsController::class, 'index'], ['perm:content.manage']);
+$router->post('/admin/reassurance', [Admin\HighlightsController::class, 'store'], ['perm:content.manage']);
+$router->post('/admin/reassurance/{id:[0-9]+}', [Admin\HighlightsController::class, 'update'], ['perm:content.manage']);
+$router->post('/admin/reassurance/{id:[0-9]+}/deplacer/{dir:haut|bas}', [Admin\HighlightsController::class, 'move'], ['perm:content.manage']);
+$router->post('/admin/reassurance/{id:[0-9]+}/supprimer', [Admin\HighlightsController::class, 'delete'], ['perm:content.manage']);
 $router->get('/admin/photos', [Admin\MediaController::class, 'index'], ['perm:content.manage']);
 $router->post('/admin/photos', [Admin\MediaController::class, 'store'], ['perm:content.manage']);
 $router->post('/admin/photos/{id:[0-9]+}', [Admin\MediaController::class, 'update'], ['perm:content.manage']);

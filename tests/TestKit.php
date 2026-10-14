@@ -28,7 +28,7 @@ final class T
     public static int $assertions = 0;
     private static bool $mysqlMigrated = false;
     /** Données de référence insérées par les migrations (vidées par TRUNCATE entre scénarios MySQL). */
-    private const REFERENCE_TABLES = ['payment_methods', 'home_slides', 'currencies', 'media'];
+    private const REFERENCE_TABLES = ['payment_methods', 'home_slides', 'currencies', 'media', 'home_highlights'];
     /** @var array<string, array> */
     private static array $reference = [];
 
@@ -83,6 +83,7 @@ final class T
         DB::run("INSERT INTO settings (name, value, updated_at) VALUES ('demo_payment_enabled', '1', ?)", [gmdate('Y-m-d H:i:s')]);
         \App\Core\Lang::set('fr');
         Settings::flush();
+        \App\Core\Lang::flushOverrides();
         \App\Services\PaymentMethods::flush();
         \App\Services\Currencies::flush();
         Mailer::$sent = [];
