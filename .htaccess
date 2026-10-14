@@ -1,0 +1,12 @@
+# Protection si la racine du projet est exposée par erreur : tout est redirigé vers public/.
+# En production, le DocumentRoot DOIT pointer sur le dossier public/.
+Options -Indexes
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(app|bin|database|storage|tests|docs|vendor)(/|$) - [F,L]
+    RewriteRule (^|/)\. - [F,L]
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
+<FilesMatch "(?i)(\.env.*|\.sql|\.md|\.log|composer\.(json|lock))$">
+    Require all denied
+</FilesMatch>
