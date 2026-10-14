@@ -29,6 +29,11 @@ final class PageController
         return view('pages/page', ['page' => $page, 'pageTitle' => $page['title'], 'metaDescription' => $page['meta_description'] ?: excerpt($page['body'], 158), 'canonical' => '/a-propos']);
     }
 
+    public function credits(Request $r): Response
+    {
+        return view('pages/credits', ['pageTitle' => t('credits.title'), 'metaDescription' => t('credits.intro'), 'canonical' => '/credits-photos']);
+    }
+
     public function legal(Request $r): Response
     {
         $slug = ltrim($r->path, '/');

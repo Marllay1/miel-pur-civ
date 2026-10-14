@@ -1,7 +1,7 @@
 <?php use App\Core\View; /** @var array $errors @var array $old @var string $retour */ ?>
 <div class="auth-wrap">
   <div class="auth-card">
-    <svg class="auth-logo brand-mark" viewBox="0 0 48 52" aria-hidden="true" focusable="false"><path class="hex" d="M24 1.5 46 14v24L24 50.5 2 38V14z"/><path class="drop" d="M24 12.5c5.2 7.6 8.8 12.6 8.8 17.8a8.8 8.8 0 0 1-17.6 0c0-5.2 3.6-10.2 8.8-17.8z"/></svg>
+    <p class="auth-brand"><?= brand_html() ?></p>
     <h1><?= e(t('account.login_title')) ?></h1>
     <div class="form-card">
       <?= View::partial('errors-summary', ['errors' => $errors]) ?>

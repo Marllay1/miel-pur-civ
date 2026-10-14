@@ -14,7 +14,7 @@ return [
     'store_tagline_en' => ['label' => 'Accroche (anglais)', 'group' => 'Identité', 'default' => 'Organic honey and beeswax from Katiola'],
     'store_city' => ['label' => 'Ville', 'group' => 'Identité', 'default' => 'Katiola'],
     'store_address' => ['label' => 'Adresse postale (facultatif)', 'group' => 'Identité', 'default' => ''],
-    'store_phone' => ['label' => 'Téléphone', 'group' => 'Identité', 'default' => '+225 01 71 61 71 52'],
+    'store_phone' => ['label' => 'Téléphone', 'group' => 'Identité', 'default' => '+225 07 47 09 90 06'],
     'store_email' => ['label' => 'E-mail public (facultatif)', 'group' => 'Identité', 'default' => ''],
     'whatsapp_number' => ['label' => 'Numéro WhatsApp (format international, chiffres uniquement, ex. 2250171617152)', 'group' => 'Identité', 'default' => ''],
     'opening_hours' => ['label' => 'Horaires (facultatif)', 'group' => 'Identité', 'default' => ''],
@@ -24,7 +24,7 @@ return [
     'legal_ncc' => ['label' => 'N° de compte contribuable (NCC)', 'group' => 'Identité', 'default' => ''],
     'legal_director' => ['label' => 'Directeur de la publication', 'group' => 'Identité', 'default' => ''],
     'legal_host' => ['label' => 'Hébergeur (nom, adresse, téléphone)', 'group' => 'Identité', 'default' => ''],
-    'social_facebook' => ['label' => 'Lien Facebook', 'group' => 'Réseaux sociaux', 'default' => ''],
+    'social_facebook' => ['label' => 'Lien Facebook', 'group' => 'Réseaux sociaux', 'default' => 'https://www.facebook.com/p/Le-Miel-Pur-de-C%C3%B4te-dIvoire-100062970108746/'],
     'social_instagram' => ['label' => 'Lien Instagram', 'group' => 'Réseaux sociaux', 'default' => ''],
     'social_tiktok' => ['label' => 'Lien TikTok', 'group' => 'Réseaux sociaux', 'default' => ''],
 
@@ -49,8 +49,12 @@ return [
     'home_hero_text_en' => ['label' => 'Introduction (anglais)', 'group' => 'Accueil', 'default' => "Our apiaries stand in the natural vegetation of northern Côte d'Ivoire, where bees find rich and varied forage. 100% organic honey, harvested, packed and sold by us."],
     'home_story_title' => ['label' => 'Titre « Notre démarche »', 'group' => 'Accueil', 'default' => 'Une apiculture de terroir'],
     'home_story_title_en' => ['label' => 'Titre « Notre démarche » (anglais)', 'group' => 'Accueil', 'default' => 'Beekeeping rooted in its land'],
-    'home_story_text' => ['label' => 'Texte « Notre démarche »', 'group' => 'Accueil', 'default' => "La région de Katiola, au centre-nord de la Côte d'Ivoire, est réputée pour la qualité de son miel. Nous y installons nos ruches au cœur d'une végétation naturelle : la diversité des floraisons offre aux abeilles une alimentation variée.\n\nNous assurons nous-mêmes la récolte, le conditionnement et la vente. Notre miel est certifié conforme aux normes internationales par un laboratoire habilité par l'INAO (Institut national de l'origine et de la qualité)."],
-    'home_story_text_en' => ['label' => 'Texte « Notre démarche » (anglais)', 'group' => 'Accueil', 'default' => "The Katiola region, in north-central Côte d'Ivoire, is renowned for the quality of its honey. We keep our hives in the heart of natural vegetation, where a wide diversity of flowering plants gives the bees a varied diet.\n\nWe handle the harvest, packing and sale ourselves. Our honey is certified compliant with international standards by a laboratory approved by INAO (the French National Institute of Origin and Quality)."],
+    'home_story_text' => ['label' => 'Texte « Notre démarche »', 'group' => 'Accueil', 'default' => "Notre mission : promouvoir les vertus du miel entièrement produit en Côte d'Ivoire.
+
+La région de Katiola, au centre-nord de la Côte d'Ivoire, est réputée pour la qualité de son miel. Nous y installons nos ruches au cœur d'une végétation naturelle : la diversité des floraisons offre aux abeilles une alimentation variée.\n\nNous assurons nous-mêmes la récolte, le conditionnement et la vente. Notre miel est certifié conforme aux normes internationales par un laboratoire habilité par l'INAO (Institut national de l'origine et de la qualité)."],
+    'home_story_text_en' => ['label' => 'Texte « Notre démarche » (anglais)', 'group' => 'Accueil', 'default' => "Our mission: to promote the benefits of honey produced entirely in Côte d'Ivoire.
+
+The Katiola region, in north-central Côte d'Ivoire, is renowned for the quality of its honey. We keep our hives in the heart of natural vegetation, where a wide diversity of flowering plants gives the bees a varied diet.\n\nWe handle the harvest, packing and sale ourselves. Our honey is certified compliant with international standards by a laboratory approved by INAO (the French National Institute of Origin and Quality)."],
     'home_pro_text' => ['label' => 'Texte « Professionnels »', 'group' => 'Accueil', 'default' => 'Hôtels, restaurants, pâtisseries, épiceries fines, cosmétique artisanale : recevez un devis pour des volumes réguliers, en seau ou en bidon.'],
     'home_pro_text_en' => ['label' => 'Texte « Professionnels » (anglais)', 'group' => 'Accueil', 'default' => 'Hotels, restaurants, bakeries, delicatessens, artisanal cosmetics: get a quote for regular volumes, in buckets or drums.'],
 

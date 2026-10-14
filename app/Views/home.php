@@ -3,7 +3,9 @@ use App\Core\View;
 use App\Services\PaymentService;
 /** @var array $featured @var array $categories @var array $faqs */
 $methods = PaymentService::availableMethods(null);
-$catIcons = ['miels' => 'hex', 'cire-d-abeille' => 'box', 'coffrets' => 'star'];
+$catPhotos = ['miels' => 'fb-bouteilles-trio', 'cire-d-abeille' => 'wm-pains-cire', 'coffrets' => 'fb-stand-coffrets'];
+$facebook = \App\Services\Settings::get('social_facebook');
+$gallery = ['fb-bouteille-fond-jaune', 'fb-bouteilles-duo', 'wm-cadre-rayons'];
 ?>
 <section class="hero">
   <div class="wrap hero-grid">
@@ -21,14 +23,10 @@ $catIcons = ['miels' => 'hex', 'cire-d-abeille' => 'box', 'coffrets' => 'star'];
         <li><?= icon('truck') ?><?= e(t('home.trust_delivery')) ?></li>
       </ul>
     </div>
-    <div class="hero-visual">
-      <div class="hero-card">
-        <img src="<?= e(asset('img/hero.svg')) ?>" alt="<?= e(t('home.hero_alt')) ?>" width="640" height="640">
-        <span class="glass-chip chip-a"><?= icon('leaf') ?><?= e(t('home.chip_bio')) ?></span>
-        <span class="glass-chip chip-c"><?= icon('shield') ?><?= e(t('home.chip_cert')) ?></span>
-        <span class="glass-chip chip-b"><?= icon('pin') ?><?= e(t('home.chip_origin')) ?></span>
-      </div>
-    </div>
+    <figure class="hero-visual hero-photo">
+      <?= photo('fb-miel-en-rayon-vente', '', '(min-width: 960px) 50vw, 100vw', true) ?>
+      <figcaption><?= photo_credit('fb-miel-en-rayon-vente') ?></figcaption>
+    </figure>
   </div>
 </section>
 
@@ -52,9 +50,9 @@ $catIcons = ['miels' => 'hex', 'cire-d-abeille' => 'box', 'coffrets' => 'star'];
     <div class="section-head"><h2 id="h-cats"><?= e(t('home.categories')) ?></h2></div>
     <div class="tiles">
       <?php foreach ($categories as $cat): ?>
-      <a class="tile" href="/boutique?categorie=<?= e($cat['slug']) ?>">
-        <span class="cell-icon"><?= icon($catIcons[$cat['slug']] ?? 'hex') ?></span>
-        <span><span class="tile-name"><?= e($cat['name']) ?></span><br><span class="tile-count"><?= e(t('home.products_count', ['count' => (int) $cat['product_count']])) ?></span></span>
+      <a class="tile tile-photo" href="/boutique?categorie=<?= e($cat['slug']) ?>">
+        <span class="tile-media"><?= isset($catPhotos[$cat['slug']]) ? photo($catPhotos[$cat['slug']], '', '(min-width: 960px) 33vw, 100vw') : '' ?><?php if ((photos()[$catPhotos[$cat['slug']] ?? '']['origin'] ?? '') === 'illustration'): ?><span class="media-badge"><?= e(t('photo.illustration_short')) ?></span><?php endif; ?></span>
+        <span class="tile-body"><span class="tile-name"><?= e($cat['name']) ?></span><span class="tile-count"><?= e(t('home.products_count', ['count' => (int) $cat['product_count']])) ?></span></span>
       </a>
       <?php endforeach; ?>
     </div>
@@ -63,13 +61,29 @@ $catIcons = ['miels' => 'hex', 'cire-d-abeille' => 'box', 'coffrets' => 'star'];
 <?php endif; ?>
 
 <section class="section" aria-labelledby="h-story">
-  <div class="wrap story">
+  <div class="wrap story story-split">
+    <figure class="story-photo">
+      <?= photo('wm-apiculteurs-cameroun', '', '(min-width: 960px) 45vw, 100vw') ?>
+      <figcaption><?= photo_credit('wm-apiculteurs-cameroun') ?></figcaption>
+    </figure>
     <div class="story-card">
       <p class="eyebrow"><span class="dot"><?= icon('hex') ?></span><?= e(t('home.story_eyebrow')) ?></p>
       <h2 id="h-story"><?= e(setting('home_story_title')) ?></h2>
       <div class="prose"><?= rich(setting('home_story_text')) ?></div>
       <div class="cert"><?= icon('shield') ?><div><strong><?= e(t('home.cert_title')) ?></strong><br><span class="muted"><?= e(t('home.cert_text')) ?></span></div></div>
       <p class="btn-row"><a class="btn btn-tinted" href="/a-propos"><?= e(t('home.story_more')) ?></a></p>
+    </div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="h-gallery">
+  <div class="wrap">
+    <div class="section-head">
+      <div><h2 id="h-gallery"><?= e(t('home.gallery_title')) ?></h2><p><?= e(t('home.gallery_sub')) ?></p></div>
+      <?php if ($facebook !== ''): ?><a class="see-all" href="<?= e($facebook) ?>" rel="noopener" target="_blank"><?= e(t('home.follow_fb')) ?><?= icon('chevron') ?></a><?php endif; ?>
+    </div>
+    <div class="gallery">
+      <?php foreach ($gallery as $g): ?><figure class="gallery-item"><?= photo($g, '', '(min-width: 960px) 33vw, 100vw') ?><figcaption><?= photo_credit($g) ?></figcaption></figure><?php endforeach; ?>
     </div>
   </div>
 </section>

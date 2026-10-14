@@ -15,7 +15,7 @@ final class SeoController
     public function sitemap(Request $r): Response
     {
         $paths = [];
-        foreach (['/', '/boutique', '/a-propos', '/commandes-professionnelles', '/faq', '/contact'] as $p) {
+        foreach (['/', '/boutique', '/a-propos', '/commandes-professionnelles', '/faq', '/contact', '/credits-photos'] as $p) {
             $paths[$p] = null;
         }
         foreach (DB::all('SELECT slug, updated_at FROM pages WHERE is_legal = 1') as $p) {

@@ -88,28 +88,35 @@ final class App
             if ($mw === 'guest' && Auth::check()) {
                 return Response::redirect(Auth::isStaff() ? '/admin' : '/compte');
             }
-            if ($mw === 'staff' && !Auth::isStaff()) {
-                if (Auth::$expired) {
-                    Session::flash('error', 'Session expirée après 2 heures d\'inactivité. Reconnectez-vous.');
-                }
-                if ($r->method !== 'GET') {
-                    throw new HttpException(403);
-                }
-                return Response::redirect('/admin/connexion');
+            if (($mw === 'staff' || str_starts_with($mw, 'perm:')) && !Auth::isStaff()) {
+                return self::denyAdmin($r);
             }
             if (str_starts_with($mw, 'perm:')) {
-                if (!Auth::isStaff()) {
-                    if ($r->method !== 'GET') {
-                        throw new HttpException(403);
-                    }
-                    return Response::redirect('/admin/connexion');
-                }
                 if (!Auth::can(substr($mw, 5))) {
                     throw new HttpException(403, 'Votre rôle ne donne pas accès à cette section.');
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * Accès à l'administration sans compte d'équipe.
+     *  - client connecté : refus explicite (403), jamais de formulaire de connexion de l'équipe ni de redirection en boucle ;
+     *  - visiteur anonyme : page de connexion de l'équipe (GET), puis retour à la page demandée ; 403 pour toute autre méthode.
+     */
+    public static function denyAdmin(Request $r): Response
+    {
+        if (Auth::check()) {
+            throw new HttpException(403, '', 'admin_denied');
+        }
+        if (Auth::$expired) {
+            Session::flash('error', 'Session expirée après 2 heures d\'inactivité. Reconnectez-vous.');
+        }
+        if ($r->method !== 'GET' || $r->wantsJson()) {
+            throw new HttpException(403);
+        }
+        return Response::redirect('/admin/connexion' . ($r->path !== '/admin' ? '?retour=' . rawurlencode($r->path) : ''));
     }
 
     public static function error(Request $r, int $status, string $message = '', string $kind = ''): Response
@@ -176,6 +183,10 @@ final class App
                 $resp->headers['X-Robots-Tag'] = 'noindex, nofollow';
                 break;
             }
+        }
+        // Page personnalisée (lien « Administration », compte) : jamais mise en cache par un intermédiaire.
+        if (!isset($resp->headers['Cache-Control']) && Auth::check()) {
+            $resp->headers['Cache-Control'] = 'private, no-cache';
         }
         return $resp;
     }

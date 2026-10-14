@@ -334,9 +334,10 @@ return [
         $customer = T::user('customer', 'client@example.test');
         $cc = new Client();
         $cc->loginAs($customer);
-        T::redirectsTo('/admin/connexion', $cc->get('/admin'), 'Client refusé');
-        T::redirectsTo('/admin/connexion', $cc->get('/admin/produits'), 'Client refusé (catalogue)');
-        $r = $cc->post('/admin/connexion', ['email' => 'client@example.test', 'password' => 'Motdepasse123']);
+        T::status(403, $cc->get('/admin'), 'Client connecté : accès refusé (pas de formulaire de connexion de l\'équipe)');
+        T::status(403, $cc->get('/admin/produits'), 'Client refusé (catalogue)');
+        T::status(403, $cc->post('/admin/connexion', ['email' => 'client@example.test', 'password' => 'Motdepasse123']), 'Client connecté : connexion d\'équipe refusée');
+        $r = (new Client('10.1.1.9'))->post('/admin/connexion', ['email' => 'client@example.test', 'password' => 'Motdepasse123']);
         T::status(422, $r, 'Un client ne peut pas se connecter à l\'admin');
         $admin = T::user('admin', 'admin@example.test');
         $a = new Client();
@@ -780,7 +781,7 @@ return [
         foreach (['/admin/produits' => ['name' => 'X'], '/admin/equipe' => ['email' => 'pirate@example.test', 'role' => 'admin'], '/admin/reglages' => ['cod_enabled' => '0'], '/admin/commandes/1/statut' => ['status' => 'cancelled']] as $url => $data) {
             T::status(403, $cu->post($url, $data), "Client → POST $url refusé");
         }
-        T::redirectsTo('/admin/connexion', $cu->get('/admin/commandes/export'), 'Client → export refusé');
+        T::status(403, $cu->get('/admin/commandes/export'), 'Client → export refusé');
         $om = new Client('10.9.0.2');
         $omUser = T::user('order_manager', 'om2@example.test');
         $om->loginAs($omUser);
@@ -1245,5 +1246,118 @@ return [
         $a->post('/admin/contenu', array_merge(array_combine($keys, array_map(static fn ($k) => \App\Services\Settings::get($k), $keys)),
             ['home_hero_title_en' => 'Honey straight from Katiola (edited)']));
         T::contains('Honey straight from Katiola (edited)', (new Client('10.31.0.9'))->get('/en')->body, 'Accueil anglais modifiable');
+    },
+
+    '31 Séparation espace client / administration, logo, favicon et photos' => function (): void {
+        $adminLink = static fn (string $html): bool => (bool) preg_match('#href="(?:https?://[^"/]+)?(?:/en)?/admin[/"?]#', $html) || str_contains($html, 'btn-admin');
+        $publicPages = ['/', '/boutique', '/boutique/miel-liquide-toutes-fleurs', '/a-propos', '/menu', '/faq', '/contact', '/panier', '/en', '/en/menu'];
+
+        // Visiteur anonyme
+        $anon = new Client('10.32.0.1');
+        foreach ($publicPages as $p) {
+            T::ok(!$adminLink($anon->get($p)->body), "Anonyme : aucun lien vers l'administration sur $p");
+        }
+        T::redirectsTo('/admin/connexion?retour=%2Fadmin%2Fcommandes', $anon->get('/admin/commandes'), 'Anonyme → connexion de l\'équipe, avec retour');
+        T::redirectsTo('/compte/connexion', $anon->get('/compte/commandes'), 'Anonyme : espace client protégé');
+        T::status(403, $anon->get('/admin/commandes', ['Accept' => 'application/json']), 'Anonyme : appel JSON à l\'administration refusé');
+        T::status(403, $anon->post('/admin/produits', ['name' => 'X']), 'Anonyme : opération d\'administration refusée');
+
+        // Client : redirections selon le rôle, jamais vers l'administration
+        T::user('customer', 'sep-client@example.test');
+        $c = new Client('10.32.0.2');
+        T::redirectsTo('/compte', $c->post('/compte/connexion', ['email' => 'sep-client@example.test', 'password' => 'Motdepasse123', 'retour' => '/admin/equipe']), 'Client : retour vers /admin ignoré, envoyé vers son compte');
+        $c2 = new Client('10.32.0.3');
+        T::redirectsTo('/panier', $c2->post('/compte/connexion', ['email' => 'sep-client@example.test', 'password' => 'Motdepasse123', 'retour' => '/panier']), 'Client : retour vers la page d\'origine');
+        foreach (array_merge($publicPages, ['/compte', '/compte/commandes', '/compte/profil']) as $p) {
+            $page = $c->get($p);
+            T::ok(!$adminLink($page->body), "Client : aucun lien vers l'administration sur $p");
+        }
+        T::notContains('Administration', $c->get('/')->body, 'Client : aucun bouton « Administration »');
+        foreach (['/admin', '/admin/commandes', '/admin/equipe', '/admin/connexion', '/en/admin'] as $p) {
+            $r = $c->get($p);
+            T::status(403, $r, "Client : $p → accès refusé");
+            T::ok(!$adminLink($r->body), "Client : la page de refus ($p) ne mène pas à l'administration");
+        }
+        $denied = $c->get('/admin');
+        T::contains('Accès refusé', $denied->body, 'Message d\'accès refusé');
+        T::contains('href="/compte"', $denied->body, 'Lien de retour vers l\'espace client');
+        T::status(403, $c->get('/admin/commandes', ['Accept' => 'application/json']), 'Client : API d\'administration refusée');
+        T::status(403, $c->post('/admin/produits', ['name' => 'Piratage']), 'Client : création de produit refusée');
+        T::status(403, $c->post('/admin/equipe', ['email' => 'x@example.test', 'role' => 'admin']), 'Client : création de compte d\'équipe refusée');
+        T::eq(0, (int) DB::value("SELECT COUNT(*) FROM products WHERE name = 'Piratage'"), 'Aucune donnée modifiée');
+        T::ok(isset($c->session['user_id']), 'Client toujours connecté après les refus (pas de déconnexion ni de boucle)');
+        T::eq('private, no-cache', $c->get('/')->headers['Cache-Control'] ?? '', 'Page personnalisée non mise en cache partagé');
+        // Pas de boucle de redirection : chaque parcours aboutit en moins de 3 étapes.
+        foreach (['/compte/connexion', '/admin', '/compte'] as $p) {
+            T::ok(in_array($c->follow($c->get($p))->status, [200, 403], true), "Client : $p aboutit sans boucle");
+        }
+        T::redirectsTo('/', $c->post('/compte/deconnexion'), 'Client : déconnexion → accueil');
+
+        // Administrateur : deux espaces, navigation dans les deux sens sans reconnexion
+        T::user('admin', 'sep-admin@example.test');
+        $a = new Client('10.32.0.4');
+        T::redirectsTo('/admin', $a->post('/compte/connexion', ['email' => 'sep-admin@example.test', 'password' => 'Motdepasse123']), 'Équipe : connexion publique → administration');
+        $home = $a->get('/');
+        T::ok($adminLink($home->body), 'Équipe : bouton « Administration » sur le site public');
+        T::contains('Administration', $home->body, 'Libellé « Administration »');
+        T::ok($adminLink($a->get('/menu')->body), 'Équipe : entrée Administration dans le menu');
+        $dash = $a->get('/admin');
+        T::status(200, $dash, 'Équipe : tableau de bord');
+        T::contains('Voir le site', $dash->body, 'Bouton « Voir le site » dans l\'administration');
+        T::notContains('target="_blank" rel="noopener">Voir le site', $dash->body, '« Voir le site » dans le même onglet');
+        T::status(200, $a->get('/boutique'), 'Équipe : retour au site public');
+        T::status(200, $a->get('/admin/commandes'), 'Équipe : retour à l\'administration sans reconnexion');
+        T::redirectsTo('/admin/commandes', $a->get('/admin/connexion?retour=%2Fadmin%2Fcommandes'), 'Équipe déjà connectée : connexion → page demandée');
+        T::redirectsTo('/admin', $a->get('/admin/connexion?retour=https%3A%2F%2Fevil.example'), 'Retour externe ignoré');
+        T::redirectsTo('/admin', $a->get('/admin/connexion?retour=%2Fadmin%2Fconnexion'), 'Retour vers la connexion ignoré (pas de boucle)');
+        T::redirectsTo('/admin', $a->get('/compte/connexion'), 'Équipe déjà connectée sur la connexion publique → administration');
+        $b = new Client('10.32.0.5');
+        T::redirectsTo('/boutique', $b->post('/compte/connexion', ['email' => 'sep-admin@example.test', 'password' => 'Motdepasse123', 'retour' => '/boutique']), 'Équipe : retour vers la page publique d\'origine');
+        $d = new Client('10.32.0.6');
+        T::redirectsTo('/admin/commandes', $d->post('/admin/connexion', ['email' => 'sep-admin@example.test', 'password' => 'Motdepasse123', 'retour' => '/admin/commandes']), 'Connexion de l\'équipe → page d\'administration demandée');
+        $e = new Client('10.32.0.7');
+        T::redirectsTo('/admin', $e->post('/admin/connexion', ['email' => 'sep-admin@example.test', 'password' => 'Motdepasse123', 'retour' => '/compte']), 'Connexion de l\'équipe : retour hors administration ignoré');
+        T::redirectsTo('/admin/connexion', $a->post('/admin/deconnexion'), 'Équipe : déconnexion → page de connexion');
+        T::ok(!$adminLink($a->get('/')->body), 'Après déconnexion : plus de lien vers l\'administration');
+
+        // Rôle restreint : lien vers l'administration, mais permissions vérifiées route par route
+        $cm = new Client('10.32.0.8');
+        $cm->loginAs(T::user('catalog_manager', 'sep-cat@example.test'));
+        T::ok($adminLink($cm->get('/')->body), 'Gestionnaire catalogue : lien Administration');
+        T::status(200, $cm->get('/admin/produits'), 'Gestionnaire catalogue : catalogue accessible');
+        T::status(403, $cm->get('/admin/equipe'), 'Gestionnaire catalogue : équipe refusée');
+        T::status(403, $cm->post('/admin/reglages', ['store_name' => 'X']), 'Gestionnaire catalogue : réglages refusés');
+
+        // Logo et favicon : emplacements prêts, aucun logo inventé
+        $html = $anon->get('/')->body;
+        T::notContains('brand-mark', $html, 'Ancien pictogramme inventé retiré');
+        T::ok(brand_logo_url() !== null ? str_contains($html, 'class="brand-logo"') : str_contains($html, 'brand-wordmark'), 'Marque : logo officiel s\'il est installé, sinon nom en toutes lettres');
+        foreach (['favicon.ico', 'favicon-32.png', 'apple-touch-icon.png', 'site.webmanifest'] as $f) {
+            T::contains('/assets/img/brand/' . $f, $html, "Balise d'icône $f");
+            T::ok(is_file(BASE_PATH . '/public/assets/img/brand/' . $f), "Fichier $f présent");
+        }
+        T::ok(is_file(BASE_PATH . '/public/favicon.ico'), '/favicon.ico à la racine');
+        T::contains('/assets/img/brand/favicon.ico', $anon->get('/admin/connexion')->body, 'Favicon sur la connexion de l\'équipe');
+
+        // Photos : toutes les images affichées existent, origine indiquée, crédits complets
+        foreach (['/', '/boutique', '/a-propos', '/commandes-professionnelles', '/credits-photos', '/boutique/miel-cremeux', '/boutique/coffret-decouverte', '/en'] as $p) {
+            $body = $anon->get($p)->body;
+            preg_match_all('#<img[^>]+src="(/[^"?]+)#', $body, $m);
+            T::ok($m[1] !== [], "Images présentes sur $p");
+            foreach ($m[1] as $src) {
+                T::ok(is_file(BASE_PATH . '/public' . $src), "Image $src (page $p) trouvée");
+            }
+            T::notContains('/assets/img/products/', $body, "Plus d'illustration générique SVG sur $p");
+        }
+        T::contains('fb-miel-en-rayon-vente', $anon->get('/')->body, 'Accueil : vraie photo de l\'entreprise');
+        T::contains('Photo d\'illustration', html_entity_decode($anon->get('/boutique/miel-cremeux')->body), 'Photo générique signalée comme illustration');
+        $credits = html_entity_decode($anon->get('/credits-photos')->body);
+        foreach (photos() as $key => $p) {
+            T::ok(is_file(BASE_PATH . '/public/assets/img/photos/' . $p['file']), "Photo $key présente");
+            if ($p['origin'] === 'illustration') {
+                T::contains($p['author'], $credits, "Crédit de $key (auteur)");
+                T::contains($p['license'], $credits, "Crédit de $key (licence)");
+            }
+        }
     },
 ];

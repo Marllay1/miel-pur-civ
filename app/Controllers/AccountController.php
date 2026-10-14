@@ -17,7 +17,34 @@ final class AccountController
 {
     public function loginForm(Request $r, array $errors = [], array $old = [], int $status = 200): Response
     {
-        return view('account/login', ['errors' => $errors, 'old' => $old, 'retour' => safe_return($r->str('retour'), '/compte'), 'pageTitle' => t('account.login_title'), 'noindex' => true], $status);
+        return view('account/login', ['errors' => $errors, 'old' => $old, 'retour' => self::customerReturn($r->str('retour')), 'pageTitle' => t('account.login_title'), 'noindex' => true], $status);
+    }
+
+    /** Retour possible pour un client : page locale du site public uniquement (jamais l'administration ni les pages de connexion). */
+    public static function customerReturn(?string $path): string
+    {
+        $path = safe_return($path, '/compte');
+        $plain = (string) strtok($path, '?');
+        foreach (['/admin', '/compte/connexion', '/compte/inscription', '/compte/deconnexion'] as $blocked) {
+            if ($plain === $blocked || str_starts_with($plain, $blocked . '/')) {
+                return '/compte';
+            }
+        }
+        return $path;
+    }
+
+    /**
+     * Destination après connexion selon le rôle :
+     *  - client : la page d'où il venait (site public) ou son compte ;
+     *  - équipe : la page publique d'où elle venait (ex. reprise d'une commande) ou, à défaut, l'administration.
+     */
+    public static function afterLogin(array $user, ?string $retour): string
+    {
+        $target = self::customerReturn($retour);
+        if ($user['role'] !== 'customer') {
+            return is_string($retour) && $retour !== '' && $target !== '/compte' ? $target : '/admin';
+        }
+        return $target;
     }
 
     public function login(Request $r): Response
@@ -30,10 +57,7 @@ final class AccountController
         Auth::login($user);
         CartService::mergeGuestCart($r, (int) $user['id']);
         Session::flash('success', t('account.welcome_back', ['name' => $user['first_name']]));
-        if ($user['role'] !== 'customer') {
-            return redirect('/admin');
-        }
-        return redirect(safe_return($r->str('retour'), '/compte'));
+        return redirect(self::afterLogin($user, $r->str('retour')));
     }
 
     public function registerForm(Request $r, array $errors = [], array $old = [], int $status = 200): Response

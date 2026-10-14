@@ -47,6 +47,118 @@ function asset(string $path): string
     return '/assets/' . $path . (is_file($file) ? '?v=' . filemtime($file) : '');
 }
 
+/** Logo officiel (public/assets/img/brand/logo.svg|png|webp, installé par bin/brand.php) ou null tant qu'il n'est pas fourni. */
+function brand_logo_url(): ?string
+{
+    static $url = false;
+    if ($url === false) {
+        $url = null;
+        foreach (['svg', 'webp', 'png'] as $ext) {
+            if (is_file(BASE_PATH . '/public/assets/img/brand/logo.' . $ext)) {
+                $url = asset('img/brand/logo.' . $ext);
+                break;
+            }
+        }
+    }
+    return $url;
+}
+
+/**
+ * Marque affichée dans les en-têtes : logo officiel s'il est installé (proportions conservées),
+ * sinon le nom de la boutique en toutes lettres — aucun logo de substitution n'est inventé.
+ */
+function brand_html(string $sub = ''): string
+{
+    $name = \App\Services\Settings::get('store_name') ?: 'Miel Pur de Côte d\'Ivoire';
+    $logo = brand_logo_url();
+    if ($logo !== null) {
+        return '<img class="brand-logo" src="' . e($logo) . '" alt="' . e($name) . '" decoding="async">'
+            . ($sub !== '' ? '<span class="brand-text"><span class="brand-sub">' . e($sub) . '</span></span>' : '');
+    }
+    return '<span class="brand-text brand-wordmark"><span class="brand-name">Miel Pur</span><span class="brand-sub">' . e($sub !== '' ? $sub : 'de Côte d\'Ivoire') . '</span></span>';
+}
+
+/** @return array<string, array> registre des photographies (app/config/photos.php) */
+function photos(): array
+{
+    static $photos = null;
+    return $photos ??= require BASE_PATH . '/app/config/photos.php';
+}
+
+/** Clé du registre correspondant à un chemin d'image (ex. image de produit), ou null. */
+function photo_key_for_path(string $path): ?string
+{
+    $file = basename((string) strtok($path, '?'));
+    foreach (photos() as $key => $p) {
+        if ($p['file'] === $file) {
+            return $key;
+        }
+    }
+    return null;
+}
+
+/**
+ * Balise <img> d'une photo du registre : dimensions intrinsèques (pas de décalage de mise en page),
+ * variante légère pour les petits écrans, chargement différé hors du premier écran.
+ */
+function photo(string $key, string $class = '', string $sizes = '100vw', bool $eager = false): string
+{
+    $p = photos()[$key] ?? null;
+    if ($p === null) {
+        return '';
+    }
+    $src = asset('img/photos/' . $p['file']);
+    $srcset = isset($p['small']) ? ' srcset="' . e(asset('img/photos/' . $p['small'])) . ' 800w, ' . e($src) . ' ' . (int) $p['w'] . 'w" sizes="' . e($sizes) . '"' : '';
+    return '<img src="' . e($src) . '"' . $srcset . ' alt="' . e($p['alt'][Lang::get()] ?? $p['alt']['fr']) . '" width="' . (int) $p['w'] . '" height="' . (int) $p['h'] . '"'
+        . ($class !== '' ? ' class="' . e($class) . '"' : '') . ($eager ? ' fetchpriority="high"' : ' loading="lazy"') . ' decoding="async">';
+}
+
+/** Texte alternatif d'une image de produit : version du registre dans la langue courante si la photo y figure. */
+function image_alt(array $image): string
+{
+    $key = photo_key_for_path((string) ($image['path'] ?? ''));
+    if ($key === null) {
+        return (string) ($image['alt'] ?? '');
+    }
+    $p = photos()[$key];
+    $alt = $p['alt'][Lang::get()] ?? $p['alt']['fr'];
+    return $p['origin'] === 'illustration' ? t('photo.illustration') . ' : ' . $alt : $alt;
+}
+
+/** Légende d'origine : photo de l'entreprise, ou photo d'illustration avec auteur, licence et source. */
+function photo_credit(string $key): string
+{
+    $p = photos()[$key] ?? null;
+    if ($p === null) {
+        return '';
+    }
+    if ($p['origin'] === 'company') {
+        return '<span class="photo-credit">' . e(t('photo.company')) . '</span>';
+    }
+    return '<span class="photo-credit">' . e(t('photo.illustration')) . ' — ' . e($p['author']) . ', <a href="' . e($p['source']) . '" rel="noopener" target="_blank">Wikimedia Commons</a>, '
+        . '<a href="' . e($p['license_url']) . '" rel="noopener license" target="_blank">' . e($p['license']) . '</a></span>';
+}
+
+/** Balises d'icônes (onglet, écran d'accueil, manifeste) générées par bin/brand.php. */
+function favicon_tags(): string
+{
+    $out = '';
+    $tags = [
+        ['favicon.ico', '<link rel="icon" href="%s" sizes="48x48">'],
+        ['favicon.svg', '<link rel="icon" href="%s" type="image/svg+xml">'],
+        ['favicon-32.png', '<link rel="icon" href="%s" type="image/png" sizes="32x32">'],
+        ['favicon-16.png', '<link rel="icon" href="%s" type="image/png" sizes="16x16">'],
+        ['apple-touch-icon.png', '<link rel="apple-touch-icon" href="%s" sizes="180x180">'],
+        ['site.webmanifest', '<link rel="manifest" href="%s">'],
+    ];
+    foreach ($tags as [$file, $tpl]) {
+        if (is_file(BASE_PATH . '/public/assets/img/brand/' . $file)) {
+            $out .= sprintf($tpl, e(asset('img/brand/' . $file))) . "\n";
+        }
+    }
+    return $out;
+}
+
 /** Montant entier en FCFA : « 12 500 FCFA » (fr) ou « 12,500 FCFA » (en). */
 function money(int|string|null $amount): string
 {
@@ -306,6 +418,7 @@ function icon(string $name, string $class = 'icon'): string
         'bag' => '<path d="M5 8h14l-1 12.5H6z"/><path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"/>',
         'grid' => '<rect x="4" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.8"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.8"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.8"/>',
         'person' => '<circle cx="12" cy="8" r="4"/><path d="M4.5 20.5c1.4-3.8 4.2-5.7 7.5-5.7s6.1 1.9 7.5 5.7"/>',
+        'gear' => '<circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/><circle cx="12" cy="12" r="6.2"/>',
         'more' => '<circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/>',
         'search' => '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/>',
         'sun' => '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',

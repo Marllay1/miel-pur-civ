@@ -18,8 +18,11 @@ final class HomeController
             '@type' => 'Organization',
             'name' => Settings::get('store_name'),
             'url' => base_url() . '/',
-            'logo' => abs_url('/assets/img/favicon.svg'),
         ];
+        // Logo officiel uniquement (aucun logo de substitution déclaré aux moteurs de recherche).
+        if (brand_logo_url() !== null) {
+            $org['logo'] = base_url() . strtok((string) brand_logo_url(), '?');
+        }
         $address = Settings::get('store_city');
         if (!Settings::isPlaceholder('store_city')) {
             $org['address'] = ['@type' => 'PostalAddress', 'addressLocality' => $address, 'addressCountry' => 'CI'];

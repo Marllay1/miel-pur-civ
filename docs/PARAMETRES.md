@@ -38,7 +38,7 @@ Clés Wave, Orange Money, MTN MoMo et CinetPay (carte) : voir [INTEGRATIONS.md](
 
 ## Administration → Réglages
 
-- **Identité** : téléphone (renseigné : +225 01 71 61 71 52), e-mail public, adresse, horaires, **raison sociale**, **RCCM**, **NCC**, **directeur de la publication**, **hébergeur** (mentions légales obligatoires), numéro WhatsApp, réseaux sociaux.
+- **Identité** : téléphone (renseigné : +225 07 47 09 90 06, numéro « Mobile » de la page Facebook ; l'annuaire Les Pages Vertes indiquait +225 01 71 61 71 52 — à confirmer), WhatsApp (la page Facebook indique « 88 79 40 37 », ancien format à 8 chiffres : numéro actuel à 10 chiffres à confirmer), e-mail public, adresse, horaires, **raison sociale**, **RCCM**, **NCC**, **directeur de la publication**, **hébergeur** (mentions légales obligatoires), numéro WhatsApp, réseaux sociaux.
 - **Commerce** : **e-mail de notification des nouvelles commandes** (sans lui, la boutique n'est pas prévenue des commandes par e-mail), montant minimum de commande, délai de paiement, seuil de stock faible.
 - **Paiement** : cocher les moyens de paiement en ligne une fois leurs clés installées et testées ; *Paiement SIMULÉ* doit rester décoché.
 - **Mesure d'audience** : seulement si souhaitée (chargée après consentement du visiteur).
@@ -53,3 +53,14 @@ Clés Wave, Orange Money, MTN MoMo et CinetPay (carte) : voir [INTEGRATIONS.md](
 - Code promo `BIENVENUE10` : installé **inactif** ; l'activer seulement si l'offre est décidée.
 
 La page **/admin/integrations** récapitule automatiquement les points encore ouverts.
+
+## Écarts relevés avec la page Facebook (consultée le 14/10/2026)
+
+La page Facebook n'est que partiellement lisible sans compte (nom, présentation abrégée, coordonnées, une dizaine de photos). À trancher par la boutique :
+
+- **Conditionnements** : les photos montrent du miel en **bouteilles** (étiquette « Miel pur de Côte d'Ivoire ») et du **miel en rayon** en barquettes, alors que le catalogue propose des pots de 250 g / 500 g / 1 kg. Indiquer les conditionnements et prix réellement vendus ; le miel en rayon et les bouteilles ne sont pas au catalogue faute de prix vérifiés.
+- **Paniers cadeaux** : visibles sur une photo de stand ; le « Coffret découverte » du catalogue est-il ce produit ?
+- **Présentation** : seule la première phrase de la page est lisible (« Promouvoir les vertus du Miel entièrement produit en Côte d'Ivoire… ») ; elle est reprise dans « Notre démarche ». Le texte complet, l'histoire et les valeurs sont à fournir.
+- **Horaires** : la page indique « Ouvre bientôt », sans horaires.
+- **Avis** : la page affiche « Recommandé par 100 % (21 avis) » ; ces avis ne sont pas repris sur le site (non vérifiables individuellement).
+- **Photos** : voir [IDENTITE-VISUELLE.md](IDENTITE-VISUELLE.md) — originaux en haute définition et photos des ruchers à fournir.

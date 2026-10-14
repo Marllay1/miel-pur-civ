@@ -19,12 +19,16 @@ $wa = wa_link(t('wa.product', ['product' => $product['name']]));
 <article class="wrap product">
   <div class="product-gallery" data-gallery>
     <div class="product-main-media">
-      <?php if ($images): ?><img src="<?= e($images[0]['path']) ?>" alt="<?= e($images[0]['alt']) ?>" width="720" height="720" data-gallery-main><?php endif; ?>
+      <?php if ($images): ?><img src="<?= e($images[0]['path']) ?>" alt="<?= e(image_alt($images[0])) ?>" width="720" height="720" fetchpriority="high" data-gallery-main>
+      <?php else: ?><span class="media-placeholder" aria-hidden="true"><?= e(mb_substr($product['name'], 0, 1)) ?></span><?php endif; ?>
     </div>
+    <?php foreach ($images as $i => $img): $photoKey = photo_key_for_path((string) $img['path']); if ($photoKey === null) { continue; } ?>
+    <p class="photo-note" data-gallery-credit="<?= (int) $i ?>"<?= $i === 0 ? '' : ' hidden' ?>><?= photo_credit($photoKey) ?></p>
+    <?php endforeach; ?>
     <?php if (count($images) > 1): ?>
     <ul class="product-thumbs">
       <?php foreach ($images as $i => $img): ?>
-      <li><button type="button" class="thumb" data-gallery-thumb="<?= e($img['path']) ?>" data-alt="<?= e($img['alt']) ?>"<?= $i === 0 ? ' aria-current="true"' : '' ?>><img src="<?= e($img['path']) ?>" alt="" width="96" height="96" loading="lazy"><span class="sr-only"><?= e(t('product.image_n', ['n' => $i + 1])) ?></span></button></li>
+      <li><button type="button" class="thumb" data-index="<?= (int) $i ?>" data-gallery-thumb="<?= e($img['path']) ?>" data-alt="<?= e(image_alt($img)) ?>"<?= $i === 0 ? ' aria-current="true"' : '' ?>><img src="<?= e($img['path']) ?>" alt="" width="96" height="96" loading="lazy"><span class="sr-only"><?= e(t('product.image_n', ['n' => $i + 1])) ?></span></button></li>
       <?php endforeach; ?>
     </ul>
     <?php endif; ?>

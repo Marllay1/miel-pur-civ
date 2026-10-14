@@ -6,6 +6,7 @@ $val = static fn (string $k) => e($old[$k] ?? '');
 <div class="wrap page-head">
   <h1><?= e(t('nav.pro')) ?></h1>
   <p class="lead"><?= e(t('pro.lead')) ?></p>
+  <figure class="page-banner"><?= photo('fb-stand-coffrets', '', '100vw', true) ?><figcaption><?= photo_credit('fb-stand-coffrets') ?></figcaption></figure>
 </div>
 <div class="wrap two-cols">
   <form action="/commandes-professionnelles" method="post" class="form-card form-grid" novalidate>

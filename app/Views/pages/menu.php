@@ -22,6 +22,13 @@ $legal = [
     <?php endforeach; ?>
   </nav>
 
+  <?php if (\App\Core\Auth::isStaff()): ?>
+  <h2 class="group-title"><?= e(t('menu.team')) ?></h2>
+  <div class="group">
+    <a class="cell" href="/admin"><span class="cell-icon"><?= icon('gear') ?></span><span class="cell-body cell-title"><?= e(t('nav.admin')) ?></span><span class="cell-chevron"><?= icon('chevron') ?></span></a>
+  </div>
+  <?php endif; ?>
+
   <h2 class="group-title"><?= e(t('menu.language')) ?></h2>
   <div class="group"><div class="cell no-icon">
     <div class="segmented">

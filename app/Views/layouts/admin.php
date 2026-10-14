@@ -23,22 +23,20 @@ $isCurrent = static fn (string $href) => $href === '/admin' ? $path === '/admin'
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex, nofollow">
 <title><?= e(($pageTitle ?? 'Administration') . ' — Admin ' . Settings::get('store_name')) ?></title>
-<link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
-<link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
+<?= favicon_tags() ?><link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
 <link rel="stylesheet" href="<?= e(asset('css/admin.css')) ?>">
 </head>
 <body class="admin">
 <a class="skip-link" href="#contenu">Aller au contenu</a>
 <header class="admin-top">
   <a class="brand" href="/admin">
-    <svg class="brand-mark" viewBox="0 0 48 52" aria-hidden="true" focusable="false"><path d="M24 2 45 14v24L24 50 3 38V14z" class="hex"/><path d="M24 13c5 7.5 8.5 12.4 8.5 17.4a8.5 8.5 0 0 1-17 0C15.5 25.4 19 20.5 24 13z" class="drop"/></svg>
-    <span class="brand-text"><span class="brand-name">Miel Pur</span><span class="brand-sub">Administration</span></span>
+    <?= brand_html('Administration') ?>
   </a>
   <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="admin-nav"><span class="nav-toggle-bars" aria-hidden="true"></span><span class="nav-toggle-label">Menu</span></button>
   <div class="admin-user">
     <?php if ($user): ?>
     <span><?= e($user['first_name'] . ' ' . $user['last_name']) ?> · <span class="muted"><?= e($user['role']) ?></span></span>
-    <a href="/" target="_blank" rel="noopener">Voir le site</a>
+    <a class="btn btn-small btn-gray" href="/">Voir le site</a>
     <form action="/admin/deconnexion" method="post"><?= csrf_field() ?><button class="link-btn" type="submit">Déconnexion</button></form>
     <?php endif; ?>
   </div>

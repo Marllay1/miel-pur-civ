@@ -30,4 +30,12 @@ if ($page['slug'] === 'mentions-legales') {
     </div>
     <?php endif; ?>
   </div>
+  <?php if ($page['slug'] === 'a-propos'): ?>
+  <h2 class="group-title"><?= e(t('about.gallery_title')) ?></h2>
+  <div class="gallery gallery-about">
+    <?php foreach (['fb-miel-en-rayon-vente', 'fb-bouteilles-trio', 'fb-stand-coffrets', 'wm-apiculteurs-cameroun'] as $g): ?>
+    <figure class="gallery-item"><?= photo($g, '', '(min-width: 760px) 360px, 100vw') ?><figcaption><?= photo_credit($g) ?></figcaption></figure>
+    <?php endforeach; ?>
+  </div>
+  <?php endif; ?>
 </div>

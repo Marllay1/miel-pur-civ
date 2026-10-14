@@ -185,6 +185,8 @@
         main.alt = t.getAttribute('data-alt') || '';
         $all('[data-gallery-thumb]').forEach(function (o) { o.removeAttribute('aria-current'); });
         t.setAttribute('aria-current', 'true');
+        var index = t.getAttribute('data-index');
+        $all('[data-gallery-credit]').forEach(function (c) { c.hidden = c.getAttribute('data-gallery-credit') !== index; });
       });
     });
   }

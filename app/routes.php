@@ -50,6 +50,7 @@ $router->post('/contact', [PageController::class, 'contactSubmit']);
 $router->get('/commandes-professionnelles', [PageController::class, 'pro']);
 $router->post('/commandes-professionnelles', [PageController::class, 'proSubmit']);
 $router->get('/faq', [PageController::class, 'faq']);
+$router->get('/credits-photos', [PageController::class, 'credits']);
 $router->get('/menu', [PageController::class, 'menu']);
 $router->post('/preferences/theme', [PageController::class, 'theme']);
 $router->post('/newsletter', [PageController::class, 'newsletter']);

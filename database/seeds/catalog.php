@@ -30,7 +30,7 @@ return static function (): void {
     $storageEn = "Store at room temperature, away from moisture and light, with the lid tightly closed. Crystallisation is natural: a lukewarm water bath (40 °C maximum) makes the honey liquid again.";
     $products = [
         [
-            'miels', 'miel-liquide-toutes-fleurs', 1, 'jar-amber.svg',
+            'miels', 'miel-liquide-toutes-fleurs', 1, ['fb-bouteille-fond-jaune', 'fb-bouteilles-trio', 'fb-bouteilles-duo'],
             ['Miel liquide toutes fleurs', 'Notre miel de Katiola, 100 % bio, issu de la diversité des floraisons du nord ivoirien.',
              "Récolté dans nos ruchers installés au cœur de la végétation naturelle du nord de la Côte d'Ivoire, ce miel toutes fleurs reflète la diversité des plantes butinées par nos abeilles.\n\n**100 % bio et 100 % miel**, sans aucun ajout. Certifié conforme aux normes internationales par un laboratoire habilité par l'INAO.",
              "Ruchers de la région de Katiola, centre-nord de la Côte d'Ivoire.",
@@ -44,7 +44,7 @@ return static function (): void {
             [['250 g', '250 g', 'pot-verre', 250, 'MPCI-LIQ-250', 2500, 40], ['500 g', '500 g', 'pot-verre', 500, 'MPCI-LIQ-500', 4500, 30], ['1 kg', '1 kg', 'pot-plastique', 1000, 'MPCI-LIQ-1000', 8000, 15]],
         ],
         [
-            'miels', 'miel-cremeux', 1, 'jar-cream.svg',
+            'miels', 'miel-cremeux', 1, ['wm-miel-cremeux'],
             ['Miel crémeux', 'Un miel à la texture fine et onctueuse, qui se tartine sans couler.',
              "Notre miel de Katiola, travaillé pour obtenir une cristallisation fine et régulière : une texture crémeuse, idéale à tartiner.\n\n**100 % bio et 100 % miel**, sans aucun ajout. Certifié conforme aux normes internationales par un laboratoire habilité par l'INAO.",
              "Ruchers de la région de Katiola, centre-nord de la Côte d'Ivoire.",
@@ -58,7 +58,7 @@ return static function (): void {
             [['250 g', '250 g', 'pot-verre', 250, 'MPCI-CRE-250', 3000, 20], ['500 g', '500 g', 'pot-verre', 500, 'MPCI-CRE-500', 5500, 3]],
         ],
         [
-            'miels', 'miel-vrac-professionnels', 0, 'bucket.svg',
+            'miels', 'miel-vrac-professionnels', 0, ['wm-filet-miel'],
             ['Miel en vrac pour professionnels', 'Notre miel en seau, pour la restauration, la pâtisserie et la transformation.',
              "Le même miel 100 % bio de Katiola, conditionné en grands formats pour les hôtels, restaurants, pâtisseries, boulangeries et artisans.\n\nPour des volumes réguliers, [demandez un devis](/commandes-professionnelles).",
              "Ruchers de la région de Katiola, centre-nord de la Côte d'Ivoire.",
@@ -72,7 +72,7 @@ return static function (): void {
             [['5 kg', '5 kg', 'bidon', 5000, 'MPCI-VRAC-5', 37500, 6], ['25 kg', '25 kg', 'bidon', 25000, 'MPCI-VRAC-25', 175000, 0]],
         ],
         [
-            'cire-d-abeille', 'pain-de-cire-d-abeille', 0, 'wax.svg',
+            'cire-d-abeille', 'pain-de-cire-d-abeille', 0, ['wm-pains-cire'],
             ['Pain de cire d\'abeille', 'Cire d\'abeille de nos ruchers, fondue et filtrée.',
              "La cire produite par nos abeilles, récupérée lors de la récolte puis fondue et filtrée pour être moulée en pains.\n\nUne matière première naturelle pour vos créations.",
              "Ruchers de la région de Katiola, centre-nord de la Côte d'Ivoire.",
@@ -86,7 +86,7 @@ return static function (): void {
             [['250 g', '250 g', 'pain-cire', 250, 'MPCI-CIRE-250', 3500, 25], ['1 kg', '1 kg', 'pain-cire', 1000, 'MPCI-CIRE-1000', 12000, 8]],
         ],
         [
-            'coffrets', 'coffret-decouverte', 1, 'box.svg',
+            'coffrets', 'coffret-decouverte', 1, ['fb-stand-coffrets'],
             ['Coffret découverte', 'Un miel liquide, un miel crémeux et un pain de cire, réunis dans un coffret.',
              "Le meilleur de nos ruchers dans un coffret à offrir : notre miel liquide toutes fleurs, notre miel crémeux et un pain de cire d'abeille.",
              "Ruchers de la région de Katiola, centre-nord de la Côte d'Ivoire.",
@@ -110,7 +110,12 @@ return static function (): void {
             'created_at' => $now, 'updated_at' => $now, 'deleted_at' => null,
         ]);
         I18n::save('product', $pid, ['name' => $nameEn, 'short_description' => $shortEn, 'description' => $descEn, 'origin' => $originEn, 'usage_tips' => $usageEn, 'storage_tips' => $storageEn]);
-        DB::insert('product_images', ['product_id' => $pid, 'path' => '/assets/img/products/' . $image, 'alt' => $alt, 'sort_order' => 0, 'is_demo' => 0, 'created_at' => $now]);
+        // Photos du registre app/config/photos.php (photos de l'entreprise ou photos d'illustration créditées).
+        foreach ($image as $order => $photoKey) {
+            $photo = photos()[$photoKey];
+            DB::insert('product_images', ['product_id' => $pid, 'path' => '/assets/img/photos/' . $photo['file'],
+                'alt' => ($photo['origin'] === 'illustration' ? "Photo d'illustration : " : '') . $photo['alt']['fr'], 'sort_order' => $order, 'is_demo' => 0, 'created_at' => $now]);
+        }
         foreach ($variants as $i => [$label, $labelEn, $format, $grams, $sku, $price, $stock]) {
             $vid = DB::insert('product_variants', [
                 'product_id' => $pid, 'label' => $label, 'format' => $format, 'weight_grams' => $grams, 'sku' => $sku,

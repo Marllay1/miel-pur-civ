@@ -43,7 +43,7 @@ php tests/run.php
 php tests/run.php --mysql
 ```
 
-30 scénarios (dont 8 de sécurité et 1 sur les paiements intégrés), 832 assertions — réussis sous PHP 8.3 et 8.2, SQLite, MariaDB 11.4 et 10.4 ; 66 contrôles HTTP en boîte noire réussis contre Apache, Nginx et le serveur intégré (`php tests/security-http.php <url>`) ; 15 contrôles SMTP (`php tests/smtp-check.php --mailpit`). Voir [docs/TESTS.md](docs/TESTS.md) et [docs/SECURITE.md](docs/SECURITE.md).
+31 scénarios (dont 8 de sécurité, 1 sur les paiements intégrés et 1 sur la séparation client/administration), 1 026 assertions — réussis sous PHP 8.3 et 8.2, SQLite, MariaDB 11.4 et 10.4 ; 66 contrôles HTTP en boîte noire réussis contre Apache, Nginx et le serveur intégré (`php tests/security-http.php <url>`) ; 15 contrôles SMTP (`php tests/smtp-check.php --mailpit`). Voir [docs/TESTS.md](docs/TESTS.md) et [docs/SECURITE.md](docs/SECURITE.md).
 
 ## Documentation
 
@@ -56,6 +56,7 @@ php tests/run.php --mysql
 | [docs/PARAMETRES.md](docs/PARAMETRES.md) | Paramètres à renseigner avant la mise en ligne (SMTP, mentions légales…) |
 | [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) | Paiements et services : état réel, ce qui est testé et ce qui reste à valider |
 | [docs/TESTS.md](docs/TESTS.md) | Suite de tests et résultats |
+| [docs/IDENTITE-VISUELLE.md](docs/IDENTITE-VISUELLE.md) | Logo et favicons (bin/brand.php), photographies, crédits et licences |
 | [docs/SECURITE.md](docs/SECURITE.md) | Mesures, tests de sécurité, défauts corrigés, risques résiduels |
 
 ## Arborescence

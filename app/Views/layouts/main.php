@@ -11,13 +11,15 @@ $storeName = Settings::get('store_name');
 $pageTitle = isset($pageTitle) && $pageTitle !== '' ? $pageTitle . ' — ' . $storeName : $storeName . ' — ' . setting('store_tagline');
 $metaDescription = $metaDescription ?? excerpt(setting('home_hero_text'), 158);
 $canonical = $canonical ?? null;
-$ogImage = $ogImage ?? asset('img/og-default.png');
+$ogImage = $ogImage ?? asset('img/og-default.jpg');
 $cartCount = 0;
 try {
     $cartCount = CartService::count(App::$request);
 } catch (\Throwable) {
 }
 $user = Auth::user();
+// Lien vers l'administration : uniquement pour un membre de l'équipe authentifié (le serveur contrôle aussi chaque route).
+$isStaff = Auth::isStaff();
 $flashes = Session::pullFlashes();
 $path = App::$request?->path ?? '/';
 $query = App::$request?->query ?? [];
@@ -27,6 +29,9 @@ $analytics = Settings::get('analytics_provider');
 $wa = wa_link(t('wa.greeting'));
 $other = Lang::get() === 'fr' ? 'en' : 'fr';
 $here = $path . ($query ? '?' . http_build_query($query) : '');
+if ($path === '/admin' || str_starts_with($path, '/admin/')) {
+    $here = '/'; // page de refus affichée sur une URL d'administration : aucun lien n'y renvoie
+}
 $altUrl = abs_url($here, $other);
 $jsI18n = [
     'added' => t('js.added'), 'viewCart' => t('js.view_cart'), 'error' => t('js.error'), 'sending' => t('js.sending'),
@@ -36,7 +41,7 @@ $tabs = [
     ['/', 'home', t('tab.home'), $path === '/'],
     ['/boutique', 'grid', t('tab.shop'), $isActive('/boutique')],
     ['/panier', 'bag', t('tab.cart'), $isActive('/panier') || $isActive('/commande')],
-    [$user ? ($user['role'] === 'customer' ? '/compte' : '/admin') : '/compte/connexion', 'person', t('tab.account'), $isActive('/compte')],
+    [$user ? '/compte' : '/compte/connexion', 'person', t('tab.account'), $isActive('/compte')],
     ['/menu', 'more', t('tab.more'), $isActive('/menu')],
 ];
 ?><!doctype html>
@@ -64,9 +69,7 @@ $tabs = [
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#F5F2EC" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#141210" media="(prefers-color-scheme: dark)">
-<link rel="icon" href="<?= e(asset('img/favicon.svg')) ?>" type="image/svg+xml">
-<link rel="apple-touch-icon" href="<?= e(asset('img/apple-touch-icon.png')) ?>">
-<link rel="preload" href="/assets/fonts/figtree-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<?= favicon_tags() ?><link rel="preload" href="/assets/fonts/figtree-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/assets/fonts/figtree-latin-600-normal.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="<?= e(asset('css/app.css')) ?>">
 <?php foreach ($jsonLd ?? [] as $ld): ?>
@@ -78,8 +81,7 @@ $tabs = [
 <header class="navbar" data-navbar>
   <div class="wrap navbar-inner">
     <a class="brand" href="/" aria-label="<?= e($storeName) ?> — <?= e(t('nav.home')) ?>">
-      <svg class="brand-mark" viewBox="0 0 48 52" aria-hidden="true" focusable="false"><path class="hex" d="M24 1.5 46 14v24L24 50.5 2 38V14z"/><path class="drop" d="M24 12.5c5.2 7.6 8.8 12.6 8.8 17.8a8.8 8.8 0 0 1-17.6 0c0-5.2 3.6-10.2 8.8-17.8z"/></svg>
-      <span class="brand-text"><span class="brand-name">Miel Pur</span><span class="brand-sub">de Côte d'Ivoire</span></span>
+      <?= brand_html() ?>
     </a>
     <nav aria-label="<?= e(t('nav.label')) ?>">
       <ul class="nav-links">
@@ -89,6 +91,7 @@ $tabs = [
       </ul>
     </nav>
     <div class="nav-actions">
+      <?php if ($isStaff): ?><a class="btn btn-small btn-admin" href="/admin" title="<?= e(t('nav.admin_hint')) ?>"><?= icon('gear') ?><span><?= e(t('nav.admin')) ?></span></a><?php endif; ?>
       <a class="icon-btn" href="/boutique#recherche" aria-label="<?= e(t('nav.search')) ?>"><?= icon('search') ?></a>
       <a class="icon-btn lang-btn" href="<?= e($altUrl) ?>" hreflang="<?= $other ?>" lang="<?= $other ?>" aria-label="<?= e(t('nav.switch_lang')) ?>"><?= strtoupper($other) ?></a>
       <form action="/preferences/theme" method="post" class="theme-form">
@@ -97,7 +100,7 @@ $tabs = [
           <span class="ti-moon"><?= icon('moon') ?></span><span class="ti-sun"><?= icon('sun') ?></span>
         </button>
       </form>
-      <a class="icon-btn nav-only-desktop" href="<?= $user ? ($user['role'] === 'customer' ? '/compte' : '/admin') : '/compte/connexion' ?>" aria-label="<?= e($user ? t('nav.account') : t('nav.login')) ?>"><?= icon('person') ?></a>
+      <a class="icon-btn nav-only-desktop" href="<?= $user ? '/compte' : '/compte/connexion' ?>" aria-label="<?= e($user ? t('nav.account') : t('nav.login')) ?>"><?= icon('person') ?></a>
       <a class="icon-btn nav-only-desktop" href="/panier" aria-label="<?= e(t('nav.cart_count', ['count' => (int) $cartCount])) ?>">
         <?= icon('bag') ?><span class="badge-count" data-cart-count data-count="<?= (int) $cartCount ?>"><?= (int) $cartCount ?></span>
       </a>
@@ -150,6 +153,7 @@ $tabs = [
         <li><a href="/retours-et-remboursements"><?= e(t('footer.returns')) ?></a></li>
         <li><a href="/politique-de-confidentialite"><?= e(t('footer.privacy')) ?></a></li>
         <li><a href="/mentions-legales"><?= e(t('footer.legal')) ?></a></li>
+        <li><a href="/credits-photos"><?= e(t('footer.credits')) ?></a></li>
       </ul>
     </div>
     <div>

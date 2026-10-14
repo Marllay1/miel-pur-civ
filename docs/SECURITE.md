@@ -6,8 +6,8 @@ Dernière campagne de tests : 2026-10-14 (itération 2 : paiements intégrés, S
 
 | Suite | Commande | Résultat |
 |---|---|---|
-| Fonctionnelle + sécurité (SQLite ; PHP 8.3 et PHP 8.2) | `php tests/run.php` | 30 scénarios, 832 assertions, 0 échec |
-| Fonctionnelle + sécurité (MariaDB 11.4 et MariaDB 10.4 de XAMPP) | `php tests/run.php --mysql` | 30 scénarios, 832 assertions, 0 échec |
+| Fonctionnelle + sécurité (SQLite ; PHP 8.3 et PHP 8.2) | `php tests/run.php` | 31 scénarios, 1 026 assertions, 0 échec |
+| Fonctionnelle + sécurité (MariaDB 11.4 et MariaDB 10.4 de XAMPP) | `php tests/run.php --mysql` | 31 scénarios, 1 026 assertions, 0 échec |
 | Boîte noire HTTP — Apache 2.4 (XAMPP) | `php tests/security-http.php http://miel.localhost` | 66 contrôles, 0 échec |
 | Boîte noire HTTP — Nginx 1.30 | `php tests/security-http.php http://miel-nginx.localhost:8088` | 66 contrôles, 0 échec |
 | Boîte noire HTTP — serveur intégré PHP | `php tests/security-http.php` | 66 contrôles, 0 échec |
@@ -29,6 +29,21 @@ Dernière campagne de tests : 2026-10-14 (itération 2 : paiements intégrés, S
 | Abus | 25 | limites : suivi (10/15 min), contact, avis, inscription, réinitialisation (3 e-mails/h), webhook (120/min) |
 | Divulgation | 27, HTTP | aucune trace technique en 500 (journalisée côté serveur), pas de `X-Powered-By`, aucun message PHP, `.env`/journaux/sources/`.git` inaccessibles (17 chemins de traversée testés), méthodes TRACE/PUT/DELETE/PATCH refusées, en-têtes Host et X-Forwarded-Host ignorés pour les liens envoyés par e-mail, en-tête Server sans numéro de version |
 | En-têtes | 15, HTTP | CSP stricte sans script inline, `frame-ancestors 'none'`, DENY, nosniff, Referrer-Policy, Permissions-Policy, no-store + noindex sur les zones privées |
+
+## Séparation espace client / administration (itération 3)
+
+| Situation | Comportement (contrôlé côté serveur) |
+|---|---|
+| Visiteur anonyme sur `/admin/...` | Redirection vers la connexion de l'équipe, puis retour à la page demandée (uniquement une page d'administration) ; toute requête non GET ou JSON → 403 |
+| Client connecté sur `/admin/...` (y compris `/admin/connexion` et `/en/admin`) | **403 « Accès refusé »** sur le gabarit public, avec un lien vers son espace client ; aucun formulaire de connexion de l'équipe, aucune boucle, la session reste ouverte |
+| Client : appel direct d'une route ou d'une « API » d'administration (GET, POST, JSON) | 403 ; aucune donnée modifiée |
+| Membre de l'équipe | Bouton « Administration » sur le site public (en-tête et menu « Plus ») et bouton « Voir le site » dans l'administration, même onglet, même session ; chaque section reste soumise à sa permission (`perm:...`) |
+| Connexion publique | Client → page d'origine ou « Mon compte » (jamais `/admin`) ; équipe → page publique d'origine si elle était précisée, sinon tableau de bord |
+| Connexion de l'équipe | Retour limité aux pages `/admin/...` (adresse externe, page de connexion ou page publique ignorées → `/admin`) |
+| Déconnexion | Client → accueil ; équipe → connexion de l'équipe ; le lien « Administration » disparaît |
+| Cache | Toute page vue par un utilisateur connecté est envoyée avec `Cache-Control: private, no-cache` (le lien « Administration » ne peut pas être servi par un cache partagé) |
+
+Le lien « Administration » n'est qu'une commodité : la protection repose sur les middlewares `staff` et `perm:*` de chaque route (scénarios 11, 12, 23 et 31).
 
 ## Défauts trouvés et corrigés pendant l'itération 2 (Apache, Nginx, paiements)
 
