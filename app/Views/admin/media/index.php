@@ -33,7 +33,7 @@
 <ol class="image-admin-list">
   <?php foreach ($media as $i => $m): $mid = (int) $m['id']; ?>
   <li class="card image-admin-row" id="photo-<?= $mid ?>">
-    <img src="<?= e($m['path']) ?>" alt="" width="160" height="120" loading="lazy">
+    <img src="<?= e(\App\Services\ImageService::small((string) $m['path'])) ?>" alt="" width="160" height="120" loading="lazy">
     <div>
       <form action="/admin/photos/<?= $mid ?>" method="post" class="form-grid">
         <?= csrf_field() ?>

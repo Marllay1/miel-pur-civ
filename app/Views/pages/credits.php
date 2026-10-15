@@ -14,7 +14,7 @@ $illustrations = array_filter(photos(), static fn (array $p) => $p['origin'] ===
   <div class="content-card">
     <p><?= e(t('credits.company_text')) ?><?php if ($facebook !== ''): ?> <a href="<?= e($facebook) ?>" rel="noopener" target="_blank"><?= e(t('credits.facebook')) ?></a><?php endif; ?></p>
     <div class="credits-grid">
-      <?php foreach ($company as $m): ?><figure class="credit-thumb"><img src="<?= e($m['path']) ?>" alt="<?= e(\App\Core\Lang::get() === 'en' && $m['alt_en'] ? $m['alt_en'] : $m['alt']) ?>" loading="lazy" decoding="async"></figure><?php endforeach; ?>
+      <?php foreach ($company as $m): ?><figure class="credit-thumb"><img src="<?= e(\App\Services\ImageService::small((string) $m['path'])) ?>" alt="<?= e(\App\Core\Lang::get() === 'en' && $m['alt_en'] ? $m['alt_en'] : $m['alt']) ?>" loading="lazy" decoding="async"></figure><?php endforeach; ?>
     </div>
   </div>
 
@@ -30,7 +30,7 @@ $illustrations = array_filter(photos(), static fn (array $p) => $p['origin'] ===
     <ul class="credits-list">
       <?php foreach ($free as $f): $parts = array_map('trim', explode('·', (string) $f['source_note'])); $url = (string) end($parts); ?>
       <li>
-        <figure class="credit-thumb"><img src="<?= e($f['path']) ?>" alt="" loading="lazy" decoding="async"></figure>
+        <figure class="credit-thumb"><img src="<?= e(\App\Services\ImageService::small((string) $f['path'])) ?>" alt="" loading="lazy" decoding="async"></figure>
         <div>
           <p><strong><?= e(image_alt($f)) ?></strong></p>
           <p class="small"><?= e(t('credits.author')) ?> : <?= e($parts[2] ?? '—') ?> · <?= e(t('credits.license')) ?> : <?= e($parts[1] ?? '—') ?><?php if (str_starts_with($url, 'https://')): ?> · <?= e(t('credits.source')) ?> : <a href="<?= e($url) ?>" rel="noopener" target="_blank">Wikimedia Commons</a><?php endif; ?></p>

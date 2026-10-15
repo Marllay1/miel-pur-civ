@@ -449,8 +449,10 @@ a.cell:active { background: var(--fill-2); }
 .product { display: grid; gap: 24px; padding-top: 6px; padding-bottom: 24px; }
 @media (min-width: 900px) { .product { grid-template-columns: 1.05fr .95fr; gap: 48px; align-items: start; } .product-gallery { position: sticky; top: calc(var(--nav-h) + 16px); } }
 .product-main-media { position: relative; aspect-ratio: 1; border-radius: var(--r-xl); overflow: hidden; background: var(--bg-2); box-shadow: var(--shadow); }
-.product-main-media img { width: 100%; height: 100%; object-fit: contain; }
+/* Toutes les photos de produits au même format : cadre carré, recadrage centré (comme les vignettes de la boutique). */
+.product-main-media img { display: block; width: 100%; height: 100%; object-fit: cover; }
 .product-thumbs { list-style: none; padding: 0; margin: 12px 0 0; display: flex; gap: 8px; }
+.thumb img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; }
 .thumb { padding: 0; border: 2px solid transparent; background: var(--bg-2); border-radius: 14px; cursor: pointer; width: 68px; overflow: hidden; }
 .thumb[aria-current="true"] { border-color: var(--tint); }
 .product-info h1 { font-size: clamp(1.8rem, 1.5rem + 1.4vw, 2.4rem); }

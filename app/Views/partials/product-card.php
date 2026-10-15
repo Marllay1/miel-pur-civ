@@ -7,7 +7,7 @@ $multi = (int) $product['variant_count'] > 1;
   <a class="product-card-link" href="/boutique/<?= e($product['slug']) ?>">
     <div class="product-card-media">
       <?php if (!empty($product['image_path'])): $photoKey = photo_key_for_path((string) $product['image_path']); ?>
-      <img src="<?= e($product['image_path']) ?>" alt="" loading="lazy" decoding="async" width="480" height="480">
+      <img src="<?= e(\App\Services\ImageService::small((string) $product['image_path'])) ?>"<?= img_srcset((string) $product['image_path'], '(min-width: 1100px) 25vw, (min-width: 700px) 33vw, 50vw') ?> alt="" loading="lazy" decoding="async" width="480" height="480">
       <?php if ($photoKey !== null && photos()[$photoKey]['origin'] === 'illustration'): ?><span class="media-badge"><?= e(t('photo.illustration_short')) ?></span><?php endif; ?>
       <?php else: ?>
       <span class="media-placeholder" aria-hidden="true"><?= e(mb_substr($product['name'], 0, 1)) ?></span>

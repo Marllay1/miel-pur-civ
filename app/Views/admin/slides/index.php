@@ -11,7 +11,7 @@
 <ol class="slide-list">
   <?php foreach ($slides as $i => $s): ?>
   <li class="card slide-row">
-    <img class="slide-thumb" src="<?= e($s['image_path']) ?>" alt="">
+    <img class="slide-thumb" src="<?= e(\App\Services\ImageService::small((string) $s['image_path'])) ?>" alt="">
     <div class="slide-info">
       <p><strong><?= e($s['title']) ?></strong> <?= $s['live'] ? '<span class="status status-delivered">Publiée</span>' : ((int) $s['is_active'] ? '<span class="status status-pending_payment">Hors période de publication</span>' : '<span class="status status-cancelled">Désactivée</span>') ?></p>
       <p class="small muted"><?= e((string) $s['body']) ?></p>

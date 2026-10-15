@@ -110,7 +110,7 @@ $action = $product ? '/admin/produits/' . $product['id'] : '/admin/produits';
   <ol class="image-admin-list">
     <?php foreach ($images as $i => $img): $iid = (int) $img['id']; ?>
     <li class="card image-admin-row">
-      <img src="<?= e($img['path']) ?>" alt="" width="120" height="120" loading="lazy">
+      <img src="<?= e(\App\Services\ImageService::small((string) $img['path'])) ?>" alt="" width="120" height="120" loading="lazy">
       <div>
         <p class="small"><?= $i === 0 ? '<span class="status status-delivered">Photo principale</span> ' : '' ?><?= (int) $img['is_demo'] ? '<span class="badge badge-demo">Démo</span> ' : '' ?><?= $img['source_note'] ? 'Provenance : ' . e($img['source_note']) : '<span class="status status-pending_payment">Provenance non renseignée</span>' ?></p>
         <form action="/admin/images/<?= $iid ?>" method="post" class="inline-form">

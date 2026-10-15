@@ -231,7 +231,7 @@ $currentDeposit = $depositByZone[$selectedZone] ?? null;
       <h2 id="h-checkout-summary"><?= e(t('checkout.your_order')) ?></h2>
       <ul class="mini-items">
         <?php foreach ($summary['items'] as $item): ?>
-        <li><?php if (!empty($item['image_path'])): ?><img class="mini-thumb" src="<?= e($item['image_path']) ?>" alt="" width="44" height="44" loading="lazy" decoding="async"><?php endif; ?><span class="mini-name"><?= e($item['product_name']) ?> <span class="muted">· <?= e($item['variant_label']) ?> × <?= (int) $item['quantity'] ?></span></span><span><?= money((int) $item['line_total']) ?></span></li>
+        <li><?php if (!empty($item['image_path'])): ?><img class="mini-thumb" src="<?= e(\App\Services\ImageService::small((string) $item['image_path'])) ?>" alt="" width="44" height="44" loading="lazy" decoding="async"><?php endif; ?><span class="mini-name"><?= e($item['product_name']) ?> <span class="muted">· <?= e($item['variant_label']) ?> × <?= (int) $item['quantity'] ?></span></span><span><?= money((int) $item['line_total']) ?></span></li>
         <?php endforeach; ?>
       </ul>
       <dl class="totals" aria-live="polite">

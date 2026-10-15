@@ -19,7 +19,7 @@ $interval = max(4, min(15, \App\Services\Settings::int('carousel_interval') ?: 7
     <article class="carousel-slide<?= $i === 0 ? ' is-active' : '' ?>" data-slide role="group" aria-roledescription="<?= e(t('carousel.slide')) ?>" aria-label="<?= e($label) ?>"<?= $i === 0 ? '' : ' aria-hidden="true"' ?>>
       <picture class="carousel-media">
         <?php if ((string) $s['image_mobile_path'] !== ''): ?><source media="(max-width: 699px)" srcset="<?= e($s['image_mobile_path']) ?>"><?php endif; ?>
-        <img src="<?= e($s['image_path']) ?>" alt="<?= e((string) $s['image_alt']) ?>"<?= $i === 0 ? ' fetchpriority="high"' : ' loading="lazy"' ?> decoding="async">
+        <img src="<?= e($s['image_path']) ?>"<?= img_srcset((string) $s['image_path'], '100vw') ?> alt="<?= e((string) $s['image_alt']) ?>"<?= $i === 0 ? ' fetchpriority="high"' : ' loading="lazy"' ?> decoding="async">
       </picture>
     </article>
     <?php endforeach; ?>

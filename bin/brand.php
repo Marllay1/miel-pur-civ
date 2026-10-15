@@ -129,7 +129,7 @@ function write_icons(string $dir, \GdImage $src, array $bg, string $themeColor):
 }
 
 if (isset($opts['remove-logo'])) {
-    foreach (array_merge(glob($dir . '/logo.*') ?: [], glob($dir . '/logo-*.png') ?: []) as $f) {
+    foreach (array_merge(glob($dir . '/logo.*') ?: [], glob($dir . '/logo-*.*') ?: []) as $f) {
         unlink($f);
         out('✔ Retiré : ' . basename($f));
     }
@@ -196,12 +196,15 @@ if (str_ends_with(strtolower($logoPath), '.svg')) {
         imagesavealpha($logo, true);
     }
     imagepng($logo, $dir . '/logo.png', 9);
+    // Copie WebP légère utilisée par les pages (logo affiché à environ 50 px de haut : 600 px de large suffisent).
+    \App\Services\BrandIcons::webpCopy($logo, $dir . '/logo.webp', 400);
     out('✔ Logo installé : public/assets/img/brand/logo.png (' . imagesx($logo) . '×' . imagesy($logo) . ' px)');
     $iconSource = $logo;
 }
 // Déclinaisons facultatives : texte clair pour le thème sombre, version empilée (pied de page, connexion).
 foreach (['logo-dark', 'logo-stacked', 'logo-stacked-dark'] as $variant) {
     @unlink($dir . '/' . $variant . '.png');
+    @unlink($dir . '/' . $variant . '.webp');
     if (!isset($opts[$variant])) {
         continue;
     }
@@ -211,6 +214,7 @@ foreach (['logo-dark', 'logo-stacked', 'logo-stacked-dark'] as $variant) {
         imagesavealpha($img, true);
     }
     imagepng($img, $dir . '/' . $variant . '.png', 9);
+    \App\Services\BrandIcons::webpCopy($img, $dir . '/' . $variant . '.webp', str_starts_with($variant, 'logo-stacked') ? 360 : 400);
     out('✔ Déclinaison installée : ' . $variant . '.png (' . imagesx($img) . '×' . imagesy($img) . ' px)');
 }
 if (isset($opts['icon'])) {

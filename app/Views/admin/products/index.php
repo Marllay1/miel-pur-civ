@@ -23,7 +23,7 @@ $statusClass = ['draft' => 'status-pending_payment', 'published' => 'status-deli
   <tbody>
   <?php foreach ($products as $p): ?>
     <tr>
-      <td><div class="order-line"><?php if ($p['image_path']): ?><img class="mini-thumb" src="<?= e($p['image_path']) ?>" alt="" width="40" height="40" loading="lazy"><?php else: ?><span class="mini-thumb mini-thumb-empty" aria-hidden="true"></span><?php endif; ?>
+      <td><div class="order-line"><?php if ($p['image_path']): ?><img class="mini-thumb" src="<?= e(\App\Services\ImageService::small((string) $p['image_path'])) ?>" alt="" width="40" height="40" loading="lazy"><?php else: ?><span class="mini-thumb mini-thumb-empty" aria-hidden="true"></span><?php endif; ?>
         <span><a href="/admin/produits/<?= (int) $p['id'] ?>"><strong><?= e($p['name']) ?></strong></a><?= (int) $p['is_demo'] ? ' <span class="badge badge-demo">Démo</span>' : '' ?><?= (int) $p['is_featured'] ? ' <span class="badge">À la une</span>' : '' ?>
         <?php if ($p['review_note'] || (int) $p['image_count'] === 0): ?><br><span class="small status status-pending_payment" title="<?= e((string) $p['review_note']) ?>"><?= (int) $p['image_count'] === 0 ? 'Photo à fournir' : 'À vérifier' ?></span><?php endif; ?></span></div></td>
       <td><?= $p['reference'] !== null ? '<code>' . e($p['reference']) . '</code>' : '<span class="small muted">à compléter</span>' ?></td>

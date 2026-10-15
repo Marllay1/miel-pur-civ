@@ -27,7 +27,7 @@ ServerSignature Off
 </VirtualHost>
 ```
 
-`TraceEnable`, `ServerTokens` et `ServerSignature` se placent au niveau du serveur (pas dans un `.htaccess`) ; vérifier qu'aucun fichier inclus plus loin ne les redéfinit (sous XAMPP : `httpd-default.conf`). Modules requis : `mod_rewrite`, `mod_headers`.
+`TraceEnable`, `ServerTokens` et `ServerSignature` se placent au niveau du serveur (pas dans un `.htaccess`) ; vérifier qu'aucun fichier inclus plus loin ne les redéfinit (sous XAMPP : `httpd-default.conf`). Modules requis : `mod_rewrite`, `mod_headers` ; recommandés : `mod_deflate` et `mod_filter` (compression des pages, CSS et JS, règles déjà présentes dans `public/.htaccess` ; sous XAMPP, décommenter leurs lignes `LoadModule` dans `httpd.conf`).
 
 ### Nginx (PHP-FPM)
 
@@ -47,6 +47,12 @@ server {
     root /var/www/miel-pur-ci/public;
     index index.php;
     client_max_body_size 8m;
+    # Compression des textes (HTML, CSS, JS, JSON, SVG) ; les images WebP/PNG/JPEG sont déjà compressées.
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 512;
+    gzip_vary on;
+    gzip_types text/plain text/css text/xml application/javascript application/json application/xml application/manifest+json image/svg+xml;
     # certificats Let's Encrypt (certbot)…
     location ~ /\. { deny all; }
     location /uploads/ { location ~ \.php$ { deny all; } }

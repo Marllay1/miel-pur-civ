@@ -118,4 +118,25 @@ final class BrandIcons
         imagesavealpha($img, true);
         return $img;
     }
+
+    /**
+     * Copie WebP allégée d'un logo (transparence conservée), à la largeur utile à l'affichage (écrans haute densité compris).
+     * Les pages l'utilisent de préférence au PNG (voir brand_logo_url) ; le PNG reste disponible.
+     */
+    public static function webpCopy(\GdImage $img, string $path, int $maxWidth): bool
+    {
+        $w = imagesx($img);
+        $h = imagesy($img);
+        if ($w > $maxWidth) {
+            $copy = imagecreatetruecolor($maxWidth, (int) round($h * $maxWidth / $w));
+            imagealphablending($copy, false);
+            imagesavealpha($copy, true);
+            imagefill($copy, 0, 0, imagecolorallocatealpha($copy, 0, 0, 0, 127));
+            imagecopyresampled($copy, $img, 0, 0, 0, 0, $maxWidth, imagesy($copy), $w, $h);
+        } else {
+            $copy = $img;
+            imagesavealpha($copy, true);
+        }
+        return imagewebp($copy, $path, 82);
+    }
 }

@@ -560,3 +560,13 @@ function pay_logo(string $code): string
     return '<span class="pay-logo ' . e($code) . '" aria-hidden="true">' . $inner . '</span>';
 }
 
+
+/**
+ * Attributs srcset/sizes d'une image téléversée (copies réduites 480 et 960 px) : le navigateur charge la taille utile.
+ * Chaîne vide pour une image sans copies (fichiers installés, anciennes images non converties).
+ */
+function img_srcset(string $path, string $sizes): string
+{
+    $set = \App\Services\ImageService::srcset($path);
+    return $set === '' ? '' : ' srcset="' . e($set) . '" sizes="' . e($sizes) . '"';
+}

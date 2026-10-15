@@ -92,7 +92,7 @@ $currentIndex = array_search($order['status'], $flow, true);
         <thead><tr><th scope="col"><?= e(t('order.product')) ?></th><th scope="col" class="num"><?= e(t('order.qty')) ?></th><th scope="col" class="num"><?= e(t('totals.total')) ?></th></tr></thead>
         <tbody>
           <?php foreach ($items as $i): ?>
-          <tr><td><div class="order-line"><?php if (!empty($i['image_path'])): ?><img class="mini-thumb" src="<?= e($i['image_path']) ?>" alt="" width="48" height="48" loading="lazy" decoding="async"><?php endif; ?><span><?= e($i['product_name']) ?><br><span class="muted small"><?= e($i['variant_label']) ?> · <?= money((int) $i['unit_price']) ?></span></span></div></td><td class="num"><?= (int) $i['quantity'] ?></td><td class="num"><?= money((int) $i['line_total']) ?></td></tr>
+          <tr><td><div class="order-line"><?php if (!empty($i['image_path'])): ?><img class="mini-thumb" src="<?= e(\App\Services\ImageService::small((string) $i['image_path'])) ?>" alt="" width="48" height="48" loading="lazy" decoding="async"><?php endif; ?><span><?= e($i['product_name']) ?><br><span class="muted small"><?= e($i['variant_label']) ?> · <?= money((int) $i['unit_price']) ?></span></span></div></td><td class="num"><?= (int) $i['quantity'] ?></td><td class="num"><?= money((int) $i['line_total']) ?></td></tr>
           <?php endforeach; ?>
         </tbody>
         <tfoot>

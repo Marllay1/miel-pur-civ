@@ -85,7 +85,7 @@ if (Settings::bool('home_show_pro')): ?>
     <div class="tiles">
       <?php foreach ($categories as $cat): ?>
       <a class="tile tile-photo" href="/boutique?categorie=<?= e($cat['slug']) ?>">
-        <span class="tile-media"><?php if (!empty($cat['image_path'])): ?><img src="<?= e($cat['image_path']) ?>" alt="" loading="lazy" decoding="async"><?php else: ?><span class="media-placeholder" aria-hidden="true"><?= e(mb_substr($cat['name'], 0, 1)) ?></span><?php endif; ?></span>
+        <span class="tile-media"><?php if (!empty($cat['image_path'])): ?><img src="<?= e(\App\Services\ImageService::small((string) $cat['image_path'])) ?>"<?= img_srcset((string) $cat['image_path'], '(min-width: 960px) 33vw, 100vw') ?> alt="" loading="lazy" decoding="async"><?php else: ?><span class="media-placeholder" aria-hidden="true"><?= e(mb_substr($cat['name'], 0, 1)) ?></span><?php endif; ?></span>
         <span class="tile-body"><span class="tile-name"><?= e($cat['name']) ?></span><span class="tile-count"><?= e(t('home.products_count', ['count' => (int) $cat['product_count']])) ?></span></span>
       </a>
       <?php endforeach; ?>

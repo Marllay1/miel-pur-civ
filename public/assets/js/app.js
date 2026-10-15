@@ -308,6 +308,9 @@
     if (!main) { return; }
     $all('[data-gallery-thumb]').forEach(function (t) {
       t.addEventListener('click', function () {
+        // srcset d'abord : sinon le navigateur garderait la photo précédente.
+        var set = t.getAttribute('data-gallery-srcset');
+        if (set) { main.srcset = set; } else { main.removeAttribute('srcset'); }
         main.src = t.getAttribute('data-gallery-thumb');
         main.alt = t.getAttribute('data-alt') || '';
         $all('[data-gallery-thumb]').forEach(function (o) { o.removeAttribute('aria-current'); });

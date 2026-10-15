@@ -51,7 +51,8 @@ final class Media
     public static function img(array $m, string $class = '', bool $eager = false): string
     {
         $size = $m['width'] && $m['height'] ? ' width="' . (int) $m['width'] . '" height="' . (int) $m['height'] . '"' : '';
-        return '<img src="' . e((string) $m['path']) . '" alt="' . e((string) ($m['alt_text'] ?? $m['alt'])) . '"' . $size
+        return '<img src="' . e((string) $m['path']) . '"' . img_srcset((string) $m['path'], '(min-width: 960px) 33vw, 100vw')
+            . ' alt="' . e((string) ($m['alt_text'] ?? $m['alt'])) . '"' . $size
             . ($class !== '' ? ' class="' . e($class) . '"' : '') . ($eager ? ' fetchpriority="high"' : ' loading="lazy"') . ' decoding="async">';
     }
 

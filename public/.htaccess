@@ -19,6 +19,15 @@ Options -Indexes -MultiViews
     </FilesMatch>
 </IfModule>
 
+# Compression des textes (HTML, CSS, JS, JSON, SVG, XML) : nécessite mod_deflate (activé par défaut sur la plupart
+# des hébergements ; dans XAMPP : décommenter « LoadModule deflate_module » dans httpd.conf). Images WebP/PNG/JPEG déjà compressées.
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/css text/xml application/javascript text/javascript application/json application/xml application/manifest+json image/svg+xml
+    <IfModule mod_headers.c>
+        Header append Vary Accept-Encoding
+    </IfModule>
+</IfModule>
+
 <IfModule mod_mime.c>
     AddType font/woff2 .woff2
     AddType image/svg+xml .svg

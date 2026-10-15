@@ -1145,7 +1145,28 @@ return [
         T::redirectsTo('/commande/', $r, 'Prestataire injoignable : retour à la page de commande');
         T::contains('momentanément indisponible', implode(' ', (array) ($d->session['_flash']['error'] ?? [])), 'Message d\'indisponibilité');
         T::eq('failed', DB::value("SELECT status FROM payments WHERE provider = 'wave' ORDER BY id DESC LIMIT 1"), 'Tentative marquée en échec');
-        T::eq(0, (int) DB::value("SELECT COUNT(*) FROM payments WHERE checkout_url LIKE '%card%' OR provider_reference LIKE '4%'"), 'Aucune donnée de carte conservée');
+        // Aucun numéro de carte (13 à 19 chiffres valides selon l'algorithme de Luhn) dans les données de paiement conservées.
+        $luhn = static function (string $digits): bool {
+            $sum = 0;
+            foreach (array_reverse(str_split($digits)) as $i => $d) {
+                $d = (int) $d * ($i % 2 ? 2 : 1);
+                $sum += $d > 9 ? $d - 9 : $d;
+            }
+            return $sum % 10 === 0;
+        };
+        $stored = array_merge(
+            DB::all('SELECT provider_reference AS v FROM payments UNION ALL SELECT checkout_url FROM payments UNION ALL SELECT failure_reason FROM payments UNION ALL SELECT provider_token FROM payments'),
+            DB::all('SELECT payload AS v FROM payment_events UNION ALL SELECT reference FROM order_transactions')
+        );
+        $pans = 0;
+        foreach ($stored as $row) {
+            preg_match_all('/(?<!\d)\d{13,19}(?!\d)/', (string) $row['v'], $m);
+            foreach ($m[0] as $digits) {
+                $pans += $luhn($digits) ? 1 : 0;
+            }
+        }
+        T::eq(0, $pans, 'Aucune donnée de carte conservée');
+        T::eq(0, (int) DB::value("SELECT COUNT(*) FROM payments WHERE checkout_url LIKE '%card%'"), 'Aucune URL de saisie de carte conservée');
     },
 
     '29 Bilinguisme FR/EN et thème clair/sombre' => function (): void {
@@ -1373,11 +1394,11 @@ return [
         $home = $v->get('/');
         $html = $home->body;
         // Logo officiel : en-tête (lien vers l'accueil), déclinaison sombre, pied de page, aucune duplication visible
-        T::ok((bool) preg_match('#<a class="brand" href="/"[^>]*>\s*<img class="brand-logo brand-logo-light" src="/assets/img/brand/logo\.png#', $html), 'Logo dans l\'en-tête, cliquable vers l\'accueil');
-        T::contains('/assets/img/brand/logo-dark.png', $html, 'Déclinaison pour le thème sombre');
+        T::ok((bool) preg_match('#<a class="brand" href="/"[^>]*>\s*<img class="brand-logo brand-logo-light" src="/assets/img/brand/logo\.webp#', $html), 'Logo dans l\'en-tête, cliquable vers l\'accueil');
+        T::contains('/assets/img/brand/logo-dark.webp', $html, 'Déclinaison pour le thème sombre (WebP allégé)');
         T::eq(1, substr_count(explode('</header>', $html)[0], 'alt="Miel Pur de Côte d&#039;Ivoire"'), 'Un seul logo annoncé dans l\'en-tête (l\'autre est décoratif)');
         $footer = explode('<footer', $html)[1] ?? '';
-        T::contains('/assets/img/brand/logo-stacked.png', $footer, 'Logo empilé dans le pied de page');
+        T::contains('/assets/img/brand/logo-stacked.webp', $footer, 'Logo empilé dans le pied de page');
         T::ok(!is_file(BASE_PATH . '/public/assets/img/brand/PROVISOIRE.txt'), 'Plus d\'icônes provisoires');
         foreach (['favicon.ico', 'apple-touch-icon.png', 'icon-512.png', 'emblem.png', 'logo.png', 'logo-stacked.png'] as $f) {
             T::ok(is_file(BASE_PATH . '/public/assets/img/brand/' . $f), "Fichier de marque $f");
@@ -1549,7 +1570,7 @@ return [
             $home = $pub();
             T::contains('src="' . $logo . '"', explode('</header>', $home)[0], 'Nouveau logo dans l\'en-tête');
             T::contains('src="' . $logo . '"', explode('<footer', $home)[1] ?? '', 'Logo de l\'en-tête réutilisé dans le pied de page');
-            T::notContains('logo-dark.png', $home, 'Déclinaison sombre de l\'ancien logo non mélangée au nouveau');
+            T::notContains('/assets/img/brand/logo-dark.', $home, 'Déclinaison sombre de l\'ancien logo non mélangée au nouveau');
             $a->upload('/admin/parametres/images/brand_logo', [], ['image' => $png(400, 120, [233, 165, 10])]);
             T::ok(!is_file(BASE_PATH . '/public' . $logo), 'Ancien fichier supprimé au remplacement');
             $tooSmall = $a->upload('/admin/parametres/images/brand_logo', [], ['image' => $png(80, 30)]);
@@ -1567,7 +1588,7 @@ return [
                 $a->post('/admin/parametres/images/' . $k . '/supprimer');
                 T::eq('', \App\Services\Settings::get($k), "Image $k retirée");
             }
-            T::contains('/assets/img/brand/logo.png', $pub(), 'Retour au logo installé');
+            T::contains('/assets/img/brand/logo.webp', $pub(), 'Retour au logo installé');
             T::ok(!is_file(BASE_PATH . '/public/uploads/brand/favicon/favicon.ico'), 'Icônes téléversées supprimées');
             // Moyens de paiement : activation, logos, paiement manuel opérationnel avec instructions
             $foot = static fn () => explode('<footer', $pub())[1] ?? '';
@@ -2370,6 +2391,77 @@ return [
         } finally {
             unset(\App\Core\HttpClient::$fakes['GET https://nominatim.openstreetmap.org/reverse']);
             Env::set('GEOCODER_CONTACT_EMAIL', '');
+        }
+    },
+    '38 Images allégées : copies réduites, srcset, formats identiques, logos WebP' => function (): void {
+        $a = new Client('10.39.0.1');
+        $a->loginAs(T::user('admin', 'images@example.test'));
+        $before = glob(BASE_PATH . '/public/uploads/products/*') ?: [];
+        $tmp = [];
+        $png = static function (int $w, int $h) use (&$tmp): string {
+            $file = tempnam(sys_get_temp_dir(), 'img') . '.png';
+            $im = imagecreatetruecolor($w, $h);
+            for ($x = 0; $x < $w; $x += 20) {
+                imagefilledrectangle($im, $x, 0, $x + 10, $h, imagecolorallocate($im, ($x * 7) % 255, 120, 40));
+            }
+            imagepng($im, $file);
+            $tmp[] = $file;
+            return $file;
+        };
+        try {
+            $pid = (int) DB::value("SELECT id FROM products WHERE slug = 'miel-cremeux'");
+            $a->upload('/admin/produits/' . $pid . '/images', ['alt' => 'Pot de miel crémeux', 'source_note' => 'Photo fournie par l\'entreprise', 'source_confirm' => '1', 'first' => '1'], ['image' => $png(2000, 1400)]);
+            $img = DB::one('SELECT * FROM product_images WHERE product_id = ? ORDER BY sort_order, id LIMIT 1', [$pid]);
+            $file = BASE_PATH . '/public' . $img['path'];
+            $base = substr($file, 0, -5);
+            T::eq(1600, getimagesize($file)[0], 'Original limité à 1 600 px');
+            T::eq(480, getimagesize($base . '-480.webp')[0], 'Copie de 480 px générée');
+            T::eq(960, getimagesize($base . '-960.webp')[0], 'Copie de 960 px générée');
+            T::ok(filesize($base . '-480.webp') < filesize($file), 'Copie réduite plus légère que l\'original');
+            $small = substr($img['path'], 0, -5) . '-480.webp';
+            $shop = (new Client('10.39.0.2'))->get('/boutique')->body;
+            T::contains('src="' . $small . '"', $shop, 'Vignette de la boutique : copie de 480 px');
+            T::contains($small . ' 480w, ' . substr($img['path'], 0, -5) . '-960.webp 960w, ' . $img['path'] . ' 1600w', $shop, 'srcset : 480, 960 et 1 600 px');
+            $page = (new Client('10.39.0.3'))->get('/boutique/miel-cremeux')->body;
+            T::ok((bool) preg_match('#<img src="' . preg_quote($img['path'], '#') . '" srcset="[^"]+" sizes="[^"]+"#', $page), 'Fiche produit : image principale avec srcset');
+            // Une image plus petite que les copies n'en reçoit pas (rien d'inutile) et n'a pas de srcset
+            $a->upload('/admin/produits/' . $pid . '/images', ['alt' => 'Petite photo', 'source_note' => 'Photo fournie par l\'entreprise', 'source_confirm' => '1'], ['image' => $png(400, 400)]);
+            $tiny = (string) DB::value("SELECT path FROM product_images WHERE product_id = ? AND alt = 'Petite photo'", [$pid]);
+            $page = (new Client('10.39.0.5'))->get('/boutique/miel-cremeux')->body;
+            T::contains('data-gallery-srcset="' . $small . ' 480w', $page, 'Galerie : srcset transmis à chaque miniature');
+            T::contains('<img src="' . $small . '" alt="" width="96"', $page, 'Miniatures : copie de 480 px');
+            T::ok(!is_file(BASE_PATH . '/public' . substr($tiny, 0, -5) . '-480.webp'), 'Pas de copie plus large que l\'original');
+            T::eq('', \App\Services\ImageService::srcset($tiny), 'Pas de srcset sans copie');
+            T::eq($tiny, \App\Services\ImageService::small($tiny), 'Sans copie : image d\'origine');
+            T::eq('/assets/img/photos/fb-bouteilles-trio.webp', \App\Services\ImageService::small('/assets/img/photos/fb-bouteilles-trio.webp'), 'Image installée : inchangée');
+            // Suppression : l'original et ses copies disparaissent
+            $a->post('/admin/images/' . $img['id'] . '/supprimer');
+            T::ok(!is_file($file) && !is_file($base . '-480.webp') && !is_file($base . '-960.webp'), 'Suppression : original et copies supprimés');
+            // Images existantes : copies générées a posteriori (bin/image-variants.php)
+            $old = BASE_PATH . '/public/uploads/products/' . gmdate('Ym') . '-test-ancienne.webp';
+            $im = imagecreatetruecolor(1200, 900);
+            imagewebp($im, $old, 82);
+            \App\Services\ImageService::writeVariants($im, $old);
+            T::ok(is_file(substr($old, 0, -5) . '-480.webp') && is_file(substr($old, 0, -5) . '-960.webp'), 'Copies générées pour une image existante');
+            // Formats identiques : cadres carrés, recadrage centré, sur la boutique comme sur la fiche produit
+            $css = (string) file_get_contents(BASE_PATH . '/public/assets/css/app.css');
+            T::contains('.product-card-media { position: relative; aspect-ratio: 1;', $css, 'Vignettes : format carré');
+            T::contains('.product-main-media { position: relative; aspect-ratio: 1;', $css, 'Fiche produit : cadre carré');
+            T::contains('.product-main-media img { display: block; width: 100%; height: 100%; object-fit: cover; }', $css, 'Fiche produit : photo remplissant le cadre (même taille pour toutes)');
+            T::contains('.thumb img { display: block; width: 100%; height: auto; aspect-ratio: 1; object-fit: cover; }', $css, 'Miniatures : format carré');
+            // Logos WebP allégés
+            $home = (new Client('10.39.0.4'))->get('/')->body;
+            T::contains('/assets/img/brand/logo.webp', $home, 'En-tête : logo WebP');
+            T::ok(filesize(BASE_PATH . '/public/assets/img/brand/logo.webp') < 25 * 1024, 'Logo de l\'en-tête allégé (moins de 25 Ko)');
+            T::ok(filesize(BASE_PATH . '/public/assets/img/brand/logo-stacked.webp') < 40 * 1024, 'Logo du pied de page allégé (moins de 40 Ko)');
+            T::contains('mod_deflate', (string) file_get_contents(BASE_PATH . '/public/.htaccess'), 'Compression prévue dans .htaccess');
+        } finally {
+            foreach (array_diff(glob(BASE_PATH . '/public/uploads/products/*') ?: [], $before) as $f) {
+                @unlink($f);
+            }
+            foreach ($tmp as $f) {
+                @unlink($f);
+            }
         }
     },
 ];

@@ -6,11 +6,14 @@ namespace App\Services;
 /**
  * Téléversement d'images : vérification du type réel, ré-encodage GD en WebP (supprime tout contenu caché),
  * nom aléatoire, stockage dans public/uploads (exécution de scripts interdite par .htaccess).
+ * Copies réduites (480 et 960 px de large, suffixes -480 et -960) servies aux vignettes et aux petits écrans (srcset).
  */
 final class ImageService
 {
     public const MAX_BYTES = 5 * 1024 * 1024;
     public const MAX_SIDE = 1600;
+    /** Largeurs des copies réduites générées au téléversement. */
+    public const VARIANTS = [480, 960];
 
     /** @return array{ok:bool, path?:string, error?:string} */
     /**
@@ -64,6 +67,9 @@ final class ImageService
         }
         $name = gmdate('Ym') . '-' . bin2hex(random_bytes(10)) . '.webp';
         $ok = imagewebp($dst, $dir . '/' . $name, 82);
+        if ($ok) {
+            self::writeVariants($dst, $dir . '/' . $name);
+        }
         imagedestroy($src);
         imagedestroy($dst);
         if (!$ok) {
@@ -81,5 +87,65 @@ final class ImageService
         if (is_file($file)) {
             @unlink($file);
         }
+        foreach (self::VARIANTS as $w) {
+            $variant = self::variantFile($file, $w);
+            if ($variant !== null && is_file($variant)) {
+                @unlink($variant);
+            }
+        }
+    }
+
+    /** Fichier de la copie réduite d'une image WebP (ex. photo.webp → photo-480.webp). */
+    private static function variantFile(string $file, int $width): ?string
+    {
+        return str_ends_with($file, '.webp') ? substr($file, 0, -5) . '-' . $width . '.webp' : null;
+    }
+
+    /** Écrit les copies réduites plus étroites que l'image (les copies plus larges que l'original seraient inutiles). */
+    public static function writeVariants(\GdImage $img, string $file): void
+    {
+        [$w, $h] = [imagesx($img), imagesy($img)];
+        foreach (self::VARIANTS as $vw) {
+            $target = self::variantFile($file, $vw);
+            if ($target === null || $vw >= $w) {
+                continue;
+            }
+            $copy = imagecreatetruecolor($vw, max(1, (int) round($h * $vw / $w)));
+            imagealphablending($copy, false);
+            imagesavealpha($copy, true);
+            imagecopyresampled($copy, $img, 0, 0, 0, 0, $vw, imagesy($copy), $w, $h);
+            imagewebp($copy, $target, 78);
+            imagedestroy($copy);
+        }
+    }
+
+    /** Copie réduite existante d'une image téléversée (chemin public), sinon l'image d'origine. */
+    public static function small(string $path, int $width = 480): string
+    {
+        if (!str_starts_with($path, '/uploads/') || str_contains($path, '..')) {
+            return $path;
+        }
+        $file = self::variantFile(BASE_PATH . '/public' . $path, $width);
+        return $file !== null && is_file($file) ? substr($path, 0, -5) . '-' . $width . '.webp' : $path;
+    }
+
+    /** Valeur srcset (copies réduites + original) d'une image téléversée ; chaîne vide si aucune copie n'existe. */
+    public static function srcset(string $path): string
+    {
+        if (!str_starts_with($path, '/uploads/') || str_contains($path, '..') || !str_ends_with($path, '.webp')) {
+            return '';
+        }
+        $file = BASE_PATH . '/public' . $path;
+        $parts = [];
+        foreach (self::VARIANTS as $w) {
+            if (is_file((string) self::variantFile($file, $w))) {
+                $parts[] = substr($path, 0, -5) . '-' . $w . '.webp ' . $w . 'w';
+            }
+        }
+        if ($parts === [] || !is_file($file) || ($size = @getimagesize($file)) === false) {
+            return '';
+        }
+        $parts[] = $path . ' ' . $size[0] . 'w';
+        return implode(', ', $parts);
     }
 }

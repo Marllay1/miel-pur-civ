@@ -21,7 +21,7 @@ $max = Settings::int('max_qty_per_line');
     <section class="group" aria-label="<?= e(t('cart.items')) ?>">
       <?php foreach ($items as $item): $name = $item['product_name'] . ' – ' . $item['variant_label']; ?>
       <div class="cart-item<?= !$item['available'] ? ' is-unavailable' : '' ?>">
-        <div class="cart-item-media"><?php if ($item['image_path']): ?><img src="<?= e($item['image_path']) ?>" alt="" width="88" height="88" loading="lazy"><?php endif; ?></div>
+        <div class="cart-item-media"><?php if ($item['image_path']): ?><img src="<?= e(\App\Services\ImageService::small((string) $item['image_path'])) ?>" alt="" width="88" height="88" loading="lazy"><?php endif; ?></div>
         <div>
           <p class="cart-item-name"><a href="/boutique/<?= e($item['product_slug']) ?>"><?= e($item['product_name']) ?></a></p>
           <p class="cart-item-sub"><?= e($item['variant_label']) ?> · <?= money((int) $item['price']) ?></p>
